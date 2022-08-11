@@ -87,6 +87,7 @@ under the License.
 				<version>${project.parent.version}</version>
 				<scope>test</scope>
 			</dependency>
+
 		</dependencies>
 	</dependencyManagement>
 
