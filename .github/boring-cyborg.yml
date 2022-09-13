@@ -25,8 +25,8 @@ labelPRBasedOnFilePath:
     - docs/**/*
 
   component=Connectors/DynamoDB:
-    - flink-connector-aws-dynamodb*/**/*
-    - flink-sql-connector-aws-dynamodb*/**/*
+    - flink-connector-dynamodb*/**/*
+    - flink-sql-connector-dynamodb*/**/*
 
 ###### IssueLink Adder #################################################################################################
 # Insert Issue (Jira/Github etc) link in PR description based on the Issue ID in PR title.

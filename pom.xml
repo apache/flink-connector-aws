@@ -30,7 +30,7 @@ under the License.
 		<relativePath/>
 	</parent>
 
-	<artifactId>flink-connector-aws-dynamodb-parent</artifactId>
+	<artifactId>flink-connector-dynamodb-parent</artifactId>
 	<version>1.0.0-SNAPSHOT</version>
 
 	<name>Flink : Connectors : Amazon DynamoDB Parent</name>
@@ -58,8 +58,8 @@ under the License.
 	</properties>
 
 	<modules>
-		<module>flink-connector-aws-dynamodb</module>
-		<module>flink-sql-connector-aws-dynamodb</module>
+		<module>flink-connector-dynamodb</module>
+		<module>flink-sql-connector-dynamodb</module>
 	</modules>
 
 	<dependencyManagement>
@@ -97,7 +97,7 @@ under the License.
 							<property>rootDir</property>
 							<project>
 								<groupId>org.apache.flink</groupId>
-								<artifactId>flink-connector-aws-dynamodb-parent</artifactId>
+								<artifactId>flink-connector-dynamodb-parent</artifactId>
 							</project>
 						</configuration>
 					</execution>
