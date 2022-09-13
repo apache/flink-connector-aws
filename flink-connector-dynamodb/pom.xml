@@ -25,12 +25,12 @@ under the License.
 
     <parent>
         <groupId>org.apache.flink</groupId>
-        <artifactId>flink-connector-aws-dynamodb-parent</artifactId>
+        <artifactId>flink-connector-dynamodb-parent</artifactId>
         <version>1.0.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>flink-connector-aws-dynamodb</artifactId>
+    <artifactId>flink-connector-dynamodb</artifactId>
     <name>Flink : Connectors : Amazon DynamoDB</name>
 
 	<dependencyManagement>
