@@ -69,7 +69,7 @@ under the License.
 							<artifactSet>
 								<includes>
 									<include>org.apache.flink:flink-connector-base</include>
-									<include>org.apache.flink:flink-connector-base</include>
+									<include>org.apache.flink:flink-connector-aws-base</include>
 									<include>org.apache.flink:flink-connector-dynamodb</include>
 									<include>software.amazon.awssdk:*</include>
 									<include>org.reactivestreams:*</include>
