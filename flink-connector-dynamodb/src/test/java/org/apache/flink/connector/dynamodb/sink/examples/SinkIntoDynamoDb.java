@@ -60,7 +60,7 @@ public class SinkIntoDynamoDb {
 
         fromGen.map(new TestRequestMapper()).sinkTo(dynamoDbSink);
 
-        env.execute("DynamoDb Async Sink Example Program");
+        env.execute("DynamoDb Sink Example Job");
     }
 
     /** Example DynamoDB request attributes mapper. */
