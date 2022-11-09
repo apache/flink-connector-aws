@@ -17,6 +17,7 @@
 
 package org.apache.flink.connector.dynamodb.sink;
 
+import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.api.connector.sink2.SinkWriter;
 import org.apache.flink.connector.base.sink.writer.ElementConverter;
 
@@ -27,9 +28,10 @@ import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbBean;
  * A generic {@link ElementConverter} that uses the dynamodb-enhanced client to build a {@link
  * DynamoDbWriteRequest} from a POJO annotated with {@link DynamoDbBean}.
  *
- * @param <InputT> The
+ * @param <InputT> The type of the {@link DynamoDbBean} to convert into {@link DynamoDbWriteRequest}
  */
-public class DynamoDBEnhancedElementConverter<InputT>
+@PublicEvolving
+public class DynamoDbBeanElementConverter<InputT>
         implements ElementConverter<InputT, DynamoDbWriteRequest> {
 
     private static final long serialVersionUID = 1L;
@@ -38,11 +40,11 @@ public class DynamoDBEnhancedElementConverter<InputT>
     private final boolean ignoreNulls;
     private transient BeanTableSchema<InputT> tableSchema;
 
-    public DynamoDBEnhancedElementConverter(final Class<InputT> recordType) {
+    public DynamoDbBeanElementConverter(final Class<InputT> recordType) {
         this(recordType, false);
     }
 
-    public DynamoDBEnhancedElementConverter(
+    public DynamoDbBeanElementConverter(
             final Class<InputT> recordType, final boolean ignoreNulls) {
         this.recordType = recordType;
         this.ignoreNulls = ignoreNulls;
@@ -54,8 +56,8 @@ public class DynamoDBEnhancedElementConverter<InputT>
     @Override
     public DynamoDbWriteRequest apply(InputT element, SinkWriter.Context context) {
         if (tableSchema == null) {
-            // We have to lazily initialise this because BeanTableSchema is not serializable and
-            // there is no open() method
+            // We have to lazily initialize this because BeanTableSchema is not serializable and
+            // there is no open() method on ElementConverter (FLINK-29938)
             tableSchema = createTableSchema(recordType);
         }
 

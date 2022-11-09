@@ -20,7 +20,7 @@ package org.apache.flink.connector.dynamodb.sink.examples;
 
 import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.connector.aws.config.AWSConfigConstants;
-import org.apache.flink.connector.dynamodb.sink.DynamoDBEnhancedElementConverter;
+import org.apache.flink.connector.dynamodb.sink.DynamoDbBeanElementConverter;
 import org.apache.flink.connector.dynamodb.sink.DynamoDbSink;
 import org.apache.flink.connector.dynamodb.util.Order;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -32,9 +32,9 @@ import java.util.UUID;
 
 /**
  * An example application demonstrating how to use the {@link DynamoDbSink} to sink into DynamoDb
- * using the {@link DynamoDBEnhancedElementConverter}.
+ * using the {@link DynamoDbBeanElementConverter}.
  */
-public class SinkIntoDynamoDbUsingEnhancedElementConverter {
+public class SinkDynamoDbBeanIntoDynamoDb {
 
     private static final String DYNAMODB_TABLE = "orders";
     private static final String REGION = "us-east-1";
@@ -48,7 +48,7 @@ public class SinkIntoDynamoDbUsingEnhancedElementConverter {
         DynamoDbSink<Order> dynamoDbSink =
                 DynamoDbSink.<Order>builder()
                         .setDestinationTableName(DYNAMODB_TABLE)
-                        .setElementConverter(new DynamoDBEnhancedElementConverter<>(Order.class))
+                        .setElementConverter(new DynamoDbBeanElementConverter<>(Order.class))
                         .setDynamoDbProperties(sinkProperties)
                         .build();
 
