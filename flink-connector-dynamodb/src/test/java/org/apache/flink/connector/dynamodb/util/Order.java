@@ -1,10 +1,10 @@
 package org.apache.flink.connector.dynamodb.util;
 
-import org.apache.flink.connector.dynamodb.sink.DynamoDBEnhancedElementConverter;
+import org.apache.flink.connector.dynamodb.sink.DynamoDbBeanElementConverter;
 
 import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbBean;
 
-/** A test {@link DynamoDbBean} POJO for use with {@link DynamoDBEnhancedElementConverter}. */
+/** A test {@link DynamoDbBean} POJO for use with {@link DynamoDbBeanElementConverter}. */
 @DynamoDbBean
 public class Order {
 

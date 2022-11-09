@@ -27,12 +27,12 @@ import static org.apache.flink.connector.dynamodb.sink.DynamoDbWriteRequestType.
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
-class DynamoDBEnhancedElementConverterTest {
+class DynamoDbBeanElementConverterTest {
 
     @Test
     void testBadType() {
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> new DynamoDBEnhancedElementConverter<>(Integer.class))
+                .isThrownBy(() -> new DynamoDbBeanElementConverter<>(Integer.class))
                 .withMessageContaining(
                         "A DynamoDb bean class must be annotated with @DynamoDbBean");
     }
@@ -40,7 +40,7 @@ class DynamoDBEnhancedElementConverterTest {
     @Test
     void testConvertOrderToDynamoDbWriteRequest() {
         ElementConverter<Order, DynamoDbWriteRequest> elementConverter =
-                new DynamoDBEnhancedElementConverter<>(Order.class);
+                new DynamoDbBeanElementConverter<>(Order.class);
         Order order = new Order("orderId", 1, 2.0);
 
         DynamoDbWriteRequest actual = elementConverter.apply(order, null);
@@ -55,7 +55,7 @@ class DynamoDBEnhancedElementConverterTest {
     @Test
     void testConvertOrderToDynamoDbWriteRequestWithIgnoresNull() {
         ElementConverter<Order, DynamoDbWriteRequest> elementConverter =
-                new DynamoDBEnhancedElementConverter<>(Order.class, true);
+                new DynamoDbBeanElementConverter<>(Order.class, true);
         Order order = new Order(null, 1, 2.0);
 
         DynamoDbWriteRequest actual = elementConverter.apply(order, null);
@@ -66,7 +66,7 @@ class DynamoDBEnhancedElementConverterTest {
     @Test
     void testConvertOrderToDynamoDbWriteRequestWritesNull() {
         ElementConverter<Order, DynamoDbWriteRequest> elementConverter =
-                new DynamoDBEnhancedElementConverter<>(Order.class, false);
+                new DynamoDbBeanElementConverter<>(Order.class, false);
         Order order = new Order(null, 1, 2.0);
 
         DynamoDbWriteRequest actual = elementConverter.apply(order, null);
