@@ -18,14 +18,12 @@
 
 package org.apache.flink.connector.dynamodb.sink.examples;
 
-import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.api.connector.sink2.SinkWriter;
 import org.apache.flink.connector.aws.config.AWSConfigConstants;
 import org.apache.flink.connector.base.sink.writer.ElementConverter;
 import org.apache.flink.connector.dynamodb.sink.DynamoDbSink;
 import org.apache.flink.connector.dynamodb.sink.DynamoDbWriteRequest;
 import org.apache.flink.connector.dynamodb.sink.DynamoDbWriteRequestType;
-import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
 import org.apache.commons.math3.random.RandomDataGenerator;
@@ -40,56 +38,47 @@ import java.util.Properties;
  */
 public class SinkIntoDynamoDb {
 
+    private static final String DYNAMODB_TABLE = "my-dynamodb-table";
+    private static final String REGION = "us-east-1";
+
     public static void main(String[] args) throws Exception {
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.enableCheckpointing(10_000);
 
-        DataStream<String> fromGen =
-                env.fromSequence(1, 10_000_000L).map(Object::toString).returns(String.class);
-
         Properties sinkProperties = new Properties();
-        sinkProperties.put(AWSConfigConstants.AWS_REGION, "your-region-here");
+        sinkProperties.put(AWSConfigConstants.AWS_REGION, REGION);
 
-        DynamoDbSink<Map<String, AttributeValue>> dynamoDbSink =
-                DynamoDbSink.<Map<String, AttributeValue>>builder()
-                        .setDestinationTableName("my-dynamodb-table")
+        DynamoDbSink<Long> dynamoDbSink =
+                DynamoDbSink.<Long>builder()
+                        .setDestinationTableName(DYNAMODB_TABLE)
                         .setElementConverter(new TestDynamoDbElementConverter())
                         .setMaxBatchSize(20)
                         .setDynamoDbProperties(sinkProperties)
                         .build();
 
-        fromGen.map(new TestRequestMapper()).sinkTo(dynamoDbSink);
+        env.fromSequence(1, 10_000_000L).sinkTo(dynamoDbSink);
 
         env.execute("DynamoDb Sink Example Job");
     }
 
-    /** Example DynamoDB request attributes mapper. */
-    public static class TestRequestMapper
-            extends RichMapFunction<String, Map<String, AttributeValue>> {
+    /** Example DynamoDB element converter. */
+    public static class TestDynamoDbElementConverter
+            implements ElementConverter<Long, DynamoDbWriteRequest> {
+
         private final RandomDataGenerator random = new RandomDataGenerator();
 
         @Override
-        public Map<String, AttributeValue> map(String data) throws Exception {
+        public DynamoDbWriteRequest apply(Long index, SinkWriter.Context context) {
             final Map<String, AttributeValue> item = new HashMap<>();
             item.put(
                     "partition_key",
                     AttributeValue.builder().s(this.random.nextHexString(5)).build());
             item.put("sort_key", AttributeValue.builder().s(this.random.nextHexString(5)).build());
-            item.put("payload", AttributeValue.builder().s(data).build());
-            return item;
-        }
-    }
+            item.put("payload", AttributeValue.builder().s(String.valueOf(index)).build());
 
-    /** Example DynamoDB element converter. */
-    public static class TestDynamoDbElementConverter
-            implements ElementConverter<Map<String, AttributeValue>, DynamoDbWriteRequest> {
-
-        @Override
-        public DynamoDbWriteRequest apply(
-                Map<String, AttributeValue> elements, SinkWriter.Context context) {
             return DynamoDbWriteRequest.builder()
                     .setType(DynamoDbWriteRequestType.PUT)
-                    .setItem(elements)
+                    .setItem(item)
                     .build();
         }
     }
