@@ -18,136 +18,236 @@ specific language governing permissions and limitations
 under the License.
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
-		 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 
-	<modelVersion>4.0.0</modelVersion>
+    <modelVersion>4.0.0</modelVersion>
 
-	<parent>
-		<groupId>org.apache.flink</groupId>
-		<artifactId>flink-connectors</artifactId>
-		<version>1.15.2</version>
-		<relativePath/>
-	</parent>
+    <parent>
+        <groupId>io.github.zentol.flink</groupId>
+        <artifactId>flink-connector-parent</artifactId>
+        <version>1.0</version>
+    </parent>
 
-	<artifactId>flink-connector-aws</artifactId>
-	<version>1.0.0-SNAPSHOT</version>
+    <groupId>org.apache.flink</groupId>
+    <artifactId>flink-connector-aws-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
 
-	<name>Flink : Connectors : AWS : Parent</name>
-	<packaging>pom</packaging>
-	<url>https://flink.apache.org</url>
-	<inceptionYear>2022</inceptionYear>
+    <name>Flink : Connectors : AWS : Parent</name>
+    <packaging>pom</packaging>
+    <url>https://flink.apache.org</url>
+    <inceptionYear>2022</inceptionYear>
 
-	<licenses>
-		<license>
-			<name>The Apache Software License, Version 2.0</name>
-			<url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
-			<distribution>repo</distribution>
-		</license>
-	</licenses>
+    <licenses>
+        <license>
+            <name>The Apache Software License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
-	<scm>
-		<url>https://github.com/apache/flink-connector-aws</url>
-		<connection>git@github.com:apache/flink-connector-aws.git</connection>
-		<developerConnection>scm:git:https://gitbox.apache.org/repos/asf/flink-connector-aws.git</developerConnection>
-	</scm>
+    <scm>
+        <url>https://github.com/apache/flink-connector-aws</url>
+        <connection>git@github.com:apache/flink-connector-aws.git</connection>
+        <developerConnection>scm:git:https://gitbox.apache.org/repos/asf/flink-connector-aws.git</developerConnection>
+    </scm>
 
-	<properties>
-		<aws.sdk.version>2.17.247</aws.sdk.version>
-		<flink.version>1.16.0</flink.version>
-	</properties>
+    <properties>
+        <aws.sdk.version>2.17.247</aws.sdk.version>
+        <netty.version>4.1.77.Final</netty.version>
+        <flink.version>1.16.0</flink.version>
+        <flink.shaded.version>16.0</flink.shaded.version>
 
-	<modules>
-		<module>flink-connector-dynamodb</module>
-		<module>flink-sql-connector-dynamodb</module>
-	</modules>
+        <junit5.version>5.8.1</junit5.version>
+        <assertj.version>3.21.0</assertj.version>
+        <archunit.version>0.22.0</archunit.version>
+        <testcontainers.version>1.17.2</testcontainers.version>
+        <mockito.version>2.21.0</mockito.version>
 
-	<dependencyManagement>
-		<dependencies>
-			<dependency>
-				<groupId>software.amazon.awssdk</groupId>
-				<artifactId>bom</artifactId>
-				<version>${aws.sdk.version}</version>
-				<type>pom</type>
-				<scope>import</scope>
-			</dependency>
+        <!-- For dependency convergence -->
+        <kryo.version>2.24.0</kryo.version>
+        <slf4j.version>1.7.36</slf4j.version>
+        <snappy.version>1.1.8.3</snappy.version>
 
-			<dependency>
-				<groupId>org.apache.flink</groupId>
-				<artifactId>flink-test-utils-junit</artifactId>
-				<version>${project.parent.version}</version>
-				<scope>test</scope>
-			</dependency>
+        <flink.parent.artifactId>flink-connector-aws-parent</flink.parent.artifactId>
+    </properties>
 
-		</dependencies>
-	</dependencyManagement>
+    <modules>
+        <module>flink-connector-dynamodb</module>
+        <module>flink-sql-connector-dynamodb</module>
+    </modules>
 
-	<build>
-		<plugins>
-			<plugin>
-				<groupId>org.codehaus.mojo</groupId>
-				<artifactId>exec-maven-plugin</artifactId>
-				<version>3.1.0</version>
-				<inherited>false</inherited>
-				<executions>
-					<execution>
-						<id>check-license</id>
-						<!-- manually called -->
-						<phase>none</phase>
-						<goals>
-							<goal>java</goal>
-						</goals>
-					</execution>
-				</executions>
-				<configuration>
-					<mainClass>org.apache.flink.tools.ci.licensecheck.LicenseChecker</mainClass>
-					<includePluginDependencies>true</includePluginDependencies>
-					<includeProjectDependencies>false</includeProjectDependencies>
-				</configuration>
-				<dependencies>
-					<dependency>
-						<groupId>org.apache.flink</groupId>
-						<artifactId>flink-ci-tools</artifactId>
-						<version>${flink.version}</version>
-					</dependency>
-				</dependencies>
-			</plugin>
+    <dependencies>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-shaded-force-shading</artifactId>
+        </dependency>
 
-			<plugin>
-				<!-- Override directory for parent project -->
-				<groupId>org.commonjava.maven.plugins</groupId>
-				<artifactId>directory-maven-plugin</artifactId>
-				<executions>
-					<execution>
-						<id>directories</id>
-						<goals>
-							<goal>directory-of</goal>
-						</goals>
-						<configuration>
-							<property>rootDir</property>
-							<project>
-								<groupId>org.apache.flink</groupId>
-								<artifactId>flink-connector-aws</artifactId>
-							</project>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-enforcer-plugin</artifactId>
-				<executions>
-					<execution>
-						<id>dependency-convergence</id>
-						<goals>
-							<goal>enforce</goal>
-						</goals>
-						<configuration>
-							<skip>false</skip>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
-		</plugins>
-	</build>
+        <!-- Test dependencies -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-test-utils</artifactId>
+            <version>${flink.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.apache.flink</groupId>
+                <artifactId>flink-shaded-force-shading</artifactId>
+                <version>${flink.shaded.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>bom</artifactId>
+                <version>${aws.sdk.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-bom</artifactId>
+                <version>${netty.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>org.apache.flink</groupId>
+                <artifactId>flink-test-utils-junit</artifactId>
+                <version>${flink.version}</version>
+                <scope>test</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>org.junit</groupId>
+                <artifactId>junit-bom</artifactId>
+                <version>${junit5.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>org.assertj</groupId>
+                <artifactId>assertj-core</artifactId>
+                <version>${assertj.version}</version>
+                <scope>test</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- For dependency convergence -->
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-api</artifactId>
+                <version>${slf4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.esotericsoftware.kryo</groupId>
+                <artifactId>kryo</artifactId>
+                <version>${kryo.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.xerial.snappy</groupId>
+                <artifactId>snappy-java</artifactId>
+                <version>${snappy.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.code.findbugs</groupId>
+                <artifactId>jsr305</artifactId>
+                <version>1.3.9</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <inherited>false</inherited>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.apache.flink</groupId>
+                        <artifactId>flink-ci-tools</artifactId>
+                        <version>${flink.version}</version>
+                    </dependency>
+                </dependencies>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.rat</groupId>
+                <artifactId>apache-rat-plugin</artifactId>
+                <inherited>false</inherited>
+            </plugin>
+
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+            </plugin>
+
+            <plugin>
+                <groupId>org.commonjava.maven.plugins</groupId>
+                <artifactId>directory-maven-plugin</artifactId>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
 </project>

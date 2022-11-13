@@ -19,7 +19,7 @@
 name: Build flink-connector-dynamodb
 on: [push, pull_request]
 jobs:
-  compile_and_test_flink_1_15_2:
+  flink_1_15_2_compile_and_test_flink:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -54,7 +54,7 @@ jobs:
             -DaltDeploymentRepository=validation_repository::default::file:${{ env.MVN_VALIDATION_DIR }} \
             | tee ${{ env.MVN_BUILD_OUTPUT_FILE }}
 
-  compile_and_test_flink_1_16_0:
+  flink_1_16_0_compile_and_test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -85,13 +85,15 @@ jobs:
 
       - name: Compile and test flink-connector-dynamodb
         run: |
+          set -o pipefail
+          
           mvn clean install -Dflink.convergence.phase=install -Pcheck-convergence -U -B ${{ env.MVN_CONNECTION_OPTIONS }} \
             -DaltDeploymentRepository=validation_repository::default::file:${{ env.MVN_VALIDATION_DIR }} \
             | tee ${{ env.MVN_BUILD_OUTPUT_FILE }}
 
       - name: Check licensing
         run: |
-          mvn ${MVN_COMMON_OPTIONS} exec:java@check-licensing -N \
+          mvn ${MVN_COMMON_OPTIONS} exec:java@check-license -N \
             -Dexec.args="${{ env.MVN_BUILD_OUTPUT_FILE }} $(pwd) $(pwd)" \
             ${{ env.MVN_CONNECTION_OPTIONS }} \
             -Dlog4j.configurationFile=file://$(pwd)/tools/ci/log4j.properties
