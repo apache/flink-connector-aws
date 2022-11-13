@@ -44,8 +44,7 @@ public class DynamoDbBeanElementConverter<InputT>
         this(recordType, false);
     }
 
-    public DynamoDbBeanElementConverter(
-            final Class<InputT> recordType, final boolean ignoreNulls) {
+    public DynamoDbBeanElementConverter(final Class<InputT> recordType, final boolean ignoreNulls) {
         this.recordType = recordType;
         this.ignoreNulls = ignoreNulls;
 
