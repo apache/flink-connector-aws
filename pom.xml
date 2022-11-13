@@ -52,18 +52,9 @@ under the License.
 		<developerConnection>scm:git:https://gitbox.apache.org/repos/asf/flink-connector-aws.git</developerConnection>
 	</scm>
 
-	<pluginRepositories>
-		<pluginRepository>
-			<!-- Allows exec-maven-plugin to resolve snapshot plugin dependencies -->
-			<id>apache.snapshots.https</id>
-			<name>${distMgmtSnapshotsName}</name>
-			<url>${distMgmtSnapshotsUrl}</url>
-		</pluginRepository>
-	</pluginRepositories>
-
 	<properties>
 		<aws.sdk.version>2.17.247</aws.sdk.version>
-		<flink.version>1.15.2</flink.version>
+		<flink.version>1.16.0</flink.version>
 	</properties>
 
 	<modules>
@@ -117,7 +108,7 @@ under the License.
 					<dependency>
 						<groupId>org.apache.flink</groupId>
 						<artifactId>flink-ci-tools</artifactId>
-						<version>1.16-SNAPSHOT</version>
+						<version>${flink.version}</version>
 					</dependency>
 				</dependencies>
 			</plugin>
