@@ -38,11 +38,6 @@ public class DynamoDbSinkException extends RuntimeException {
     @PublicEvolving
     static class DynamoDbSinkFailFastException extends DynamoDbSinkException {
 
-        public DynamoDbSinkFailFastException() {
-            super(
-                    "Encountered an exception while persisting records, not retrying due to {failOnError} being set.");
-        }
-
         public DynamoDbSinkFailFastException(final Throwable cause) {
             super(
                     "Encountered an exception while persisting records, not retrying due to {failOnError} being set.",

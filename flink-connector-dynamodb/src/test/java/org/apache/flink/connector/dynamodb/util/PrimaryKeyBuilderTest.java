@@ -18,6 +18,7 @@
 
 package org.apache.flink.connector.dynamodb.util;
 
+import org.apache.flink.connector.dynamodb.sink.InvalidConfigurationException;
 import org.apache.flink.connector.dynamodb.sink.InvalidRequestException;
 
 import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableList;
@@ -105,6 +106,24 @@ public class PrimaryKeyBuilderTest {
 
         assertThat(keyBuilder.build(createPutItemRequest(createItemValues())))
                 .isEqualTo(keyBuilder.build(createDeleteItemRequest(createItemValues())));
+    }
+
+    @Test
+    public void testExceptOnEmptyPartitionKeys() {
+        assertThatExceptionOfType(InvalidConfigurationException.class)
+                .isThrownBy(() -> new PrimaryKeyBuilder(ImmutableList.of()))
+                .withMessageContaining(
+                        "Unable to construct partition key as overwriteByPartitionKeys configuration not provided.");
+    }
+
+    @Test
+    public void testExceptOnEmptyWriteRequest() {
+        assertThatExceptionOfType(InvalidRequestException.class)
+                .isThrownBy(
+                        () ->
+                                new PrimaryKeyBuilder(ImmutableList.of(PARTITION_KEY_NAME))
+                                        .build(WriteRequest.builder().build()))
+                .withMessageContaining("Empty write request");
     }
 
     @Test

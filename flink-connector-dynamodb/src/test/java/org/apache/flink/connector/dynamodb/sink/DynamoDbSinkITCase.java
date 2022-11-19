@@ -19,7 +19,6 @@
 package org.apache.flink.connector.dynamodb.sink;
 
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
-import org.apache.flink.connector.aws.config.AWSConfigConstants;
 import org.apache.flink.connector.dynamodb.testutils.DynamoDBHelpers;
 import org.apache.flink.connector.dynamodb.testutils.DynamoDbContainer;
 import org.apache.flink.connector.dynamodb.testutils.Item;
@@ -117,17 +116,17 @@ public class DynamoDbSinkITCase {
     @Test
     public void nonExistentTableNameShouldResultInFailureWhenFailOnErrorIsFalse() {
         List<Map<String, AttributeValue>> items =
-            Items.builder().item(Item.builder().attr("1", "1").build()).build();
+                Items.builder().item(Item.builder().attr("1", "1").build()).build();
         Assertions.assertThatExceptionOfType(JobExecutionException.class)
-            .isThrownBy(
-                () ->
-                    new Scenario(env.fromCollection(items))
-                        .withTableName("NonExistentTableName")
-                        .withFailOnError(false)
-                        .runScenario())
-            .havingCause()
-            .havingCause()
-            .withMessageContaining("Encountered non-recoverable exception");
+                .isThrownBy(
+                        () ->
+                                new Scenario(env.fromCollection(items))
+                                        .withTableName("NonExistentTableName")
+                                        .withFailOnError(false)
+                                        .runScenario())
+                .havingCause()
+                .havingCause()
+                .withMessageContaining("Encountered non-recoverable exception");
     }
 
     @Test

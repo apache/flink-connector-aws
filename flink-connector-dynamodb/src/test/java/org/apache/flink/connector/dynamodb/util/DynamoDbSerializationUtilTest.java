@@ -37,6 +37,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 /** Tests for {@link DynamoDbSerializationUtil}. */
 public class DynamoDbSerializationUtilTest {
@@ -87,17 +88,20 @@ public class DynamoDbSerializationUtilTest {
                         .setItem(item)
                         .setType(DynamoDbWriteRequestType.PUT)
                         .build();
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        DataOutputStream out = new DataOutputStream(outputStream);
-        DynamoDbSerializationUtil.serializeWriteRequest(dynamoDbWriteRequest, out);
-        outputStream.close();
-        out.close();
-        InputStream inputStream = new ByteArrayInputStream(outputStream.toByteArray());
-        DataInputStream dataInputStream = new DataInputStream(inputStream);
-        DynamoDbWriteRequest deserializedWriteRequest =
-                DynamoDbSerializationUtil.deserializeWriteRequest(dataInputStream);
-        inputStream.close();
-        assertThat(deserializedWriteRequest).isEqualTo(dynamoDbWriteRequest);
+
+        byte[] serialized;
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+                DataOutputStream out = new DataOutputStream(outputStream)) {
+            DynamoDbSerializationUtil.serializeWriteRequest(dynamoDbWriteRequest, out);
+            serialized = outputStream.toByteArray();
+        }
+
+        try (InputStream inputStream = new ByteArrayInputStream(serialized);
+                DataInputStream dataInputStream = new DataInputStream(inputStream)) {
+            DynamoDbWriteRequest deserializedWriteRequest =
+                    DynamoDbSerializationUtil.deserializeWriteRequest(dataInputStream);
+            assertThat(deserializedWriteRequest).isEqualTo(dynamoDbWriteRequest);
+        }
     }
 
     @Test
@@ -110,16 +114,42 @@ public class DynamoDbSerializationUtilTest {
                         .setItem(key)
                         .setType(DynamoDbWriteRequestType.DELETE)
                         .build();
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        DataOutputStream out = new DataOutputStream(outputStream);
-        DynamoDbSerializationUtil.serializeWriteRequest(dynamoDbWriteRequest, out);
-        outputStream.close();
-        out.close();
-        InputStream inputStream = new ByteArrayInputStream(outputStream.toByteArray());
-        DataInputStream dataInputStream = new DataInputStream(inputStream);
-        DynamoDbWriteRequest deserializedWriteRequest =
-                DynamoDbSerializationUtil.deserializeWriteRequest(dataInputStream);
-        inputStream.close();
-        assertThat(deserializedWriteRequest).isEqualTo(dynamoDbWriteRequest);
+
+        byte[] serialized;
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+                DataOutputStream out = new DataOutputStream(outputStream)) {
+            DynamoDbSerializationUtil.serializeWriteRequest(dynamoDbWriteRequest, out);
+            serialized = outputStream.toByteArray();
+        }
+
+        try (InputStream inputStream = new ByteArrayInputStream(serialized);
+                DataInputStream dataInputStream = new DataInputStream(inputStream)) {
+            DynamoDbWriteRequest deserializedWriteRequest =
+                    DynamoDbSerializationUtil.deserializeWriteRequest(dataInputStream);
+            assertThat(deserializedWriteRequest).isEqualTo(dynamoDbWriteRequest);
+        }
+    }
+
+    @Test
+    public void testSerializeEmptyAttributeValueThrowsException() {
+        final Map<String, AttributeValue> item = new HashMap<>();
+        item.put("empty", AttributeValue.builder().build());
+        DynamoDbWriteRequest dynamoDbWriteRequest =
+                DynamoDbWriteRequest.builder()
+                        .setItem(item)
+                        .setType(DynamoDbWriteRequestType.PUT)
+                        .build();
+
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+                DataOutputStream out = new DataOutputStream(outputStream)) {
+            assertThatExceptionOfType(IllegalArgumentException.class)
+                    .isThrownBy(
+                            () ->
+                                    DynamoDbSerializationUtil.serializeWriteRequest(
+                                            dynamoDbWriteRequest, out))
+                    .withMessageContaining("Attribute value must not be empty: AttributeValue()");
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 }
