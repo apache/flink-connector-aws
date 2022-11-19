@@ -41,7 +41,7 @@ public class PrimaryKeyBuilder {
     public PrimaryKeyBuilder(List<String> partitionKeys) {
         if (CollectionUtil.isNullOrEmpty(partitionKeys)) {
             throw new InvalidConfigurationException(
-                    "Can not construct partition key as overwriteByPartitionKeys configuration not provided");
+                    "Unable to construct partition key as overwriteByPartitionKeys configuration not provided.");
         }
 
         this.partitionKeys = partitionKeys;
@@ -115,7 +115,7 @@ public class PrimaryKeyBuilder {
                         "DeleteItemRequest " + request + " does not contain request key.");
             }
         } else {
-            throw new InvalidRequestException("Empty write request" + request);
+            throw new InvalidRequestException("Empty write request " + request);
         }
     }
 }
