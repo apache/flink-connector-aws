@@ -115,203 +115,23 @@ public class DynamoDbSinkITCase {
     }
 
     @Test
-    public void nonExistentTableNameShouldResultInFailureWhenFailOnErrorIsTrue() throws Exception {
-        testJobFatalFailureTerminatesCorrectlyWithFailOnErrorFlagSetTo(true);
-    }
-
-    @Test
     public void nonExistentTableNameShouldResultInFailureWhenFailOnErrorIsFalse() {
-        testJobFatalFailureTerminatesCorrectlyWithFailOnErrorFlagSetTo(false);
-    }
-
-    private void testJobFatalFailureTerminatesCorrectlyWithFailOnErrorFlagSetTo(
-            boolean failOnError) {
         List<Map<String, AttributeValue>> items =
-                Items.builder().item(Item.builder().attr("1", "1").build()).build();
+            Items.builder().item(Item.builder().attr("1", "1").build()).build();
         Assertions.assertThatExceptionOfType(JobExecutionException.class)
-                .isThrownBy(
-                        () ->
-                                new Scenario(env.fromCollection(items))
-                                        .withTableName("NonExistentTableName")
-                                        .withFailOnError(failOnError)
-                                        .runScenario())
-                .havingCause()
-                .havingCause()
-                .withMessageContaining("Encountered non-recoverable exception");
+            .isThrownBy(
+                () ->
+                    new Scenario(env.fromCollection(items))
+                        .withTableName("NonExistentTableName")
+                        .withFailOnError(false)
+                        .runScenario())
+            .havingCause()
+            .havingCause()
+            .withMessageContaining("Encountered non-recoverable exception");
     }
 
     @Test
-    void badRegionShouldResultInFailureWhenInFailOnErrorIsOn() {
-        badRegionShouldResultInFailureWhenInFailOnErrorIs(true);
-    }
-
-    @Test
-    void badRegionShouldResultInFailureWhenInFailOnErrorIsOff() {
-        badRegionShouldResultInFailureWhenInFailOnErrorIs(false);
-    }
-
-    private void badRegionShouldResultInFailureWhenInFailOnErrorIs(boolean failOnError) {
-        Properties properties = getDefaultProperties();
-        properties.setProperty(AWS_REGION, "some-bad-region");
-
-        assertRunWithPropertiesAndSinkShouldFailWithExceptionOfType(
-                failOnError, properties, "Invalid AWS region");
-    }
-
-    @Test
-    void missingRegionShouldResultInFailureWhenInFailOnErrorIsOn() {
-        missingRegionShouldResultInFailureWhenInFailOnErrorIs(true);
-    }
-
-    @Test
-    void missingRegionShouldResultInFailureWhenInFailOnErrorIsOff() {
-        missingRegionShouldResultInFailureWhenInFailOnErrorIs(false);
-    }
-
-    private void missingRegionShouldResultInFailureWhenInFailOnErrorIs(boolean failOnError) {
-        Properties properties = getDefaultProperties();
-        properties.remove(AWS_REGION);
-        assertRunWithPropertiesAndSinkShouldFailWithExceptionOfType(
-                failOnError, properties, "region must not be null.");
-    }
-
-    @Test
-    void noURIEndpointShouldResultInFailureWhenInFailOnErrorIsOn() {
-        noURIEndpointShouldResultInFailureWhenInFailOnErrorIs(true);
-    }
-
-    @Test
-    void noURIEndpointShouldResultInFailureWhenInFailOnErrorIsOff() {
-        noURIEndpointShouldResultInFailureWhenInFailOnErrorIs(false);
-    }
-
-    private void noURIEndpointShouldResultInFailureWhenInFailOnErrorIs(boolean failOnError) {
-        Properties properties = getDefaultProperties();
-        properties.setProperty(AWS_ENDPOINT, "bad-endpoint-no-uri");
-        assertRunWithPropertiesAndSinkShouldFailWithExceptionOfType(
-                failOnError, properties, "The URI scheme of endpointOverride must not be null.");
-    }
-
-    @Test
-    void badEndpointShouldResultInFailureWhenInFailOnErrorIsOn() {
-        badEndpointShouldResultInFailureWhenInFailOnErrorIs(true);
-    }
-
-    @Test
-    void badEndpointShouldResultInFailureWhenInFailOnErrorIsOff() {
-        badEndpointShouldResultInFailureWhenInFailOnErrorIs(false);
-    }
-
-    private void badEndpointShouldResultInFailureWhenInFailOnErrorIs(boolean failOnError) {
-        Properties properties = getDefaultProperties();
-        properties.setProperty(AWS_ENDPOINT, "https://bad-endpoint-with-uri");
-        assertRunWithPropertiesAndSinkShouldFailWithExceptionOfType(
-                failOnError,
-                properties,
-                "UnknownHostException when attempting to interact with a service.");
-    }
-
-    @Test
-    void envVarWithNoCredentialsShouldResultInFailureWhenInFailOnErrorIsOn() {
-        noCredentialsProvidedAndCredentialsProviderSpecifiedShouldResultInFailure(
-                true,
-                AWSConfigConstants.CredentialProvider.ENV_VAR.toString(),
-                "Access key must be specified either via environment variable");
-    }
-
-    @Test
-    void envVarWithNoCredentialsShouldResultInFailureWhenInFailOnErrorIsOff() {
-        noCredentialsProvidedAndCredentialsProviderSpecifiedShouldResultInFailure(
-                false,
-                AWSConfigConstants.CredentialProvider.ENV_VAR.toString(),
-                "Access key must be specified either via environment variable");
-    }
-
-    @Test
-    void sysPropWithNoCredentialsShouldResultInFailureWhenInFailOnErrorIsOn() {
-        noCredentialsProvidedAndCredentialsProviderSpecifiedShouldResultInFailure(
-                true,
-                AWSConfigConstants.CredentialProvider.SYS_PROP.toString(),
-                "Unable to load credentials from system settings");
-    }
-
-    @Test
-    void sysPropWithNoCredentialsShouldResultInFailureWhenInFailOnErrorIsOff() {
-        noCredentialsProvidedAndCredentialsProviderSpecifiedShouldResultInFailure(
-                false,
-                AWSConfigConstants.CredentialProvider.SYS_PROP.toString(),
-                "Unable to load credentials from system settings");
-    }
-
-    @Test
-    void basicWithNoCredentialsShouldResultInFailureWhenInFailOnErrorIsOn() {
-        noCredentialsProvidedAndCredentialsProviderSpecifiedShouldResultInFailure(
-                true,
-                AWSConfigConstants.CredentialProvider.BASIC.toString(),
-                "Please set values for AWS Access Key ID ('aws.credentials.provider.basic.accesskeyid') and Secret Key ('aws.credentials.provider.basic.secretkey') when using the BASIC AWS credential provider type.");
-    }
-
-    @Test
-    void basicWithNoCredentialsShouldResultInFailureWhenInFailOnErrorIsOff() {
-        noCredentialsProvidedAndCredentialsProviderSpecifiedShouldResultInFailure(
-                false,
-                AWSConfigConstants.CredentialProvider.BASIC.toString(),
-                "Please set values for AWS Access Key ID ('aws.credentials.provider.basic.accesskeyid') and Secret Key ('aws.credentials.provider.basic.secretkey') when using the BASIC AWS credential provider type.");
-    }
-
-    @Test
-    void webIdentityTokenWithNoCredentialsShouldResultInFailureWhenInFailOnErrorIsOn() {
-        noCredentialsProvidedAndCredentialsProviderSpecifiedShouldResultInFailure(
-                true,
-                AWSConfigConstants.CredentialProvider.WEB_IDENTITY_TOKEN.toString(),
-                "Either the environment variable AWS_WEB_IDENTITY_TOKEN_FILE or the javaproperty aws.webIdentityTokenFile must be set");
-    }
-
-    @Test
-    void webIdentityTokenWithNoCredentialsShouldResultInFailureWhenInFailOnErrorIsOff() {
-        noCredentialsProvidedAndCredentialsProviderSpecifiedShouldResultInFailure(
-                false,
-                AWSConfigConstants.CredentialProvider.WEB_IDENTITY_TOKEN.toString(),
-                "Either the environment variable AWS_WEB_IDENTITY_TOKEN_FILE or the javaproperty aws.webIdentityTokenFile must be set");
-    }
-
-    @Test
-    void wrongCredentialProviderNameShouldResultInFailureWhenInFailOnErrorIsOn() {
-        noCredentialsProvidedAndCredentialsProviderSpecifiedShouldResultInFailure(
-                true, "WRONG", "Invalid AWS Credential Provider Type");
-    }
-
-    @Test
-    void wrongCredentialProviderNameShouldResultInFailureWhenInFailOnErrorIsOff() {
-        noCredentialsProvidedAndCredentialsProviderSpecifiedShouldResultInFailure(
-                false, "WRONG", "Invalid AWS Credential Provider Type");
-    }
-
-    private void noCredentialsProvidedAndCredentialsProviderSpecifiedShouldResultInFailure(
-            boolean failOnError, String credentialsProvider, String expectedMessage) {
-        assertRunWithPropertiesAndSinkShouldFailWithExceptionOfType(
-                failOnError,
-                getDefaultPropertiesWithoutCredentialsSetAndCredentialProvider(credentialsProvider),
-                expectedMessage);
-    }
-
-    private void assertRunWithPropertiesAndSinkShouldFailWithExceptionOfType(
-            boolean failOnError, Properties properties, String expectedMessage) {
-        Assertions.assertThatExceptionOfType(JobExecutionException.class)
-                .isThrownBy(
-                        () ->
-                                new Scenario(getRandomDataGenerator(10, 1))
-                                        .withTableName(testTableName)
-                                        .withFailOnError(failOnError)
-                                        .withClientProperties(properties)
-                                        .runScenario())
-                .havingCause()
-                .havingCause()
-                .withMessageContaining(expectedMessage);
-    }
-
-    @Test
-    public void batchRequestFailsBecauseNoDeduplicationConfiguration() {
+    public void batchRequestFailsOnDuplicates() {
         Assertions.assertThatExceptionOfType(JobExecutionException.class)
                 .isThrownBy(
                         () ->
