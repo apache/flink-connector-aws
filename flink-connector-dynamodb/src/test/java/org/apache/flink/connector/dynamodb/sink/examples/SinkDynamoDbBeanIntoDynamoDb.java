@@ -47,7 +47,7 @@ public class SinkDynamoDbBeanIntoDynamoDb {
 
         DynamoDbSink<Order> dynamoDbSink =
                 DynamoDbSink.<Order>builder()
-                        .setDestinationTableName(DYNAMODB_TABLE)
+                        .setTableName(DYNAMODB_TABLE)
                         .setElementConverter(new DynamoDbBeanElementConverter<>(Order.class))
                         .setDynamoDbProperties(sinkProperties)
                         .build();

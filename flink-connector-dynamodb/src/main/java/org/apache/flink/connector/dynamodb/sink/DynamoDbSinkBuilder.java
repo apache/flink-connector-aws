@@ -51,7 +51,7 @@ import java.util.Properties;
  *  DynamoDbSink<String> dynamoDbSink =
  *            DynamoDbSink.<String>builder()
  *                    .setElementConverter(new DummyDynamoDbElementConverter())
- *                    .setDestinationTableName("your-table-name")
+ *                    .setTableName("your-table-name")
  *                    .build();
  * }</pre>
  *
@@ -65,7 +65,7 @@ import java.util.Properties;
  *   <li>{@code maxTimeInBufferMS} will be 5000ms
  *   <li>{@code maxRecordSizeInBytes} setting is not supported by this implementation
  *   <li>{@code failOnError} will be false
- *   <li>{@code destinationTableName} destination table for the sink
+ *   <li>{@code tableName} destination table for the sink
  *   <li>{@code overwriteByPartitionKeys} will be empty meaning no records deduplication will be
  *       performed by the batch sink
  * </ul>
@@ -106,8 +106,8 @@ public class DynamoDbSinkBuilder<InputT>
         return this;
     }
 
-    /** Destination table name for the DynamoDB sink. */
-    public DynamoDbSinkBuilder<InputT> setDestinationTableName(String tableName) {
+    /** Table name for the DynamoDB sink. */
+    public DynamoDbSinkBuilder<InputT> setTableName(String tableName) {
         this.tableName = tableName;
         return this;
     }

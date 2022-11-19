@@ -462,7 +462,7 @@ public class DynamoDbSinkITCase {
                             .setMaxBatchSize(maxBatchSize)
                             .setFailOnError(failOnError)
                             .setMaxBufferedRequests(1000)
-                            .setDestinationTableName(tableName)
+                            .setTableName(tableName)
                             .setOverwriteByPartitionKeys(deduplicateOnKeys)
                             .setDynamoDbProperties(properties)
                             .build();

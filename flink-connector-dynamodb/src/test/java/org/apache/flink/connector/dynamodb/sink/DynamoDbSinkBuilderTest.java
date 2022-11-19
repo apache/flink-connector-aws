@@ -32,7 +32,7 @@ public class DynamoDbSinkBuilderTest {
         DynamoDbSink<Map<String, AttributeValue>> dynamoDbSink =
                 DynamoDbSink.<Map<String, AttributeValue>>builder()
                         .setElementConverter(new TestDynamoDbElementConverter())
-                        .setDestinationTableName("testTable")
+                        .setTableName("testTable")
                         .build();
         Assertions.assertThat(1).isEqualTo(dynamoDbSink.getWriterStateSerializer().getVersion());
     }
@@ -43,7 +43,7 @@ public class DynamoDbSinkBuilderTest {
                 .isThrownBy(
                         () ->
                                 DynamoDbSink.builder()
-                                        .setDestinationTableName("testTable")
+                                        .setTableName("testTable")
                                         .setFailOnError(true)
                                         .build())
                 .withMessageContaining(
@@ -51,7 +51,7 @@ public class DynamoDbSinkBuilderTest {
     }
 
     @Test
-    public void destinationTableNameMustBeSetWhenBuilt() {
+    public void tableNameMustBeSetWhenBuilt() {
         Assertions.assertThatExceptionOfType(NullPointerException.class)
                 .isThrownBy(
                         () ->
@@ -64,13 +64,13 @@ public class DynamoDbSinkBuilderTest {
     }
 
     @Test
-    public void destinationTableNameMustBeNotEmptyWhenBuilt() {
+    public void tableNameMustBeNotEmptyWhenBuilt() {
         Assertions.assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(
                         () ->
                                 DynamoDbSink.<Map<String, AttributeValue>>builder()
                                         .setElementConverter(new TestDynamoDbElementConverter())
-                                        .setDestinationTableName("")
+                                        .setTableName("")
                                         .setFailOnError(true)
                                         .build())
                 .withMessageContaining(
@@ -84,7 +84,7 @@ public class DynamoDbSinkBuilderTest {
                         () ->
                                 DynamoDbSink.<Map<String, AttributeValue>>builder()
                                         .setElementConverter(new TestDynamoDbElementConverter())
-                                        .setDestinationTableName("test_table")
+                                        .setTableName("test_table")
                                         .setMaxBatchSize(50)
                                         .setFailOnError(true)
                                         .build())
@@ -99,7 +99,7 @@ public class DynamoDbSinkBuilderTest {
                         () ->
                                 DynamoDbSink.<Map<String, AttributeValue>>builder()
                                         .setElementConverter(new TestDynamoDbElementConverter())
-                                        .setDestinationTableName("test_table")
+                                        .setTableName("test_table")
                                         .setMaxBatchSizeInBytes(100)
                                         .setFailOnError(true)
                                         .build())
@@ -114,7 +114,7 @@ public class DynamoDbSinkBuilderTest {
                         () ->
                                 DynamoDbSink.<Map<String, AttributeValue>>builder()
                                         .setElementConverter(new TestDynamoDbElementConverter())
-                                        .setDestinationTableName("test_table")
+                                        .setTableName("test_table")
                                         .setMaxRecordSizeInBytes(100)
                                         .setFailOnError(true)
                                         .build())

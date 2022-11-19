@@ -50,7 +50,7 @@ public class SinkIntoDynamoDb {
 
         DynamoDbSink<Long> dynamoDbSink =
                 DynamoDbSink.<Long>builder()
-                        .setDestinationTableName(DYNAMODB_TABLE)
+                        .setTableName(DYNAMODB_TABLE)
                         .setElementConverter(new TestDynamoDbElementConverter())
                         .setMaxBatchSize(20)
                         .setDynamoDbProperties(sinkProperties)
