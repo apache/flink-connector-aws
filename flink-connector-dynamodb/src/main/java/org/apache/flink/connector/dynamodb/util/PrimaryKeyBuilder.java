@@ -57,11 +57,7 @@ public class PrimaryKeyBuilder {
 
             if (keyAttribute == null) {
                 throw new InvalidRequestException(
-                        "Request "
-                                + request.toString()
-                                + " does not contain partition key "
-                                + keyName
-                                + ".");
+                        "Request " + request + " does not contain partition key " + keyName + ".");
             }
 
             String keyValue = getKeyValue(keyAttribute);
@@ -69,7 +65,7 @@ public class PrimaryKeyBuilder {
             if (StringUtils.isBlank(keyValue)) {
                 throw new InvalidRequestException(
                         "Partition key or sort key attributes require non-empty values. Request "
-                                + request.toString()
+                                + request
                                 + " contains empty key "
                                 + keyName
                                 + ".");
@@ -109,19 +105,17 @@ public class PrimaryKeyBuilder {
                 return request.putRequest().item();
             } else {
                 throw new InvalidRequestException(
-                        "PutItemRequest " + request.toString() + " does not contain request items");
+                        "PutItemRequest " + request + " does not contain request items.");
             }
         } else if (request.deleteRequest() != null) {
             if (request.deleteRequest().hasKey()) {
                 return request.deleteRequest().key();
             } else {
                 throw new InvalidRequestException(
-                        "DeleteItemRequest "
-                                + request.toString()
-                                + " does not contain request key");
+                        "DeleteItemRequest " + request + " does not contain request key.");
             }
         } else {
-            throw new InvalidRequestException("Empty write request" + request.toString());
+            throw new InvalidRequestException("Empty write request" + request);
         }
     }
 }
