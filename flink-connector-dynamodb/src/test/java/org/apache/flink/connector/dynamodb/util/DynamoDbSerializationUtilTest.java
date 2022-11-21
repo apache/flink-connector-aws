@@ -23,7 +23,7 @@ import org.apache.flink.connector.dynamodb.sink.DynamoDbWriteRequestType;
 
 import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableMap;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 

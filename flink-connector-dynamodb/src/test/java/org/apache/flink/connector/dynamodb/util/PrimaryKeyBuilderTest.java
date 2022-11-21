@@ -23,8 +23,7 @@ import org.apache.flink.connector.dynamodb.sink.InvalidRequestException;
 import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableList;
 import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableMap;
 
-import org.assertj.core.api.Assertions;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.DeleteRequest;
@@ -32,8 +31,10 @@ import software.amazon.awssdk.services.dynamodb.model.PutRequest;
 import software.amazon.awssdk.services.dynamodb.model.WriteRequest;
 
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
 import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 /** Unit tests for {@link PrimaryKeyBuilder}. */
 public class PrimaryKeyBuilderTest {
@@ -87,14 +88,13 @@ public class PrimaryKeyBuilderTest {
 
         PrimaryKeyBuilder keyBuilder =
                 new PrimaryKeyBuilder(ImmutableList.of(PARTITION_KEY_NAME, SORT_KEY_NAME));
-        Assertions.assertThat(keyBuilder.build(putRequestOne))
-                .isNotEqualTo(keyBuilder.build(putRequestTwo));
+        assertThat(keyBuilder.build(putRequestOne)).isNotEqualTo(keyBuilder.build(putRequestTwo));
     }
 
     @Test
     public void testPartitionKeysOfTwoDifferentRequestsEqual() {
         PrimaryKeyBuilder keyBuilder = new PrimaryKeyBuilder(ImmutableList.of(PARTITION_KEY_NAME));
-        Assertions.assertThat(keyBuilder.build(createPutItemRequest(createItemValues())))
+        assertThat(keyBuilder.build(createPutItemRequest(createItemValues())))
                 .isEqualTo(keyBuilder.build(createDeleteItemRequest(createItemValues())));
     }
 
@@ -103,35 +103,65 @@ public class PrimaryKeyBuilderTest {
         PrimaryKeyBuilder keyBuilder =
                 new PrimaryKeyBuilder(ImmutableList.of(PARTITION_KEY_NAME, SORT_KEY_NAME));
 
-        Assertions.assertThat(keyBuilder.build(createPutItemRequest(createItemValues())))
+        assertThat(keyBuilder.build(createPutItemRequest(createItemValues())))
                 .isEqualTo(keyBuilder.build(createDeleteItemRequest(createItemValues())));
     }
 
-    @Test(expected = InvalidRequestException.class)
-    public void testExceptOnEmptyRequest() {
-        new PrimaryKeyBuilder(ImmutableList.of(PARTITION_KEY_NAME))
-                .build(createPutItemRequest(new HashMap<>()));
+    @Test
+    public void testExceptOnEmptyPutRequest() {
+        assertThatExceptionOfType(InvalidRequestException.class)
+                .isThrownBy(
+                        () ->
+                                new PrimaryKeyBuilder(ImmutableList.of(PARTITION_KEY_NAME))
+                                        .build(
+                                                WriteRequest.builder()
+                                                        .putRequest(PutRequest.builder().build())
+                                                        .build()))
+                .withMessageContaining("does not contain request items.");
     }
 
-    @Test(expected = InvalidRequestException.class)
+    @Test
+    public void testExceptOnEmptyDeleteRequest() {
+        assertThatExceptionOfType(InvalidRequestException.class)
+                .isThrownBy(
+                        () ->
+                                new PrimaryKeyBuilder(ImmutableList.of(PARTITION_KEY_NAME))
+                                        .build(
+                                                WriteRequest.builder()
+                                                        .deleteRequest(
+                                                                DeleteRequest.builder().build())
+                                                        .build()))
+                .withMessageContaining("does not contain request key.");
+    }
+
+    @Test
     public void testExceptWhenNoPartitionKey() {
         ImmutableMap<String, AttributeValue> itemValues =
                 ImmutableMap.of("some_item", AttributeValue.builder().bool(false).build());
 
-        new PrimaryKeyBuilder(ImmutableList.of(PARTITION_KEY_NAME))
-                .build(createPutItemRequest(itemValues));
+        assertThatExceptionOfType(InvalidRequestException.class)
+                .isThrownBy(
+                        () ->
+                                new PrimaryKeyBuilder(ImmutableList.of(PARTITION_KEY_NAME))
+                                        .build(createPutItemRequest(itemValues)))
+                .withMessageContaining("does not contain partition key part_key_name.");
     }
 
-    @Test(expected = InvalidRequestException.class)
+    @Test
     public void testExceptWhenEmptyKey() {
         ImmutableMap<String, AttributeValue> itemValues =
                 ImmutableMap.of(PARTITION_KEY_NAME, AttributeValue.builder().s("").build());
 
-        new PrimaryKeyBuilder(ImmutableList.of(PARTITION_KEY_NAME))
-                .build(createPutItemRequest(itemValues));
+        assertThatExceptionOfType(InvalidRequestException.class)
+                .isThrownBy(
+                        () ->
+                                new PrimaryKeyBuilder(ImmutableList.of(PARTITION_KEY_NAME))
+                                        .build(createPutItemRequest(itemValues)))
+                .withMessageContaining(
+                        "Partition key or sort key attributes require non-empty values.");
     }
 
-    @Test(expected = InvalidRequestException.class)
+    @Test
     public void testExceptWhenNoPartitionKeyCompositeKey() {
         ImmutableMap<String, AttributeValue> itemValues =
                 ImmutableMap.of(
@@ -140,11 +170,15 @@ public class PrimaryKeyBuilderTest {
                         "some_item",
                         AttributeValue.builder().bool(false).build());
 
-        new PrimaryKeyBuilder(ImmutableList.of(PARTITION_KEY_NAME))
-                .build(createPutItemRequest(itemValues));
+        assertThatExceptionOfType(InvalidRequestException.class)
+                .isThrownBy(
+                        () ->
+                                new PrimaryKeyBuilder(ImmutableList.of(PARTITION_KEY_NAME))
+                                        .build(createPutItemRequest(itemValues)))
+                .withMessageContaining("does not contain partition key part_key_name.");
     }
 
-    @Test(expected = InvalidRequestException.class)
+    @Test
     public void testExceptWhenNoSortKey() {
         ImmutableMap<String, AttributeValue> itemValues =
                 ImmutableMap.of(
@@ -153,7 +187,12 @@ public class PrimaryKeyBuilderTest {
                         "some_item",
                         AttributeValue.builder().bool(false).build());
 
-        new PrimaryKeyBuilder(ImmutableList.of(PARTITION_KEY_NAME, SORT_KEY_NAME))
-                .build(createPutItemRequest(itemValues));
+        assertThatExceptionOfType(InvalidRequestException.class)
+                .isThrownBy(
+                        () ->
+                                new PrimaryKeyBuilder(
+                                                ImmutableList.of(PARTITION_KEY_NAME, SORT_KEY_NAME))
+                                        .build(createPutItemRequest(itemValues)))
+                .withMessageContaining("does not contain partition key sort_key_name.");
     }
 }
