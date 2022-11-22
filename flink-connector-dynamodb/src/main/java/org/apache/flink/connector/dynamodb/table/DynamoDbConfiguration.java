@@ -20,6 +20,11 @@ package org.apache.flink.connector.dynamodb.table;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.configuration.ReadableConfig;
+import org.apache.flink.connector.aws.table.util.AsyncClientOptionsUtils;
+import org.apache.flink.connector.base.table.sink.options.AsyncSinkConfigurationValidator;
+
+import java.util.Map;
+import java.util.Properties;
 
 import static org.apache.flink.connector.dynamodb.table.DynamoDbConnectorOptions.FAIL_ON_ERROR;
 import static org.apache.flink.connector.dynamodb.table.DynamoDbConnectorOptions.TABLE_NAME;
@@ -28,17 +33,31 @@ import static org.apache.flink.connector.dynamodb.table.DynamoDbConnectorOptions
 @Internal
 public class DynamoDbConfiguration {
 
-    private final ReadableConfig config;
+    private final Map<String, String> rawTableOptions;
+    private final ReadableConfig tableOptions;
+    private final AsyncSinkConfigurationValidator asyncSinkConfigurationValidator;
+    private final AsyncClientOptionsUtils asyncClientOptionsUtils;
 
-    public DynamoDbConfiguration(ReadableConfig config) {
-        this.config = config;
+    public DynamoDbConfiguration(Map<String, String> rawTableOptions, ReadableConfig tableOptions) {
+        this.rawTableOptions = rawTableOptions;
+        this.tableOptions = tableOptions;
+        this.asyncSinkConfigurationValidator = new AsyncSinkConfigurationValidator(tableOptions);
+        this.asyncClientOptionsUtils = new AsyncClientOptionsUtils(rawTableOptions);
     }
 
     public String getTableName() {
-        return config.get(TABLE_NAME);
+        return tableOptions.get(TABLE_NAME);
     }
 
     public boolean getFailOnError() {
-        return config.get(FAIL_ON_ERROR);
+        return tableOptions.get(FAIL_ON_ERROR);
+    }
+
+    public Properties getAsyncSinkProperties() {
+        return asyncSinkConfigurationValidator.getValidatedConfigurations();
+    }
+
+    public Properties getSinkClientProperties() {
+        return asyncClientOptionsUtils.getValidatedConfigurations();
     }
 }
