@@ -71,7 +71,7 @@ public class DynamoDbDynamicSinkFactoryTest {
 
         // Construct expected sink
         Properties dynamoDbClientProperties = new Properties();
-        dynamoDbClientProperties.putAll(sinkOptions);
+        dynamoDbClientProperties.put("aws.region", "us-east-1");
         DynamoDbDynamicSink expectedSink =
                 (DynamoDbDynamicSink)
                         DynamoDbDynamicSink.builder()
@@ -104,14 +104,12 @@ public class DynamoDbDynamicSinkFactoryTest {
                 (DynamoDbDynamicSink) createTableSink(sinkSchema, sinkOptions);
 
         // Construct expected sink
-        Properties dynamoDbClientProperties = new Properties();
-        dynamoDbClientProperties.putAll(sinkOptions);
         DynamoDbDynamicSink expectedSink =
                 (DynamoDbDynamicSink)
                         DynamoDbDynamicSink.builder()
                                 .setTableName(DYNAMO_DB_TABLE_NAME)
                                 .setOverwriteByPartitionKeys(new HashSet<>())
-                                .setDynamoDbClientProperties(dynamoDbClientProperties)
+                                .setDynamoDbClientProperties(defaultSinkProperties())
                                 .setPhysicalDataType(sinkSchema.toPhysicalRowDataType())
                                 .build();
 
@@ -124,14 +122,12 @@ public class DynamoDbDynamicSinkFactoryTest {
         Map<String, String> sinkOptions = defaultSinkOptions().build();
 
         // Construct expected sink
-        Properties dynamoDbClientProperties = new Properties();
-        dynamoDbClientProperties.putAll(sinkOptions);
         DynamoDbDynamicSink originalSink =
                 (DynamoDbDynamicSink)
                         DynamoDbDynamicSink.builder()
                                 .setTableName(DYNAMO_DB_TABLE_NAME)
                                 .setOverwriteByPartitionKeys(new HashSet<>())
-                                .setDynamoDbClientProperties(dynamoDbClientProperties)
+                                .setDynamoDbClientProperties(defaultSinkProperties())
                                 .setPhysicalDataType(sinkSchema.toPhysicalRowDataType())
                                 .build();
 
@@ -150,14 +146,76 @@ public class DynamoDbDynamicSinkFactoryTest {
                 (DynamoDbDynamicSink) createTableSink(sinkSchema, partitionKeys, sinkOptions);
 
         // Construct expected sink
-        Properties dynamoDbClientProperties = new Properties();
-        dynamoDbClientProperties.putAll(sinkOptions);
         DynamoDbDynamicSink expectedSink =
                 (DynamoDbDynamicSink)
                         DynamoDbDynamicSink.builder()
                                 .setTableName(DYNAMO_DB_TABLE_NAME)
                                 .setOverwriteByPartitionKeys(new HashSet<>(partitionKeys))
-                                .setDynamoDbClientProperties(dynamoDbClientProperties)
+                                .setDynamoDbClientProperties(defaultSinkProperties())
+                                .setPhysicalDataType(sinkSchema.toPhysicalRowDataType())
+                                .setFailOnError(true)
+                                .build();
+
+        assertThat(actualSink).usingRecursiveComparison().isEqualTo(expectedSink);
+    }
+
+    @Test
+    void testGoodTableSinkWithAwsCredentialOptions() {
+        ResolvedSchema sinkSchema = defaultSinkSchema();
+        Map<String, String> sinkOptions =
+                defaultSinkOptions().withTableOption(FAIL_ON_ERROR, "true").build();
+        sinkOptions.put("aws.credentials.provider", "BASIC");
+        sinkOptions.put("aws.credentials.basic.accesskeyid", "1234");
+        sinkOptions.put("aws.credentials.basic.secretkey", "5678");
+        List<String> partitionKeys = Collections.singletonList("partition_key");
+
+        // Construct actual sink
+        DynamoDbDynamicSink actualSink =
+                (DynamoDbDynamicSink) createTableSink(sinkSchema, partitionKeys, sinkOptions);
+
+        // Construct expected sink
+        Properties expectedSinkProperties = defaultSinkProperties();
+        expectedSinkProperties.put("aws.credentials.provider", "BASIC");
+        expectedSinkProperties.put("aws.credentials.provider.basic.accesskeyid", "1234");
+        expectedSinkProperties.put("aws.credentials.provider.basic.secretkey", "5678");
+        DynamoDbDynamicSink expectedSink =
+                (DynamoDbDynamicSink)
+                        DynamoDbDynamicSink.builder()
+                                .setTableName(DYNAMO_DB_TABLE_NAME)
+                                .setOverwriteByPartitionKeys(new HashSet<>(partitionKeys))
+                                .setDynamoDbClientProperties(expectedSinkProperties)
+                                .setPhysicalDataType(sinkSchema.toPhysicalRowDataType())
+                                .setFailOnError(true)
+                                .build();
+
+        assertThat(actualSink).usingRecursiveComparison().isEqualTo(expectedSink);
+    }
+
+    @Test
+    void testGoodTableSinkWithHttpClientOptions() {
+        ResolvedSchema sinkSchema = defaultSinkSchema();
+        Map<String, String> sinkOptions =
+                defaultSinkOptions().withTableOption(FAIL_ON_ERROR, "true").build();
+        sinkOptions.put("sink.http-client.max-concurrency", "123");
+        sinkOptions.put("sink.http-client.read-timeout", "456");
+        sinkOptions.put("sink.http-client.protocol.version", "HTTP1_1");
+        List<String> partitionKeys = Collections.singletonList("partition_key");
+
+        // Construct actual sink
+        DynamoDbDynamicSink actualSink =
+                (DynamoDbDynamicSink) createTableSink(sinkSchema, partitionKeys, sinkOptions);
+
+        // Construct expected sink
+        Properties expectedSinkProperties = defaultSinkProperties();
+        expectedSinkProperties.put("aws.http-client.max-concurrency", "123");
+        expectedSinkProperties.put("aws.http-client.read-timeout", "456");
+        expectedSinkProperties.put("aws.http.protocol.version", "HTTP1_1");
+        DynamoDbDynamicSink expectedSink =
+                (DynamoDbDynamicSink)
+                        DynamoDbDynamicSink.builder()
+                                .setTableName(DYNAMO_DB_TABLE_NAME)
+                                .setOverwriteByPartitionKeys(new HashSet<>(partitionKeys))
+                                .setDynamoDbClientProperties(expectedSinkProperties)
                                 .setPhysicalDataType(sinkSchema.toPhysicalRowDataType())
                                 .setFailOnError(true)
                                 .build();
@@ -183,8 +241,6 @@ public class DynamoDbDynamicSinkFactoryTest {
                 (DynamoDbDynamicSink) createTableSink(sinkSchema, partitionKeys, sinkOptions);
 
         // Construct expected sink
-        Properties dynamoDbClientProperties = new Properties();
-        dynamoDbClientProperties.putAll(sinkOptions);
         DynamoDbDynamicSink expectedSink =
                 (DynamoDbDynamicSink)
                         DynamoDbDynamicSink.builder()
@@ -195,7 +251,7 @@ public class DynamoDbDynamicSinkFactoryTest {
                                 .setMaxTimeInBufferMS(1000)
                                 .setTableName(DYNAMO_DB_TABLE_NAME)
                                 .setOverwriteByPartitionKeys(new HashSet<>(partitionKeys))
-                                .setDynamoDbClientProperties(dynamoDbClientProperties)
+                                .setDynamoDbClientProperties(defaultSinkProperties())
                                 .setPhysicalDataType(sinkSchema.toPhysicalRowDataType())
                                 .build();
 
@@ -291,5 +347,11 @@ public class DynamoDbDynamicSinkFactoryTest {
                         DynamoDbDynamicSinkFactory.FACTORY_IDENTIFIER, TestFormatFactory.IDENTIFIER)
                 .withTableOption(TABLE_NAME, DYNAMO_DB_TABLE_NAME)
                 .withTableOption("aws.region", "us-east-1");
+    }
+
+    private Properties defaultSinkProperties() {
+        Properties properties = new Properties();
+        properties.put("aws.region", "us-east-1");
+        return properties;
     }
 }

@@ -21,7 +21,6 @@ package org.apache.flink.connector.dynamodb.table;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.connector.base.table.AsyncDynamicTableSinkFactory;
-import org.apache.flink.connector.base.table.sink.options.AsyncSinkConfigurationValidator;
 import org.apache.flink.table.catalog.ResolvedCatalogTable;
 import org.apache.flink.table.connector.sink.DynamicTableSink;
 import org.apache.flink.table.factories.FactoryUtil;
@@ -29,7 +28,6 @@ import org.apache.flink.table.factories.FactoryUtil;
 import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableSet;
 
 import java.util.HashSet;
-import java.util.Properties;
 import java.util.Set;
 
 import static org.apache.flink.connector.dynamodb.table.DynamoDbConnectorOptions.AWS_REGION;
@@ -50,10 +48,7 @@ public class DynamoDbDynamicSinkFactory extends AsyncDynamicTableSinkFactory {
         FactoryUtil.validateFactoryOptions(this, factoryHelper.getOptions());
 
         DynamoDbConfiguration dynamoDbConfiguration =
-                new DynamoDbConfiguration(factoryHelper.getOptions());
-
-        Properties tableProperties = new Properties();
-        tableProperties.putAll(catalogTable.getOptions());
+                new DynamoDbConfiguration(catalogTable.getOptions(), factoryHelper.getOptions());
 
         DynamoDbDynamicSink.DynamoDbDynamicTableSinkBuilder builder =
                 DynamoDbDynamicSink.builder()
@@ -62,12 +57,10 @@ public class DynamoDbDynamicSinkFactory extends AsyncDynamicTableSinkFactory {
                         .setPhysicalDataType(
                                 catalogTable.getResolvedSchema().toPhysicalRowDataType())
                         .setOverwriteByPartitionKeys(new HashSet<>(catalogTable.getPartitionKeys()))
-                        .setDynamoDbClientProperties(tableProperties);
+                        .setDynamoDbClientProperties(
+                                dynamoDbConfiguration.getSinkClientProperties());
 
-        AsyncSinkConfigurationValidator asyncSinkConfigurationValidator =
-                new AsyncSinkConfigurationValidator(factoryHelper.getOptions());
-        addAsyncOptionsToBuilder(
-                asyncSinkConfigurationValidator.getValidatedConfigurations(), builder);
+        addAsyncOptionsToBuilder(dynamoDbConfiguration.getAsyncSinkProperties(), builder);
 
         return builder.build();
     }
