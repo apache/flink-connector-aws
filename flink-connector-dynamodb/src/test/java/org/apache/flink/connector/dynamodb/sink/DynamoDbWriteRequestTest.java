@@ -18,6 +18,8 @@
 
 package org.apache.flink.connector.dynamodb.sink;
 
+import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableMap;
+
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
@@ -43,5 +45,20 @@ class DynamoDbWriteRequestTest {
                         "If this test fails the DynamoDB AWS SDK may have changed. "
                                 + "We need to check this, and update the DynamoDbWriterStateSerializer if required.")
                 .hasSize(11);
+    }
+
+    @Test
+    public void testToString() {
+        DynamoDbWriteRequest dynamoDbWriteRequest =
+                DynamoDbWriteRequest.builder()
+                        .setItem(
+                                ImmutableMap.of(
+                                        "testKey", AttributeValue.builder().s("testValue").build()))
+                        .setType(DynamoDbWriteRequestType.PUT)
+                        .build();
+        assertThat(dynamoDbWriteRequest.toString())
+                .contains("testKey")
+                .contains("testValue")
+                .contains(DynamoDbWriteRequestType.PUT.toString());
     }
 }

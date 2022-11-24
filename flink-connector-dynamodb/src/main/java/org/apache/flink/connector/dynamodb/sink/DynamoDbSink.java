@@ -23,6 +23,7 @@ import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.connector.base.sink.AsyncSinkBase;
 import org.apache.flink.connector.base.sink.writer.BufferedRequestState;
 import org.apache.flink.connector.base.sink.writer.ElementConverter;
+import org.apache.flink.connector.dynamodb.sink.client.DynamoDbAsyncClientProvider;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
 
 import java.io.IOException;
@@ -151,7 +152,7 @@ public class DynamoDbSink<InputT> extends AsyncSinkBase<InputT, DynamoDbWriteReq
                 failOnError,
                 tableName,
                 overwriteByPartitionKeys,
-                dynamoDbClientProperties,
+                new DynamoDbAsyncClientProvider(dynamoDbClientProperties),
                 recoveredState);
     }
 

@@ -25,7 +25,6 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
 import java.io.Serializable;
 import java.util.Map;
-import java.util.Objects;
 
 /**
  * Represents a single Write Request to DynamoDb. Contains the item to be written as well as the
@@ -52,25 +51,13 @@ public class DynamoDbWriteRequest implements Serializable {
         return type;
     }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-        DynamoDbWriteRequest that = (DynamoDbWriteRequest) o;
-        return item.equals(that.item) && type == that.type;
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(item, type);
-    }
-
     public static Builder builder() {
         return new Builder();
+    }
+
+    @Override
+    public String toString() {
+        return "DynamoDbWriteRequest{" + "item=" + item + ", type=" + type + '}';
     }
 
     /** Builder for DynamoDbWriteRequest. */

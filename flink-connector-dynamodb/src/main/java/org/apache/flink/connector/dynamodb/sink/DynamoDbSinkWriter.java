@@ -20,13 +20,12 @@ package org.apache.flink.connector.dynamodb.sink;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.connector.sink2.Sink.InitContext;
-import org.apache.flink.connector.aws.config.AWSConfigConstants;
-import org.apache.flink.connector.aws.util.AWSAsyncSinkUtil;
 import org.apache.flink.connector.aws.util.AWSGeneralUtil;
 import org.apache.flink.connector.base.sink.throwable.FatalExceptionClassifier;
 import org.apache.flink.connector.base.sink.writer.AsyncSinkWriter;
 import org.apache.flink.connector.base.sink.writer.BufferedRequestState;
 import org.apache.flink.connector.base.sink.writer.ElementConverter;
+import org.apache.flink.connector.dynamodb.sink.client.SdkClientProvider;
 import org.apache.flink.connector.dynamodb.util.PrimaryKeyBuilder;
 import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.groups.SinkWriterMetricGroup;
@@ -36,7 +35,6 @@ import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse;
@@ -53,7 +51,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -96,7 +93,6 @@ class DynamoDbSinkWriter<InputT> extends AsyncSinkWriter<InputT, DynamoDbWriteRe
                     (err) ->
                             err instanceof DynamoDbException
                                     && ((DynamoDbException) err)
-                                            .toBuilder()
                                             .awsErrorDetails()
                                             .errorCode()
                                             .equalsIgnoreCase("ValidationException"),
@@ -123,9 +119,7 @@ class DynamoDbSinkWriter<InputT> extends AsyncSinkWriter<InputT, DynamoDbWriteRe
     /* The sink writer metric group */
     private final SinkWriterMetricGroup metrics;
 
-    /* The asynchronous http client for the asynchronous DynamoDb client */
-    private final SdkAsyncHttpClient httpClient;
-    private final DynamoDbAsyncClient client;
+    private final SdkClientProvider<DynamoDbAsyncClient> clientProvider;
     private final boolean failOnError;
     private final String tableName;
 
@@ -143,7 +137,7 @@ class DynamoDbSinkWriter<InputT> extends AsyncSinkWriter<InputT, DynamoDbWriteRe
             boolean failOnError,
             String tableName,
             List<String> overwriteByPartitionKeys,
-            Properties dynamoDbClientProperties,
+            SdkClientProvider<DynamoDbAsyncClient> clientProvider,
             Collection<BufferedRequestState<DynamoDbWriteRequest>> states) {
         super(
                 elementConverter,
@@ -161,31 +155,7 @@ class DynamoDbSinkWriter<InputT> extends AsyncSinkWriter<InputT, DynamoDbWriteRe
         this.metrics = context.metricGroup();
         this.numRecordsSendErrorsCounter = metrics.getNumRecordsSendErrorsCounter();
         this.numRecordsSendPartialFailure = metrics.counter("numRecordsSendPartialFailure");
-        this.httpClient =
-                AWSGeneralUtil.createAsyncHttpClient(
-                        overrideClientProperties(dynamoDbClientProperties));
-        this.client = buildClient(dynamoDbClientProperties, httpClient);
-    }
-
-    private Properties overrideClientProperties(Properties dynamoDbClientProperties) {
-        Properties overridenProperties = new Properties();
-        overridenProperties.putAll(dynamoDbClientProperties);
-
-        // Specify HTTP1_1 protocol since DynamoDB endpoint doesn't support HTTP2
-        overridenProperties.put(AWSConfigConstants.HTTP_PROTOCOL_VERSION, "HTTP1_1");
-        return overridenProperties;
-    }
-
-    private DynamoDbAsyncClient buildClient(
-            Properties dynamoDbClientProperties, SdkAsyncHttpClient httpClient) {
-        AWSGeneralUtil.validateAwsCredentials(dynamoDbClientProperties);
-
-        return AWSAsyncSinkUtil.createAwsAsyncClient(
-                dynamoDbClientProperties,
-                httpClient,
-                DynamoDbAsyncClient.builder(),
-                DynamoDbConfigConstants.BASE_DYNAMODB_USER_AGENT_PREFIX_FORMAT,
-                DynamoDbConfigConstants.DYNAMODB_CLIENT_USER_AGENT_PREFIX);
+        this.clientProvider = clientProvider;
     }
 
     @Override
@@ -211,10 +181,12 @@ class DynamoDbSinkWriter<InputT> extends AsyncSinkWriter<InputT, DynamoDbWriteRe
         }
 
         CompletableFuture<BatchWriteItemResponse> future =
-                client.batchWriteItem(
-                        BatchWriteItemRequest.builder()
-                                .requestItems(ImmutableMap.of(tableName, items))
-                                .build());
+                clientProvider
+                        .getClient()
+                        .batchWriteItem(
+                                BatchWriteItemRequest.builder()
+                                        .requestItems(ImmutableMap.of(tableName, items))
+                                        .build());
 
         future.whenComplete(
                 (response, err) -> {
@@ -259,6 +231,7 @@ class DynamoDbSinkWriter<InputT> extends AsyncSinkWriter<InputT, DynamoDbWriteRe
     }
 
     private boolean isRetryable(Throwable err) {
+        // isFatal() is really isNotFatal()
         if (!DYNAMODB_FATAL_EXCEPTION_CLASSIFIER.isFatal(err, getFatalExceptionCons())) {
             return false;
         }
@@ -281,7 +254,7 @@ class DynamoDbSinkWriter<InputT> extends AsyncSinkWriter<InputT, DynamoDbWriteRe
 
     @Override
     public void close() {
-        AWSGeneralUtil.closeResources(httpClient, client);
+        AWSGeneralUtil.closeResources(clientProvider);
     }
 
     private WriteRequest convertToWriteRequest(DynamoDbWriteRequest dynamoDbWriteRequest) {

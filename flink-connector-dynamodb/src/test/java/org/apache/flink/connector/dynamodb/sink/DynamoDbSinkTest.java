@@ -34,6 +34,7 @@ import static org.apache.flink.connector.aws.config.AWSConfigConstants.Credentia
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.CredentialProvider.SYS_PROP;
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.CredentialProvider.WEB_IDENTITY_TOKEN;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
 /** Test for {@link DynamoDbSink}. */
 public class DynamoDbSinkTest {
@@ -227,6 +228,22 @@ public class DynamoDbSinkTest {
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> sink.createWriter(new TestSinkInitContext()))
                 .withMessageContaining("Invalid AWS Credential Provider Type set in config.");
+    }
+
+    @Test
+    public void testGetWriterStateSerializer() {
+        Properties properties = getDefaultProperties();
+        properties.put(AWS_CREDENTIALS_PROVIDER, "INVALID_CREDENTIALS_PROVIDER");
+        DynamoDbSink<Map<String, AttributeValue>> sink =
+                DynamoDbSink.<Map<String, AttributeValue>>builder()
+                        .setElementConverter(new TestDynamoDbElementConverter())
+                        .setDynamoDbProperties(properties)
+                        .setTableName("test_table")
+                        .build();
+
+        assertThat(sink.getWriterStateSerializer())
+                .usingRecursiveComparison()
+                .isEqualTo(new DynamoDbWriterStateSerializer());
     }
 
     private Properties getDefaultProperties() {

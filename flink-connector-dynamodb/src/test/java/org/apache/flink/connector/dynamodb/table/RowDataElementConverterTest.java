@@ -60,7 +60,7 @@ public class RowDataElementConverterTest {
                         .setItem(rowDataToAttributeValueConverter.convertRowData(rowData))
                         .build();
 
-        assertThat(actualWriteRequest).isEqualTo(expectedWriterequest);
+        assertThat(actualWriteRequest).usingRecursiveComparison().isEqualTo(expectedWriterequest);
     }
 
     @Test
@@ -73,7 +73,7 @@ public class RowDataElementConverterTest {
                         .setItem(rowDataToAttributeValueConverter.convertRowData(rowData))
                         .build();
 
-        assertThat(actualWriteRequest).isEqualTo(expectedWriterequest);
+        assertThat(actualWriteRequest).usingRecursiveComparison().isEqualTo(expectedWriterequest);
     }
 
     @Test
@@ -98,7 +98,7 @@ public class RowDataElementConverterTest {
                         .setItem(rowDataToAttributeValueConverter.convertRowData(rowData))
                         .build();
 
-        assertThat(actualWriteRequest).isEqualTo(expectedWriterequest);
+        assertThat(actualWriteRequest).usingRecursiveComparison().isEqualTo(expectedWriterequest);
     }
 
     @Test
@@ -123,7 +123,7 @@ public class RowDataElementConverterTest {
 
         assertThat(transformedConverter).extracting("rowDataToAttributeValueConverter").isNotNull();
 
-        assertThat(actualWriteRequest).isEqualTo(expectedWriterequest);
+        assertThat(actualWriteRequest).usingRecursiveComparison().isEqualTo(expectedWriterequest);
     }
 
     private RowData createElement(RowKind kind) {

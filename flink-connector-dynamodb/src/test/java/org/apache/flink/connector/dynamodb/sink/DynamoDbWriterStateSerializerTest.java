@@ -29,8 +29,8 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
-import static org.apache.flink.connector.base.sink.writer.AsyncSinkWriterTestUtils.assertThatBufferStatesAreEqual;
 import static org.apache.flink.connector.base.sink.writer.AsyncSinkWriterTestUtils.getTestState;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
 /**
  * Tests for serializing and deserialzing a collection of {@link DynamoDbWriteRequest} with {@link
@@ -56,7 +56,13 @@ public class DynamoDbWriterStateSerializerTest {
         BufferedRequestState<DynamoDbWriteRequest> actualState =
                 serializer.deserialize(1, serializer.serialize(expectedState));
 
-        assertThatBufferStatesAreEqual(actualState, expectedState);
+        assertThat(actualState).usingRecursiveComparison().isEqualTo(expectedState);
+    }
+
+    @Test
+    public void testVersion() {
+        DynamoDbWriterStateSerializer serializer = new DynamoDbWriterStateSerializer();
+        assertThat(serializer.getVersion()).isEqualTo(1);
     }
 
     private int getRequestSize(DynamoDbWriteRequest requestEntry) {
