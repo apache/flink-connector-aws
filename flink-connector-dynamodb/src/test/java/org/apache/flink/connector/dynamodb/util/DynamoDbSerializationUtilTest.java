@@ -100,7 +100,9 @@ public class DynamoDbSerializationUtilTest {
                 DataInputStream dataInputStream = new DataInputStream(inputStream)) {
             DynamoDbWriteRequest deserializedWriteRequest =
                     DynamoDbSerializationUtil.deserializeWriteRequest(dataInputStream);
-            assertThat(deserializedWriteRequest).isEqualTo(dynamoDbWriteRequest);
+            assertThat(deserializedWriteRequest)
+                    .usingRecursiveComparison()
+                    .isEqualTo(dynamoDbWriteRequest);
         }
     }
 
@@ -126,7 +128,9 @@ public class DynamoDbSerializationUtilTest {
                 DataInputStream dataInputStream = new DataInputStream(inputStream)) {
             DynamoDbWriteRequest deserializedWriteRequest =
                     DynamoDbSerializationUtil.deserializeWriteRequest(dataInputStream);
-            assertThat(deserializedWriteRequest).isEqualTo(dynamoDbWriteRequest);
+            assertThat(deserializedWriteRequest)
+                    .usingRecursiveComparison()
+                    .isEqualTo(dynamoDbWriteRequest);
         }
     }
 
@@ -151,5 +155,23 @@ public class DynamoDbSerializationUtilTest {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    @Test
+    public void testUnsupportedDynamoDbType() {
+        assertThatExceptionOfType(UnsupportedOperationException.class)
+                .isThrownBy(
+                        () -> DynamoDbType.fromByteValue((byte) (DynamoDbType.values().length + 1)))
+                .withMessageContaining("Unsupported byte value");
+    }
+
+    @Test
+    public void testUnsupportedDynamoDbWriteRequestType() {
+        assertThatExceptionOfType(UnsupportedOperationException.class)
+                .isThrownBy(
+                        () ->
+                                DynamoDbWriteRequestType.fromByteValue(
+                                        (byte) (DynamoDbWriteRequestType.values().length + 1)))
+                .withMessageContaining("Unsupported byte value");
     }
 }
