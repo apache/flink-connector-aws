@@ -19,52 +19,16 @@
 name: Build flink-connector-dynamodb
 on: [push, pull_request]
 jobs:
-  flink_1_15_2_compile_and_test_flink:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        jdk: [8, 11]
-    env:
-      MVN_COMMON_OPTIONS: -U -B --no-transfer-progress
-      MVN_CONNECTION_OPTIONS: -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120
-      FLINK_URL: https://dlcdn.apache.org/flink/flink-1.15.2/flink-1.15.2-bin-scala_2.12.tgz
-      MVN_BUILD_OUTPUT_FILE: "/tmp/mvn_build_output.out"
-      MVN_VALIDATION_DIR: "/tmp/flink-validation-deployment"
-    steps:
-      - run: echo "Running CI pipeline for JDK version ${{ matrix.jdk }}"
-
-      - name: Check out repository code
-        uses: actions/checkout@v2
-
-      - name: Set JDK
-        uses: actions/setup-java@v2
-        with:
-          java-version: ${{ matrix.jdk }}
-          distribution: 'temurin'
-          cache: 'maven'
-
-      - name: Set Maven 3.8.5
-        uses: stCarolas/setup-maven@v4.2
-        with:
-          maven-version: 3.8.5
-
-      - name: Compile and test flink-connector-dynamodb
-        run: |
-          set -o pipefail
-          
-          mvn clean install -Dflink.convergence.phase=install -Pcheck-convergence -U -B ${{ env.MVN_CONNECTION_OPTIONS }} \
-            -DaltDeploymentRepository=validation_repository::default::file:${{ env.MVN_VALIDATION_DIR }} \
-            -Dflink.version=1.15.2 | tee ${{ env.MVN_BUILD_OUTPUT_FILE }}
-
-  flink_1_16_0_compile_and_test:
+  compile_and_test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         jdk: [ 8, 11 ]
+        flink: [ 1.16.0 ]
     env:
       MVN_COMMON_OPTIONS: -U -B --no-transfer-progress
       MVN_CONNECTION_OPTIONS: -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120
-      FLINK_URL: https://dlcdn.apache.org/flink/flink-1.16.0/flink-1.16.0-bin-scala_2.12.tgz
+      FLINK_URL: https://dlcdn.apache.org/flink/flink-${{ matrix.flink }}/flink-${{ matrix.flink }}-bin-scala_2.12.tgz
       MVN_BUILD_OUTPUT_FILE: "/tmp/mvn_build_output.out"
       MVN_VALIDATION_DIR: "/tmp/flink-validation-deployment"
     steps:
@@ -91,7 +55,7 @@ jobs:
           
           mvn clean install -Dflink.convergence.phase=install -Pcheck-convergence -U -B ${{ env.MVN_CONNECTION_OPTIONS }} \
             -DaltDeploymentRepository=validation_repository::default::file:${{ env.MVN_VALIDATION_DIR }} \
-            -Dflink.version=1.16.0 | tee ${{ env.MVN_BUILD_OUTPUT_FILE }}
+            -Dflink.version=${{ matrix.flink }} | tee ${{ env.MVN_BUILD_OUTPUT_FILE }}
 
       - name: Check licensing
         run: |
