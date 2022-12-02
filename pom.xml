@@ -53,16 +53,19 @@ under the License.
     </scm>
 
     <properties>
-        <aws.sdk.version>2.17.247</aws.sdk.version>
+        <aws.sdkv1.version>1.12.276</aws.sdkv1.version>
+        <aws.sdkv2.version>2.17.247</aws.sdkv2.version>
         <netty.version>4.1.77.Final</netty.version>
         <flink.version>1.16.0</flink.version>
         <flink.shaded.version>16.0</flink.shaded.version>
+        <jackson-bom.version>2.13.4.20221013</jackson-bom.version>
 
         <junit5.version>5.8.1</junit5.version>
         <assertj.version>3.21.0</assertj.version>
         <archunit.version>0.22.0</archunit.version>
         <testcontainers.version>1.17.2</testcontainers.version>
         <mockito.version>3.4.6</mockito.version>
+        <powermock.version>2.0.9</powermock.version>
 
         <flink.parent.artifactId>flink-connector-aws-parent</flink.parent.artifactId>
     </properties>
@@ -73,10 +76,12 @@ under the License.
         <module>flink-connector-dynamodb</module>
         <module>flink-connector-aws-kinesis-firehose</module>
         <module>flink-connector-aws-kinesis-streams</module>
-        
+        <module>flink-connector-kinesis</module>
+
         <module>flink-sql-connector-dynamodb</module>
         <module>flink-sql-connector-aws-kinesis-firehose</module>
         <module>flink-sql-connector-aws-kinesis-streams</module>
+        <module>flink-sql-connector-kinesis</module>
     </modules>
 
     <dependencies>
@@ -112,10 +117,40 @@ under the License.
 
         <dependency>
             <groupId>org.mockito</groupId>
+            <artifactId>mockito-inline</artifactId>
+            <version>${mockito.version}</version>
+            <type>jar</type>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.mockito</groupId>
             <artifactId>mockito-core</artifactId>
             <version>${mockito.version}</version>
             <type>jar</type>
             <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.powermock</groupId>
+            <artifactId>powermock-module-junit4</artifactId>
+            <version>${powermock.version}</version>
+            <type>jar</type>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.powermock</groupId>
+            <artifactId>powermock-api-mockito2</artifactId>
+            <version>${powermock.version}</version>
+            <type>jar</type>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.mockito</groupId>
+                    <artifactId>mockito-core</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <dependency>
@@ -135,11 +170,27 @@ under the License.
             </dependency>
 
             <dependency>
-                <groupId>software.amazon.awssdk</groupId>
-                <artifactId>bom</artifactId>
-                <version>${aws.sdk.version}</version>
+                <groupId>com.amazonaws</groupId>
+                <artifactId>aws-java-sdk-bom</artifactId>
+                <version>${aws.sdkv1.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>bom</artifactId>
+                <version>${aws.sdkv2.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <type>pom</type>
+                <scope>import</scope>
+                <version>${jackson-bom.version}</version>
             </dependency>
 
             <dependency>
@@ -212,6 +263,76 @@ under the License.
                 <groupId>org.objenesis</groupId>
                 <artifactId>objenesis</artifactId>
                 <version>2.1</version>
+            </dependency>
+            <dependency>
+                <groupId>javax.xml.bind</groupId>
+                <artifactId>jaxb-api</artifactId>
+                <version>2.3.1</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-lang3</artifactId>
+                <version>3.3.2</version>
+            </dependency>
+            <dependency>
+                <groupId>commons-codec</groupId>
+                <artifactId>commons-codec</artifactId>
+                <version>1.15</version>
+            </dependency>
+            <dependency>
+                <groupId>commons-logging</groupId>
+                <artifactId>commons-logging</artifactId>
+                <version>1.1.3</version>
+            </dependency>
+            <dependency>
+                <groupId>commons-io</groupId>
+                <artifactId>commons-io</artifactId>
+                <version>2.11.0</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.httpcomponents</groupId>
+                <artifactId>httpcore</artifactId>
+                <version>4.4.14</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.httpcomponents</groupId>
+                <artifactId>httpclient</artifactId>
+                <version>4.5.13</version>
+            </dependency>
+            <dependency>
+                <groupId>net.bytebuddy</groupId>
+                <artifactId>byte-buddy</artifactId>
+                <version>1.10.14</version>
+            </dependency>
+            <dependency>
+                <groupId>net.bytebuddy</groupId>
+                <artifactId>byte-buddy-agent</artifactId>
+                <version>1.10.14</version>
+            </dependency>
+            <dependency>
+                <groupId>junit</groupId>
+                <artifactId>junit</artifactId>
+                <version>4.13.2</version>
+            </dependency>
+            <dependency>
+                <groupId>org.javassist</groupId>
+                <artifactId>javassist</artifactId>
+                <version>3.24.0-GA</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.protobuf</groupId>
+                <artifactId>protobuf-java</artifactId>
+                <version>3.11.4</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.guava</groupId>
+                <artifactId>guava</artifactId>
+                <version>29.0-jre</version>
+            </dependency>
+            <dependency>
+                <groupId>com.amazonaws</groupId>
+                <artifactId>amazon-kinesis-client</artifactId>
+                <version>1.14.8</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

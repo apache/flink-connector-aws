@@ -30,7 +30,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>flink-sql-connector-aws-kinesis-streams</artifactId>
-    <name>Flink : Connectors : AWS : SQL : Amazon Kinesis Data Streams</name>
+    <name>Flink : Connectors : AWS : SQL : Amazon Kinesis Data Streams Sink v2</name>
 
     <properties>
         <japicmp.skip>true</japicmp.skip>
