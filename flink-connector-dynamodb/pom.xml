@@ -30,7 +30,7 @@ under the License.
     </parent>
 
     <artifactId>flink-connector-dynamodb</artifactId>
-    <name>Flink : Connectors : Amazon DynamoDB</name>
+    <name>Flink : Connectors : AWS : Amazon DynamoDB</name>
 
     <packaging>jar</packaging>
 
