@@ -21,5 +21,12 @@ under the License.
         "http://www.puppycrawl.com/dtds/suppressions_1_1.dtd">
 
 <suppressions>
-
+    <!-- Kinesis producer has to use guava directly -->
+    <suppress
+            files="FlinkKinesisProducer.java|FlinkKinesisProducerTest.java"
+            checks="IllegalImport"/>
+    <!-- Kinesis EFO consumer required to handle Netty ReadTimeoutException -->
+    <suppress
+            files="FanOutRecordPublisherTest.java|FanOutShardSubscriber.java|FanOutShardSubscriberTest.java"
+            checks="IllegalImport"/>
 </suppressions>

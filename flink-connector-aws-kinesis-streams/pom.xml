@@ -30,7 +30,7 @@ under the License.
     </parent>
 
     <artifactId>flink-connector-aws-kinesis-streams</artifactId>
-    <name>Flink : Connectors : AWS : Amazon Kinesis Data Streams</name>
+    <name>Flink : Connectors : AWS : Amazon Kinesis Data Streams Sink v2</name>
     <packaging>jar</packaging>
 
     <dependencies>
