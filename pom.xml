@@ -69,10 +69,14 @@ under the License.
 
     <modules>
         <module>flink-connector-aws-base</module>
+
         <module>flink-connector-dynamodb</module>
-        <module>flink-sql-connector-dynamodb</module>
         <module>flink-connector-aws-kinesis-firehose</module>
+        <module>flink-connector-aws-kinesis-streams</module>
+        
+        <module>flink-sql-connector-dynamodb</module>
         <module>flink-sql-connector-aws-kinesis-firehose</module>
+        <module>flink-sql-connector-aws-kinesis-streams</module>
     </modules>
 
     <dependencies>
