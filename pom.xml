@@ -62,17 +62,13 @@ under the License.
         <assertj.version>3.21.0</assertj.version>
         <archunit.version>0.22.0</archunit.version>
         <testcontainers.version>1.17.2</testcontainers.version>
-        <mockito.version>2.21.0</mockito.version>
-
-        <!-- For dependency convergence -->
-        <kryo.version>2.24.0</kryo.version>
-        <slf4j.version>1.7.36</slf4j.version>
-        <snappy.version>1.1.8.3</snappy.version>
+        <mockito.version>3.4.6</mockito.version>
 
         <flink.parent.artifactId>flink-connector-aws-parent</flink.parent.artifactId>
     </properties>
 
     <modules>
+        <module>flink-connector-aws-base</module>
         <module>flink-connector-dynamodb</module>
         <module>flink-sql-connector-dynamodb</module>
     </modules>
@@ -99,6 +95,20 @@ under the License.
         <dependency>
             <groupId>org.assertj</groupId>
             <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>${mockito.version}</version>
+            <type>jar</type>
             <scope>test</scope>
         </dependency>
 
@@ -142,6 +152,13 @@ under the License.
             </dependency>
 
             <dependency>
+                <groupId>org.apache.flink</groupId>
+                <artifactId>flink-architecture-tests-test</artifactId>
+                <version>${flink.version}</version>
+                <scope>test</scope>
+            </dependency>
+
+            <dependency>
                 <groupId>org.junit</groupId>
                 <artifactId>junit-bom</artifactId>
                 <version>${junit5.version}</version>
@@ -168,22 +185,27 @@ under the License.
             <dependency>
                 <groupId>org.slf4j</groupId>
                 <artifactId>slf4j-api</artifactId>
-                <version>${slf4j.version}</version>
+                <version>1.7.36</version>
             </dependency>
             <dependency>
                 <groupId>com.esotericsoftware.kryo</groupId>
                 <artifactId>kryo</artifactId>
-                <version>${kryo.version}</version>
+                <version>2.24.0</version>
             </dependency>
             <dependency>
                 <groupId>org.xerial.snappy</groupId>
                 <artifactId>snappy-java</artifactId>
-                <version>${snappy.version}</version>
+                <version>1.1.8.3</version>
             </dependency>
             <dependency>
                 <groupId>com.google.code.findbugs</groupId>
                 <artifactId>jsr305</artifactId>
                 <version>1.3.9</version>
+            </dependency>
+            <dependency>
+                <groupId>org.objenesis</groupId>
+                <artifactId>objenesis</artifactId>
+                <version>2.1</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
