@@ -31,7 +31,7 @@ under the License.
     </parent>
 
     <artifactId>flink-sql-connector-dynamodb</artifactId>
-    <name>Flink : Connectors : SQL : Amazon DynamoDB</name>
+    <name>Flink : Connectors : AWS : SQL : Amazon DynamoDB</name>
     <packaging>jar</packaging>
 
     <dependencyManagement>
