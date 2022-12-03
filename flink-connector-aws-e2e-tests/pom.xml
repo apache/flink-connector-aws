@@ -40,8 +40,17 @@ under the License.
 
     <modules>
         <module>flink-connector-aws-kinesis-firehose-e2e-tests</module>
+        <module>flink-connector-aws-kinesis-streams-e2e-tests</module>
     </modules>
 
+    <dependencies>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-connector-test-utils</artifactId>
+            <version>${flink.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
     <dependencyManagement>
         <!-- For dependency convergence -->
         <dependencies>
