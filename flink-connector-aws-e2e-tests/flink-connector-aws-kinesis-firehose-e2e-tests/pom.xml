@@ -30,7 +30,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>flink-connector-aws-kinesis-firehose-e2e-tests</artifactId>
-    <name>Flink : Connectors : AWS : E2E Tests : Amazon Kinesis Firehose e2e tests</name>
+    <name>Flink : Connectors : AWS : E2E Tests : Amazon Kinesis Firehose</name>
     <packaging>jar</packaging>
 
     <dependencies>
