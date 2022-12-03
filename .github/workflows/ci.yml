@@ -29,6 +29,7 @@ jobs:
       MVN_COMMON_OPTIONS: -U -B --no-transfer-progress
       MVN_CONNECTION_OPTIONS: -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120
       FLINK_URL: https://dlcdn.apache.org/flink/flink-${{ matrix.flink }}/flink-${{ matrix.flink }}-bin-scala_2.12.tgz
+      FLINK_CACHE_DIR: "/tmp/cache/flink"
       MVN_BUILD_OUTPUT_FILE: "/tmp/mvn_build_output.out"
       MVN_VALIDATION_DIR: "/tmp/flink-validation-deployment"
     steps:
@@ -49,13 +50,30 @@ jobs:
         with:
           maven-version: 3.8.5
 
+      - name: Create cache dirs
+        run: mkdir -p ${{ env.FLINK_CACHE_DIR }}
+
+      - name: Cache Flink binary
+        if: ${{ inputs.cache_flink_binary == 'true' }}
+        uses: actions/cache@v3
+        id: cache-flink
+        with:
+          path: ${{ env.FLINK_CACHE_DIR }}
+          key: ${{ inputs.flink_url }}
+
+      - name: Download Flink binary
+        working-directory: ${{ env.FLINK_CACHE_DIR }}
+        if: steps.cache-flink.outputs.cache-hit != 'true'
+        run: wget -q -c ${{ inputs.flink_url }} -O - | tar -xz
+
       - name: Compile and test flink-connector-dynamodb
         run: |
           set -o pipefail
           
           mvn clean install -Dflink.convergence.phase=install -Pcheck-convergence -U -B ${{ env.MVN_CONNECTION_OPTIONS }} \
             -DaltDeploymentRepository=validation_repository::default::file:${{ env.MVN_VALIDATION_DIR }} \
-            -Dflink.version=${{ matrix.flink }} | tee ${{ env.MVN_BUILD_OUTPUT_FILE }}
+            -Dflink.version=${{ matrix.flink }} | tee ${{ env.MVN_BUILD_OUTPUT_FILE }} \
+            -Prun-end-to-end-tests -DdistDir=${{ env.FLINK_CACHE_DIR }}/flink-${{ matrix.flink }} \
 
       - name: Check licensing
         run: |
