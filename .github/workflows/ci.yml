@@ -16,7 +16,7 @@
 # limitations under the License.
 ################################################################################
 
-name: Build flink-connector-dynamodb
+name: Build flink-connector-aws
 on: [push, pull_request]
 jobs:
   compile_and_test:
@@ -66,14 +66,27 @@ jobs:
         if: steps.cache-flink.outputs.cache-hit != 'true'
         run: wget -q -c ${{ env.FLINK_URL }} -O - | tar -xz
 
-      - name: Compile and test flink-connector-dynamodb
+      - name: Compile and test flink-connector-aws
         run: |
           set -o pipefail
           
           mvn clean install -Dflink.convergence.phase=install -Pcheck-convergence -U -B ${{ env.MVN_CONNECTION_OPTIONS }} \
             -DaltDeploymentRepository=validation_repository::default::file:${{ env.MVN_VALIDATION_DIR }} \
-            -Dflink.version=${{ matrix.flink }} | tee ${{ env.MVN_BUILD_OUTPUT_FILE }} \
+            -Dflink.version=${{ matrix.flink }} | tee ${{ env.MVN_BUILD_OUTPUT_FILE }} 
+
+      - name: Run e2e tests
+        run: |
+          set -o pipefail
+          
+          cd flink-connector-aws-e2e-tests
+          
+          mvn clean verify ${{ env.MVN_CONNECTION_OPTIONS }} \
+            -DaltDeploymentRepository=validation_repository::default::file:${{ env.MVN_VALIDATION_DIR }} \
+            -Dflink.version=${{ matrix.flink }}  \
             -Prun-end-to-end-tests -DdistDir=${{ env.FLINK_CACHE_DIR }}/flink-${{ matrix.flink }} \
+            | tee ${{ env.MVN_BUILD_OUTPUT_FILE }}
+          
+          mvn clean
 
       - name: Check licensing
         run: |
