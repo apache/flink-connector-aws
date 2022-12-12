@@ -117,7 +117,7 @@ public class KinesisFirehoseTableITTest extends TestLogger {
             FlinkContainers.builder().withTestcontainersSettings(TESTCONTAINERS_SETTINGS).build();
 
     @Before
-    public void setup() {
+    public void setup() throws Exception {
         System.setProperty(SdkSystemSetting.CBOR_ENABLED.property(), "false");
 
         httpClient = createHttpClient();
