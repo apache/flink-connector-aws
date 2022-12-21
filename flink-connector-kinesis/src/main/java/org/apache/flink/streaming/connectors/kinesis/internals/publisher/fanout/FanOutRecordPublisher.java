@@ -27,7 +27,7 @@ import org.apache.flink.streaming.connectors.kinesis.model.SequenceNumber;
 import org.apache.flink.streaming.connectors.kinesis.model.StartingPosition;
 import org.apache.flink.streaming.connectors.kinesis.model.StreamShardHandle;
 import org.apache.flink.streaming.connectors.kinesis.proxy.FullJitterBackoff;
-import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyV2Interface;
+import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyAsyncV2Interface;
 import org.apache.flink.util.Preconditions;
 
 import org.slf4j.Logger;
@@ -64,7 +64,7 @@ public class FanOutRecordPublisher implements RecordPublisher {
 
     private final String consumerArn;
 
-    private final KinesisProxyV2Interface kinesisProxy;
+    private final KinesisProxyAsyncV2Interface kinesisProxy;
 
     private final StreamShardHandle subscribedShard;
 
@@ -89,7 +89,7 @@ public class FanOutRecordPublisher implements RecordPublisher {
             final StartingPosition startingPosition,
             final String consumerArn,
             final StreamShardHandle subscribedShard,
-            final KinesisProxyV2Interface kinesisProxy,
+            final KinesisProxyAsyncV2Interface kinesisProxy,
             final FanOutRecordPublisherConfiguration configuration,
             final FullJitterBackoff backoff) {
         this.nextStartingPosition = Preconditions.checkNotNull(startingPosition);

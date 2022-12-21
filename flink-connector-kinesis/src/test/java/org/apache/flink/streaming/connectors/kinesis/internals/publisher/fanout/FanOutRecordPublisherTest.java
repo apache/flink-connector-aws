@@ -23,11 +23,11 @@ import org.apache.flink.streaming.connectors.kinesis.internals.publisher.RecordP
 import org.apache.flink.streaming.connectors.kinesis.model.SequenceNumber;
 import org.apache.flink.streaming.connectors.kinesis.model.StartingPosition;
 import org.apache.flink.streaming.connectors.kinesis.proxy.FullJitterBackoff;
-import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyV2Interface;
+import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyAsyncV2Interface;
 import org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory;
-import org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory.AbstractSingleShardFanOutKinesisV2;
-import org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory.SingleShardFanOutKinesisV2;
-import org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory.SubscriptionErrorKinesisV2;
+import org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory.AbstractSingleShardFanOutKinesisAsyncV2;
+import org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory.SingleShardFanOutKinesisAsyncV2;
+import org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory.SubscriptionErrorKinesisAsyncV2;
 import org.apache.flink.streaming.connectors.kinesis.testutils.TestUtils.TestConsumer;
 
 import com.amazonaws.http.timers.client.SdkInterruptedException;
@@ -107,7 +107,7 @@ public class FanOutRecordPublisherTest {
 
     @Test
     public void testToSdkV2StartingPositionAfterSequenceNumber() throws Exception {
-        SingleShardFanOutKinesisV2 kinesis = emptyShard();
+        SingleShardFanOutKinesisAsyncV2 kinesis = emptyShard();
 
         RecordPublisher publisher =
                 createRecordPublisher(
@@ -122,7 +122,7 @@ public class FanOutRecordPublisherTest {
 
     @Test
     public void testToSdkV2StartingPositionAtSequenceNumber() throws Exception {
-        SingleShardFanOutKinesisV2 kinesis = emptyShard();
+        SingleShardFanOutKinesisAsyncV2 kinesis = emptyShard();
 
         RecordPublisher publisher =
                 createRecordPublisher(
@@ -138,7 +138,7 @@ public class FanOutRecordPublisherTest {
 
     @Test
     public void testToSdkV2StartingPositionLatest() throws Exception {
-        SingleShardFanOutKinesisV2 kinesis = emptyShard();
+        SingleShardFanOutKinesisAsyncV2 kinesis = emptyShard();
 
         RecordPublisher publisher = createRecordPublisher(kinesis, latest());
         publisher.run(new TestConsumer());
@@ -149,7 +149,7 @@ public class FanOutRecordPublisherTest {
 
     @Test
     public void testToSdkV2StartingPositionTrimHorizon() throws Exception {
-        SingleShardFanOutKinesisV2 kinesis = emptyShard();
+        SingleShardFanOutKinesisAsyncV2 kinesis = emptyShard();
 
         RecordPublisher publisher =
                 createRecordPublisher(
@@ -164,7 +164,7 @@ public class FanOutRecordPublisherTest {
 
     @Test
     public void testToSdkV2StartingPositionAtTimeStamp() throws Exception {
-        SingleShardFanOutKinesisV2 kinesis = emptyShard();
+        SingleShardFanOutKinesisAsyncV2 kinesis = emptyShard();
         Date now = new Date();
 
         RecordPublisher publisher =
@@ -198,7 +198,7 @@ public class FanOutRecordPublisherTest {
         events.add(createSubscribeToShardEvent(record));
         events.add(createSubscribeToShardEvent(record));
 
-        AbstractSingleShardFanOutKinesisV2 kinesis = singleShardWithEvents(events);
+        AbstractSingleShardFanOutKinesisAsyncV2 kinesis = singleShardWithEvents(events);
         Date now = new Date();
 
         // Create ShardHandle with HashKeyRange excluding single UserRecord with hash key 0
@@ -239,7 +239,7 @@ public class FanOutRecordPublisherTest {
                         .data(SdkBytes.fromByteArray(data))
                         .build();
 
-        KinesisProxyV2Interface kinesis = singletonShard(createSubscribeToShardEvent(record));
+        KinesisProxyAsyncV2Interface kinesis = singletonShard(createSubscribeToShardEvent(record));
         RecordPublisher publisher = createRecordPublisher(kinesis, latest());
 
         TestConsumer consumer = new TestConsumer();
@@ -258,7 +258,7 @@ public class FanOutRecordPublisherTest {
         thrown.expect(RuntimeException.class);
         thrown.expectMessage("An error thrown from the consumer");
 
-        SingleShardFanOutKinesisV2 kinesis =
+        SingleShardFanOutKinesisAsyncV2 kinesis =
                 FakeKinesisFanOutBehavioursFactory.boundedShard().build();
         RecordPublisher recordPublisher = createRecordPublisher(kinesis);
 
@@ -273,7 +273,7 @@ public class FanOutRecordPublisherTest {
             throws Exception {
         thrown.expect(ResourceNotFoundException.class);
 
-        KinesisProxyV2Interface kinesis =
+        KinesisProxyAsyncV2Interface kinesis =
                 FakeKinesisFanOutBehavioursFactory.resourceNotFoundWhenObtainingSubscription();
         RecordPublisher recordPublisher = createRecordPublisher(kinesis);
 
@@ -284,7 +284,7 @@ public class FanOutRecordPublisherTest {
     public void testShardConsumerCompletesIfResourceNotFoundExceptionThrownFromSubscription()
             throws Exception {
         ResourceNotFoundException exception = ResourceNotFoundException.builder().build();
-        SubscriptionErrorKinesisV2 kinesis =
+        SubscriptionErrorKinesisAsyncV2 kinesis =
                 FakeKinesisFanOutBehavioursFactory.errorDuringSubscription(exception);
         RecordPublisher recordPublisher = createRecordPublisher(kinesis);
         TestConsumer consumer = new TestConsumer();
@@ -299,7 +299,7 @@ public class FanOutRecordPublisherTest {
     public void testShardConsumerRetriesIfLimitExceededExceptionThrownFromSubscription()
             throws Exception {
         LimitExceededException exception = LimitExceededException.builder().build();
-        SubscriptionErrorKinesisV2 kinesis =
+        SubscriptionErrorKinesisAsyncV2 kinesis =
                 FakeKinesisFanOutBehavioursFactory.errorDuringSubscription(exception);
         RecordPublisher recordPublisher = createRecordPublisher(kinesis);
         TestConsumer consumer = new TestConsumer();
@@ -318,7 +318,7 @@ public class FanOutRecordPublisherTest {
     @Test
     public void testSubscribeToShardBacksOffForRetryableError() throws Exception {
         LimitExceededException retryableError = LimitExceededException.builder().build();
-        SubscriptionErrorKinesisV2 kinesis =
+        SubscriptionErrorKinesisAsyncV2 kinesis =
                 FakeKinesisFanOutBehavioursFactory.errorDuringSubscription(retryableError);
         FanOutRecordPublisherConfiguration configuration = createConfiguration();
 
@@ -357,7 +357,7 @@ public class FanOutRecordPublisherTest {
                 new FanOutRecordPublisherConfiguration(efoProperties, emptyList());
 
         LimitExceededException retryableError = LimitExceededException.builder().build();
-        SubscriptionErrorKinesisV2 kinesis =
+        SubscriptionErrorKinesisAsyncV2 kinesis =
                 FakeKinesisFanOutBehavioursFactory.errorDuringSubscription(retryableError);
         FullJitterBackoff backoff = mock(FullJitterBackoff.class);
 
@@ -387,7 +387,7 @@ public class FanOutRecordPublisherTest {
                 new FanOutRecordPublisherConfiguration(efoProperties, emptyList());
 
         ReadTimeoutException retryableError = ReadTimeoutException.INSTANCE;
-        FakeKinesisFanOutBehavioursFactory.SubscriptionErrorKinesisV2 kinesis =
+        SubscriptionErrorKinesisAsyncV2 kinesis =
                 FakeKinesisFanOutBehavioursFactory.errorDuringSubscription(retryableError);
         FullJitterBackoff backoff = mock(FullJitterBackoff.class);
 
@@ -415,7 +415,7 @@ public class FanOutRecordPublisherTest {
     @Test
     public void testSubscribeToShardBacksOffAttemptIncreases() throws Exception {
         LimitExceededException retryableError = LimitExceededException.builder().build();
-        SubscriptionErrorKinesisV2 kinesis =
+        SubscriptionErrorKinesisAsyncV2 kinesis =
                 FakeKinesisFanOutBehavioursFactory.errorDuringSubscription(retryableError);
         FanOutRecordPublisherConfiguration configuration = createConfiguration();
 
@@ -446,7 +446,7 @@ public class FanOutRecordPublisherTest {
 
     @Test
     public void testBackOffAttemptResetsWithSuccessfulSubscription() throws Exception {
-        SubscriptionErrorKinesisV2 kinesis =
+        SubscriptionErrorKinesisAsyncV2 kinesis =
                 FakeKinesisFanOutBehavioursFactory.alternatingSuccessErrorDuringSubscription();
         FanOutRecordPublisherConfiguration configuration = createConfiguration();
 
@@ -481,7 +481,7 @@ public class FanOutRecordPublisherTest {
 
     @Test
     public void testRecordDurability() throws Exception {
-        SingleShardFanOutKinesisV2 kinesis =
+        SingleShardFanOutKinesisAsyncV2 kinesis =
                 FakeKinesisFanOutBehavioursFactory.boundedShard()
                         .withBatchCount(10)
                         .withBatchesPerSubscription(3)
@@ -512,7 +512,7 @@ public class FanOutRecordPublisherTest {
 
     @Test
     public void testAggregatedRecordDurability() throws Exception {
-        SingleShardFanOutKinesisV2 kinesis =
+        SingleShardFanOutKinesisAsyncV2 kinesis =
                 FakeKinesisFanOutBehavioursFactory.boundedShard()
                         .withBatchCount(10)
                         .withAggregationFactor(5)
@@ -549,7 +549,7 @@ public class FanOutRecordPublisherTest {
 
     @Test
     public void testInterruptedPublisherReturnsCancelled() throws Exception {
-        KinesisProxyV2Interface kinesis =
+        KinesisProxyAsyncV2Interface kinesis =
                 FakeKinesisFanOutBehavioursFactory.errorDuringSubscription(
                         new SdkInterruptedException(null));
 
@@ -573,12 +573,12 @@ public class FanOutRecordPublisherTest {
         return dataBytes;
     }
 
-    private RecordPublisher createRecordPublisher(final KinesisProxyV2Interface kinesis) {
+    private RecordPublisher createRecordPublisher(final KinesisProxyAsyncV2Interface kinesis) {
         return createRecordPublisher(kinesis, latest());
     }
 
     private RecordPublisher createRecordPublisher(
-            final KinesisProxyV2Interface kinesis, final StartingPosition startingPosition) {
+            final KinesisProxyAsyncV2Interface kinesis, final StartingPosition startingPosition) {
         return new FanOutRecordPublisher(
                 startingPosition,
                 "arn",

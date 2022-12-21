@@ -19,8 +19,8 @@ package org.apache.flink.streaming.connectors.kinesis.internals.publisher.fanout
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.VisibleForTesting;
-import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyV2;
-import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyV2Interface;
+import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyAsyncV2;
+import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyAsyncV2Interface;
 import org.apache.flink.util.Preconditions;
 
 import io.netty.handler.timeout.ReadTimeoutException;
@@ -104,7 +104,7 @@ public class FanOutShardSubscriber {
     private final AtomicReference<FanOutSubscriptionEvent> subscriptionErrorEvent =
             new AtomicReference<>();
 
-    private final KinesisProxyV2Interface kinesis;
+    private final KinesisProxyAsyncV2Interface kinesis;
 
     private final String consumerArn;
 
@@ -126,7 +126,7 @@ public class FanOutShardSubscriber {
     FanOutShardSubscriber(
             final String consumerArn,
             final String shardId,
-            final KinesisProxyV2Interface kinesis,
+            final KinesisProxyAsyncV2Interface kinesis,
             final Duration subscribeToShardTimeout) {
         this(consumerArn, shardId, kinesis, subscribeToShardTimeout, DEFAULT_QUEUE_TIMEOUT);
     }
@@ -145,7 +145,7 @@ public class FanOutShardSubscriber {
     FanOutShardSubscriber(
             final String consumerArn,
             final String shardId,
-            final KinesisProxyV2Interface kinesis,
+            final KinesisProxyAsyncV2Interface kinesis,
             final Duration subscribeToShardTimeout,
             final Duration queueWaitTimeout) {
         this.kinesis = Preconditions.checkNotNull(kinesis);
@@ -190,8 +190,8 @@ public class FanOutShardSubscriber {
     }
 
     /**
-     * Calls {@link KinesisProxyV2#subscribeToShard} and waits to acquire a subscription. In the
-     * event a non-recoverable error occurs this method will rethrow the exception. Once the
+     * Calls {@link KinesisProxyAsyncV2#subscribeToShard} and waits to acquire a subscription. In
+     * the event a non-recoverable error occurs this method will rethrow the exception. Once the
      * subscription is acquired the client signals to the producer that we are ready to receive
      * records.
      *
