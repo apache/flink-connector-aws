@@ -539,15 +539,15 @@ public class KinesisConfigUtil {
         }
     }
 
-    public static Properties getV2ConsumerAsyncClientProperties(final Properties configProps) {
-        Properties asyncClientProperties = new Properties();
-        asyncClientProperties.putAll(configProps);
-        asyncClientProperties.setProperty(
+    public static Properties getV2ConsumerClientProperties(final Properties configProps) {
+        Properties clientProperties = new Properties();
+        clientProperties.putAll(configProps);
+        clientProperties.setProperty(
                 KinesisStreamsConfigConstants.KINESIS_CLIENT_USER_AGENT_PREFIX,
                 AWSAsyncSinkUtil.formatFlinkUserAgentPrefix(
                         KinesisStreamsConfigConstants.BASE_KINESIS_USER_AGENT_PREFIX_FORMAT));
 
-        return asyncClientProperties;
+        return clientProperties;
     }
 
     private static void validateOptionalPositiveLongProperty(

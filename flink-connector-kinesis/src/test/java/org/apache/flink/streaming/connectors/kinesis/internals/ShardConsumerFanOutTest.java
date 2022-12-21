@@ -20,10 +20,10 @@ package org.apache.flink.streaming.connectors.kinesis.internals;
 import org.apache.flink.streaming.connectors.kinesis.internals.publisher.fanout.FanOutRecordPublisherFactory;
 import org.apache.flink.streaming.connectors.kinesis.metrics.ShardConsumerMetricsReporter;
 import org.apache.flink.streaming.connectors.kinesis.model.SequenceNumber;
-import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyV2Interface;
+import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyAsyncV2Interface;
 import org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory;
-import org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory.AbstractSingleShardFanOutKinesisV2;
-import org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory.SingleShardFanOutKinesisV2;
+import org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory.AbstractSingleShardFanOutKinesisAsyncV2;
+import org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory.SingleShardFanOutKinesisAsyncV2;
 
 import com.amazonaws.SdkClientException;
 import com.amazonaws.http.timers.client.SdkInterruptedException;
@@ -51,7 +51,7 @@ public class ShardConsumerFanOutTest {
 
     @Test
     public void testEmptyShard() throws Exception {
-        SingleShardFanOutKinesisV2 kinesis = FakeKinesisFanOutBehavioursFactory.emptyShard();
+        SingleShardFanOutKinesisAsyncV2 kinesis = FakeKinesisFanOutBehavioursFactory.emptyShard();
 
         assertNumberOfMessagesReceivedFromKinesis(0, kinesis, fakeSequenceNumber());
 
@@ -61,7 +61,7 @@ public class ShardConsumerFanOutTest {
     @Test
     public void testStartFromLatestIsTranslatedToTimestamp() throws Exception {
         Instant now = Instant.now();
-        SingleShardFanOutKinesisV2 kinesis =
+        SingleShardFanOutKinesisAsyncV2 kinesis =
                 FakeKinesisFanOutBehavioursFactory.boundedShard().build();
         SequenceNumber sequenceNumber = SENTINEL_LATEST_SEQUENCE_NUM.get();
 
@@ -77,7 +77,7 @@ public class ShardConsumerFanOutTest {
 
     @Test
     public void testStartFromLatestReceivesNoRecordsContinuesToUseTimestamp() throws Exception {
-        AbstractSingleShardFanOutKinesisV2 kinesis =
+        AbstractSingleShardFanOutKinesisAsyncV2 kinesis =
                 FakeKinesisFanOutBehavioursFactory.emptyBatchFollowedBySingleRecord();
 
         SequenceNumber sequenceNumber = SENTINEL_LATEST_SEQUENCE_NUM.get();
@@ -98,7 +98,7 @@ public class ShardConsumerFanOutTest {
         String timestamp = "2020-07-02T09:14";
         Instant expectedTimestamp = new SimpleDateFormat(format).parse(timestamp).toInstant();
 
-        SingleShardFanOutKinesisV2 kinesis =
+        SingleShardFanOutKinesisAsyncV2 kinesis =
                 FakeKinesisFanOutBehavioursFactory.boundedShard().build();
 
         Properties consumerConfig = efoProperties();
@@ -116,7 +116,7 @@ public class ShardConsumerFanOutTest {
 
     @Test
     public void testMillisBehindReported() throws Exception {
-        SingleShardFanOutKinesisV2 kinesis =
+        SingleShardFanOutKinesisAsyncV2 kinesis =
                 FakeKinesisFanOutBehavioursFactory.boundedShard()
                         .withMillisBehindLatest(123L)
                         .build();
@@ -130,7 +130,7 @@ public class ShardConsumerFanOutTest {
 
     @Test
     public void testBoundedShardConsumesCorrectNumberOfMessages() throws Exception {
-        SingleShardFanOutKinesisV2 kinesis =
+        SingleShardFanOutKinesisAsyncV2 kinesis =
                 FakeKinesisFanOutBehavioursFactory.boundedShard()
                         .withBatchCount(10)
                         .withRecordsPerBatch(5)
@@ -144,7 +144,7 @@ public class ShardConsumerFanOutTest {
 
     @Test
     public void testBoundedShardResubscribesToShard() throws Exception {
-        SingleShardFanOutKinesisV2 kinesis =
+        SingleShardFanOutKinesisAsyncV2 kinesis =
                 FakeKinesisFanOutBehavioursFactory.boundedShard()
                         .withBatchCount(100)
                         .withRecordsPerBatch(10)
@@ -165,7 +165,7 @@ public class ShardConsumerFanOutTest {
 
     @Test
     public void testBoundedShardWithAggregatedRecords() throws Exception {
-        SingleShardFanOutKinesisV2 kinesis =
+        SingleShardFanOutKinesisAsyncV2 kinesis =
                 FakeKinesisFanOutBehavioursFactory.boundedShard()
                         .withBatchCount(100)
                         .withRecordsPerBatch(10)
@@ -179,7 +179,7 @@ public class ShardConsumerFanOutTest {
     @Test
     public void testBoundedShardResumingConsumptionFromAggregatedSubsequenceNumber()
             throws Exception {
-        SingleShardFanOutKinesisV2 kinesis =
+        SingleShardFanOutKinesisAsyncV2 kinesis =
                 FakeKinesisFanOutBehavioursFactory.boundedShard()
                         .withBatchCount(10)
                         .withRecordsPerBatch(1)
@@ -199,7 +199,7 @@ public class ShardConsumerFanOutTest {
 
     @Test
     public void testSubscribeToShardUsesCorrectStartingSequenceNumbers() throws Exception {
-        SingleShardFanOutKinesisV2 kinesis =
+        SingleShardFanOutKinesisAsyncV2 kinesis =
                 FakeKinesisFanOutBehavioursFactory.boundedShard()
                         .withBatchCount(10)
                         .withRecordsPerBatch(1)
@@ -228,7 +228,7 @@ public class ShardConsumerFanOutTest {
     @Test
     public void testShardConsumerExitsWhenRecordPublisherIsInterrupted() throws Exception {
         // Throws error after 5 records
-        KinesisProxyV2Interface kinesis =
+        KinesisProxyAsyncV2Interface kinesis =
                 FakeKinesisFanOutBehavioursFactory.errorDuringSubscription(
                         new SdkInterruptedException(null));
 
@@ -249,7 +249,7 @@ public class ShardConsumerFanOutTest {
     @Test
     public void testShardConsumerRetriesGenericSdkError() throws Exception {
         // Throws error after 5 records and there are 25 records available in the shard
-        KinesisProxyV2Interface kinesis =
+        KinesisProxyAsyncV2Interface kinesis =
                 FakeKinesisFanOutBehavioursFactory.errorDuringSubscription(
                         new SdkClientException(""));
 
@@ -278,7 +278,7 @@ public class ShardConsumerFanOutTest {
 
     private ShardConsumerMetricsReporter assertNumberOfMessagesReceivedFromKinesis(
             final int expectedNumberOfMessages,
-            final KinesisProxyV2Interface kinesis,
+            final KinesisProxyAsyncV2Interface kinesis,
             final SequenceNumber startingSequenceNumber)
             throws Exception {
         return assertNumberOfMessagesReceivedFromKinesis(
@@ -287,7 +287,7 @@ public class ShardConsumerFanOutTest {
 
     private ShardConsumerMetricsReporter assertNumberOfMessagesReceivedFromKinesis(
             final int expectedNumberOfMessages,
-            final KinesisProxyV2Interface kinesis,
+            final KinesisProxyAsyncV2Interface kinesis,
             final SequenceNumber startingSequenceNumber,
             final Properties consumerConfig)
             throws Exception {

@@ -17,9 +17,9 @@
 
 package org.apache.flink.streaming.connectors.kinesis.internals.publisher.fanout;
 
-import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyV2Interface;
+import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyAsyncV2Interface;
 import org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory;
-import org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory.SubscriptionErrorKinesisV2;
+import org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory.SubscriptionErrorKinesisAsyncV2;
 
 import com.amazonaws.http.timers.client.SdkInterruptedException;
 import io.netty.handler.timeout.ReadTimeoutException;
@@ -43,7 +43,7 @@ public class FanOutShardSubscriberTest {
         thrown.expect(FanOutShardSubscriber.RecoverableFanOutSubscriberException.class);
         thrown.expectMessage("io.netty.handler.timeout.ReadTimeoutException");
 
-        SubscriptionErrorKinesisV2 errorKinesisV2 =
+        SubscriptionErrorKinesisAsyncV2 errorKinesisV2 =
                 FakeKinesisFanOutBehavioursFactory.errorDuringSubscription(
                         ReadTimeoutException.INSTANCE);
 
@@ -65,7 +65,7 @@ public class FanOutShardSubscriberTest {
         thrown.expectMessage("Error!");
 
         RuntimeException error = new RuntimeException("Error!");
-        SubscriptionErrorKinesisV2 errorKinesisV2 =
+        SubscriptionErrorKinesisAsyncV2 errorKinesisV2 =
                 FakeKinesisFanOutBehavioursFactory.errorDuringSubscription(error);
 
         FanOutShardSubscriber subscriber =
@@ -85,7 +85,7 @@ public class FanOutShardSubscriberTest {
         thrown.expect(FanOutShardSubscriber.FanOutSubscriberInterruptedException.class);
 
         SdkInterruptedException error = new SdkInterruptedException(null);
-        SubscriptionErrorKinesisV2 errorKinesisV2 =
+        SubscriptionErrorKinesisAsyncV2 errorKinesisV2 =
                 FakeKinesisFanOutBehavioursFactory.errorDuringSubscription(error);
 
         FanOutShardSubscriber subscriber =
@@ -107,7 +107,7 @@ public class FanOutShardSubscriberTest {
 
         RuntimeException error1 = new RuntimeException("Error 1!");
         RuntimeException error2 = new RuntimeException("Error 2!");
-        SubscriptionErrorKinesisV2 errorKinesisV2 =
+        SubscriptionErrorKinesisAsyncV2 errorKinesisV2 =
                 FakeKinesisFanOutBehavioursFactory.errorDuringSubscription(error1, error2);
 
         FanOutShardSubscriber subscriber =
@@ -123,7 +123,7 @@ public class FanOutShardSubscriberTest {
 
     @Test
     public void testSubscriptionCompletion() throws Exception {
-        FakeKinesisFanOutBehavioursFactory.AbstractSingleShardFanOutKinesisV2 errorKinesisV2 =
+        FakeKinesisFanOutBehavioursFactory.AbstractSingleShardFanOutKinesisAsyncV2 errorKinesisV2 =
                 FakeKinesisFanOutBehavioursFactory.emptyBatchFollowedBySingleRecord();
 
         FanOutShardSubscriber subscriber =
@@ -145,7 +145,7 @@ public class FanOutShardSubscriberTest {
         thrown.expect(FanOutShardSubscriber.RecoverableFanOutSubscriberException.class);
         thrown.expectMessage("Timed out acquiring subscription");
 
-        KinesisProxyV2Interface kinesis =
+        KinesisProxyAsyncV2Interface kinesis =
                 FakeKinesisFanOutBehavioursFactory.failsToAcquireSubscription();
 
         FanOutShardSubscriber subscriber =
@@ -160,7 +160,7 @@ public class FanOutShardSubscriberTest {
         thrown.expect(FanOutShardSubscriber.RecoverableFanOutSubscriberException.class);
         thrown.expectMessage("Timed out enqueuing event SubscriptionNextEvent");
 
-        KinesisProxyV2Interface kinesis =
+        KinesisProxyAsyncV2Interface kinesis =
                 FakeKinesisFanOutBehavioursFactory.shardThatCreatesBackpressureOnQueue();
 
         FanOutShardSubscriber subscriber =

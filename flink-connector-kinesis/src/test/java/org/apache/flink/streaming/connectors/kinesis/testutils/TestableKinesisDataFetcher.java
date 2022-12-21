@@ -22,8 +22,8 @@ import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.streaming.connectors.kinesis.internals.KinesisDataFetcher;
 import org.apache.flink.streaming.connectors.kinesis.model.KinesisStreamShardState;
 import org.apache.flink.streaming.connectors.kinesis.model.StreamShardHandle;
+import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyAsyncV2Interface;
 import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyInterface;
-import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyV2Interface;
 import org.apache.flink.streaming.connectors.kinesis.serialization.KinesisDeserializationSchema;
 
 import java.util.Collection;
@@ -83,7 +83,7 @@ public class TestableKinesisDataFetcher<T> extends KinesisDataFetcher<T> {
             LinkedList<KinesisStreamShardState> subscribedShardsStateUnderTest,
             HashMap<String, String> subscribedStreamsToLastDiscoveredShardIdsStateUnderTest,
             KinesisProxyInterface fakeKinesis,
-            KinesisProxyV2Interface fakeKinesisV2) {
+            KinesisProxyAsyncV2Interface fakeKinesisV2) {
         super(
                 fakeStreams,
                 sourceContext,

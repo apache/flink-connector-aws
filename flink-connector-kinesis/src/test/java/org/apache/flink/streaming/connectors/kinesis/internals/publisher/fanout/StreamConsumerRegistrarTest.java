@@ -19,9 +19,9 @@ package org.apache.flink.streaming.connectors.kinesis.internals.publisher.fanout
 
 import org.apache.flink.streaming.connectors.kinesis.FlinkKinesisException.FlinkKinesisTimeoutException;
 import org.apache.flink.streaming.connectors.kinesis.proxy.FullJitterBackoff;
-import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyV2Interface;
+import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxySyncV2Interface;
 import org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory;
-import org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory.StreamConsumerFakeKinesis;
+import org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory.StreamConsumerFakeKinesisSync;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -48,7 +48,7 @@ import static org.apache.flink.streaming.connectors.kinesis.config.ConsumerConfi
 import static org.apache.flink.streaming.connectors.kinesis.config.ConsumerConfigConstants.efoConsumerArn;
 import static org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory.STREAM_CONSUMER_ARN_EXISTING;
 import static org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory.STREAM_CONSUMER_ARN_NEW;
-import static org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory.StreamConsumerFakeKinesis.NUMBER_OF_DESCRIBE_REQUESTS_TO_ACTIVATE;
+import static org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory.StreamConsumerFakeKinesisSync.NUMBER_OF_DESCRIBE_REQUESTS_TO_ACTIVATE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -80,7 +80,7 @@ public class StreamConsumerRegistrarTest {
     public void testStreamNotFoundWhenRegisteringThrowsException() throws Exception {
         thrown.expect(ResourceNotFoundException.class);
 
-        KinesisProxyV2Interface kinesis = FakeKinesisFanOutBehavioursFactory.streamNotFound();
+        KinesisProxySyncV2Interface kinesis = FakeKinesisFanOutBehavioursFactory.streamNotFound();
         StreamConsumerRegistrar registrar = createRegistrar(kinesis, mock(FullJitterBackoff.class));
 
         registrar.registerStreamConsumer(STREAM, "name");
@@ -90,7 +90,7 @@ public class StreamConsumerRegistrarTest {
     public void testRegisterStreamConsumerRegistersNewStreamConsumer() throws Exception {
         FullJitterBackoff backoff = mock(FullJitterBackoff.class);
 
-        KinesisProxyV2Interface kinesis =
+        KinesisProxySyncV2Interface kinesis =
                 FakeKinesisFanOutBehavioursFactory.streamConsumerNotFound();
         StreamConsumerRegistrar registrar = createRegistrar(kinesis, backoff);
 
@@ -103,7 +103,7 @@ public class StreamConsumerRegistrarTest {
     public void testRegisterStreamConsumerThatAlreadyExistsAndActive() throws Exception {
         FullJitterBackoff backoff = mock(FullJitterBackoff.class);
 
-        KinesisProxyV2Interface kinesis =
+        KinesisProxySyncV2Interface kinesis =
                 FakeKinesisFanOutBehavioursFactory.existingActiveConsumer();
         StreamConsumerRegistrar registrar = createRegistrar(kinesis, backoff);
 
@@ -117,7 +117,7 @@ public class StreamConsumerRegistrarTest {
     public void testRegisterStreamConsumerWaitsForConsumerToBecomeActive() throws Exception {
         FullJitterBackoff backoff = mock(FullJitterBackoff.class);
 
-        StreamConsumerFakeKinesis kinesis =
+        StreamConsumerFakeKinesisSync kinesis =
                 FakeKinesisFanOutBehavioursFactory.registerExistingConsumerAndWaitToBecomeActive();
         StreamConsumerRegistrar registrar = createRegistrar(kinesis, backoff);
 
@@ -143,7 +143,7 @@ public class StreamConsumerRegistrarTest {
         thrown.expectMessage(
                 "Timeout waiting for stream consumer to become active: name on stream-arn");
 
-        StreamConsumerFakeKinesis kinesis =
+        StreamConsumerFakeKinesisSync kinesis =
                 FakeKinesisFanOutBehavioursFactory.registerExistingConsumerAndWaitToBecomeActive();
 
         Properties configProps = createEfoProperties();
@@ -161,7 +161,7 @@ public class StreamConsumerRegistrarTest {
     public void testRegistrationBackoffForLazy() throws Exception {
         FullJitterBackoff backoff = mock(FullJitterBackoff.class);
 
-        KinesisProxyV2Interface kinesis =
+        KinesisProxySyncV2Interface kinesis =
                 FakeKinesisFanOutBehavioursFactory.existingActiveConsumer();
 
         Properties efoProperties = createEfoProperties();
@@ -182,7 +182,7 @@ public class StreamConsumerRegistrarTest {
     public void testDeregisterStreamConsumerAndWaitForDeletingStatus() throws Exception {
         FullJitterBackoff backoff = mock(FullJitterBackoff.class);
 
-        StreamConsumerFakeKinesis kinesis =
+        StreamConsumerFakeKinesisSync kinesis =
                 FakeKinesisFanOutBehavioursFactory.existingActiveConsumer();
         StreamConsumerRegistrar registrar = createRegistrar(kinesis, backoff);
 
@@ -203,7 +203,7 @@ public class StreamConsumerRegistrarTest {
         thrown.expectMessage(
                 "Timeout waiting for stream consumer to deregister: stream-consumer-arn");
 
-        StreamConsumerFakeKinesis kinesis =
+        StreamConsumerFakeKinesisSync kinesis =
                 FakeKinesisFanOutBehavioursFactory.existingActiveConsumer();
 
         Properties configProps = createEfoProperties();
@@ -221,7 +221,7 @@ public class StreamConsumerRegistrarTest {
     public void testDeregisterStreamConsumerNotFound() throws Exception {
         FullJitterBackoff backoff = mock(FullJitterBackoff.class);
 
-        StreamConsumerFakeKinesis kinesis =
+        StreamConsumerFakeKinesisSync kinesis =
                 FakeKinesisFanOutBehavioursFactory.streamConsumerNotFound();
         StreamConsumerRegistrar registrar = createRegistrar(kinesis, backoff);
 
@@ -237,7 +237,7 @@ public class StreamConsumerRegistrarTest {
 
         FullJitterBackoff backoff = mock(FullJitterBackoff.class);
 
-        StreamConsumerFakeKinesis kinesis =
+        StreamConsumerFakeKinesisSync kinesis =
                 FakeKinesisFanOutBehavioursFactory.streamConsumerNotFound();
         StreamConsumerRegistrar registrar = createRegistrar(kinesis, backoff);
 
@@ -254,7 +254,7 @@ public class StreamConsumerRegistrarTest {
 
         StreamConsumerRegistrar registrar =
                 new StreamConsumerRegistrar(
-                        mock(KinesisProxyV2Interface.class), configuration, backoff);
+                        mock(KinesisProxySyncV2Interface.class), configuration, backoff);
 
         registrar.registrationBackoff(configuration, backoff, 10);
 
@@ -277,7 +277,7 @@ public class StreamConsumerRegistrarTest {
 
         StreamConsumerRegistrar registrar =
                 new StreamConsumerRegistrar(
-                        mock(KinesisProxyV2Interface.class), configuration, backoff);
+                        mock(KinesisProxySyncV2Interface.class), configuration, backoff);
 
         registrar.deregistrationBackoff(configuration, backoff, 11);
 
@@ -292,7 +292,7 @@ public class StreamConsumerRegistrarTest {
 
     @Test
     public void testCloseClosesProxy() {
-        KinesisProxyV2Interface kinesis = mock(KinesisProxyV2Interface.class);
+        KinesisProxySyncV2Interface kinesis = mock(KinesisProxySyncV2Interface.class);
         StreamConsumerRegistrar registrar = createRegistrar(kinesis, mock(FullJitterBackoff.class));
 
         registrar.close();
@@ -301,7 +301,7 @@ public class StreamConsumerRegistrarTest {
     }
 
     private StreamConsumerRegistrar createRegistrar(
-            final KinesisProxyV2Interface kinesis, final FullJitterBackoff backoff) {
+            final KinesisProxySyncV2Interface kinesis, final FullJitterBackoff backoff) {
         FanOutRecordPublisherConfiguration configuration = createConfiguration();
         return new StreamConsumerRegistrar(kinesis, configuration, backoff);
     }

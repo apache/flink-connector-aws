@@ -24,8 +24,8 @@ import org.apache.flink.streaming.connectors.kinesis.internals.publisher.RecordP
 import org.apache.flink.streaming.connectors.kinesis.model.StartingPosition;
 import org.apache.flink.streaming.connectors.kinesis.model.StreamShardHandle;
 import org.apache.flink.streaming.connectors.kinesis.proxy.FullJitterBackoff;
-import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyV2;
-import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyV2Interface;
+import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyAsyncV2;
+import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyAsyncV2Interface;
 import org.apache.flink.util.Preconditions;
 
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
@@ -42,17 +42,17 @@ public class FanOutRecordPublisherFactory implements RecordPublisherFactory {
     private static final FullJitterBackoff BACKOFF = new FullJitterBackoff();
 
     /**
-     * A singleton {@link KinesisProxyV2} is used per Flink task. The {@link KinesisAsyncClient}
-     * uses an internal thread pool; using a single client reduces overhead.
+     * A singleton {@link KinesisProxyAsyncV2} is used per Flink task. The {@link
+     * KinesisAsyncClient} uses an internal thread pool; using a single client reduces overhead.
      */
-    private final KinesisProxyV2Interface kinesisProxy;
+    private final KinesisProxyAsyncV2Interface kinesisProxy;
 
     /**
      * Instantiate a factory responsible for creating {@link FanOutRecordPublisher}.
      *
      * @param kinesisProxy the singleton proxy used by all record publishers created by this factory
      */
-    public FanOutRecordPublisherFactory(final KinesisProxyV2Interface kinesisProxy) {
+    public FanOutRecordPublisherFactory(final KinesisProxyAsyncV2Interface kinesisProxy) {
         this.kinesisProxy = kinesisProxy;
     }
 

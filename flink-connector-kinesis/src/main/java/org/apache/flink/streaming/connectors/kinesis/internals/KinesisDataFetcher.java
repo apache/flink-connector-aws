@@ -44,9 +44,9 @@ import org.apache.flink.streaming.connectors.kinesis.model.StreamShardHandle;
 import org.apache.flink.streaming.connectors.kinesis.model.StreamShardMetadata;
 import org.apache.flink.streaming.connectors.kinesis.proxy.GetShardListResult;
 import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxy;
+import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyAsyncV2Interface;
 import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyInterface;
 import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyV2Factory;
-import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyV2Interface;
 import org.apache.flink.streaming.connectors.kinesis.serialization.KinesisDeserializationSchema;
 import org.apache.flink.streaming.connectors.kinesis.util.AWSUtil;
 import org.apache.flink.streaming.connectors.kinesis.util.RecordEmitter;
@@ -273,7 +273,7 @@ public class KinesisDataFetcher<T> {
 
     /** Factory to create Kinesis proxy V@ instances used by a fetcher. */
     public interface FlinkKinesisProxyV2Factory {
-        KinesisProxyV2Interface create(Properties configProps);
+        KinesisProxyAsyncV2Interface create(Properties configProps);
     }
 
     /**
@@ -377,7 +377,7 @@ public class KinesisDataFetcher<T> {
                 new ArrayList<>(),
                 createInitialSubscribedStreamsToLastDiscoveredShardsState(streams),
                 KinesisProxy::create,
-                KinesisProxyV2Factory::createKinesisProxyV2);
+                KinesisProxyV2Factory::createKinesisProxyAsyncV2);
     }
 
     @VisibleForTesting

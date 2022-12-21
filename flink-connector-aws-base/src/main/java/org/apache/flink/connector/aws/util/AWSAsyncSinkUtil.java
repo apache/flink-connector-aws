@@ -24,11 +24,13 @@ import org.apache.flink.runtime.util.EnvironmentInformation;
 
 import software.amazon.awssdk.awscore.client.builder.AwsAsyncClientBuilder;
 import software.amazon.awssdk.awscore.client.builder.AwsClientBuilder;
+import software.amazon.awssdk.awscore.client.builder.AwsSyncClientBuilder;
 import software.amazon.awssdk.core.SdkClient;
 import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.core.client.config.SdkAdvancedClientOption;
 import software.amazon.awssdk.core.client.config.SdkClientConfiguration;
 import software.amazon.awssdk.core.client.config.SdkClientOption;
+import software.amazon.awssdk.http.SdkHttpClient;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 
 import java.net.URI;
@@ -59,7 +61,7 @@ public class AWSAsyncSinkUtil extends AWSGeneralUtil {
     /**
      * @param configProps configuration properties
      * @param httpClient the underlying HTTP client used to talk to AWS
-     * @return a new AWS Client
+     * @return a new AWS Async Client
      */
     public static <
                     S extends SdkClient,
@@ -86,7 +88,10 @@ public class AWSAsyncSinkUtil extends AWSGeneralUtil {
      * @param configProps configuration properties
      * @param clientConfiguration the AWS SDK v2 config to instantiate the client
      * @param httpClient the underlying HTTP client used to talk to AWS
-     * @return a new AWS Client
+     * @param clientBuilder httpClientBuilder to build the underlying HTTP client
+     * @param awsUserAgentPrefixFormat user agent prefix for Flink
+     * @param awsClientUserAgentPrefix user agent prefix for kinesis client
+     * @return a new AWS Async Client
      */
     public static <
                     S extends SdkClient,
@@ -101,10 +106,8 @@ public class AWSAsyncSinkUtil extends AWSGeneralUtil {
                     final String awsUserAgentPrefixFormat,
                     final String awsClientUserAgentPrefix) {
         String flinkUserAgentPrefix =
-                Optional.ofNullable(configProps.getProperty(awsClientUserAgentPrefix))
-                        .orElse(
-                                formatFlinkUserAgentPrefix(
-                                        awsUserAgentPrefixFormat + V2_USER_AGENT_SUFFIX));
+                getFlinkUserAgentPrefix(
+                        configProps, awsUserAgentPrefixFormat, awsClientUserAgentPrefix);
 
         final ClientOverrideConfiguration overrideConfiguration =
                 createClientOverrideConfiguration(
@@ -148,11 +151,7 @@ public class AWSAsyncSinkUtil extends AWSGeneralUtil {
                     final SdkAsyncHttpClient httpClient,
                     final ClientOverrideConfiguration overrideConfiguration) {
 
-        if (configProps.containsKey(AWSConfigConstants.AWS_ENDPOINT)) {
-            final URI endpointOverride =
-                    URI.create(configProps.getProperty(AWSConfigConstants.AWS_ENDPOINT));
-            clientBuilder.endpointOverride(endpointOverride);
-        }
+        updateEndpointOverride(configProps, clientBuilder);
 
         return clientBuilder
                 .httpClient(httpClient)
@@ -160,5 +159,65 @@ public class AWSAsyncSinkUtil extends AWSGeneralUtil {
                 .credentialsProvider(getCredentialsProvider(configProps))
                 .region(getRegion(configProps))
                 .build();
+    }
+
+    /**
+     * @param configProps configuration properties
+     * @param httpClient the underlying HTTP client used to talk to AWS
+     * @param clientBuilder httpClientBuilder to build the underlying HTTP client
+     * @param awsUserAgentPrefixFormat user agent prefix for Flink
+     * @param awsClientUserAgentPrefix user agent prefix for kinesis client
+     * @return a new AWS Sync Client
+     */
+    public static <
+                    S extends SdkClient,
+                    T extends
+                            AwsSyncClientBuilder<? extends T, S> & AwsClientBuilder<? extends T, S>>
+            S createAwsSyncClient(
+                    final Properties configProps,
+                    final SdkHttpClient httpClient,
+                    final T clientBuilder,
+                    final String awsUserAgentPrefixFormat,
+                    final String awsClientUserAgentPrefix) {
+        SdkClientConfiguration clientConfiguration = SdkClientConfiguration.builder().build();
+
+        String flinkUserAgentPrefix =
+                getFlinkUserAgentPrefix(
+                        configProps, awsUserAgentPrefixFormat, awsClientUserAgentPrefix);
+
+        final ClientOverrideConfiguration overrideConfiguration =
+                createClientOverrideConfiguration(
+                        clientConfiguration,
+                        ClientOverrideConfiguration.builder(),
+                        flinkUserAgentPrefix);
+
+        updateEndpointOverride(configProps, clientBuilder);
+
+        return clientBuilder
+                .httpClient(httpClient)
+                .overrideConfiguration(overrideConfiguration)
+                .credentialsProvider(getCredentialsProvider(configProps))
+                .region(getRegion(configProps))
+                .build();
+    }
+
+    private static String getFlinkUserAgentPrefix(
+            final Properties configProps,
+            final String awsUserAgentPrefixFormat,
+            final String awsClientUserAgentPrefix) {
+
+        return Optional.ofNullable(configProps.getProperty(awsClientUserAgentPrefix))
+                .orElse(
+                        formatFlinkUserAgentPrefix(
+                                awsUserAgentPrefixFormat + V2_USER_AGENT_SUFFIX));
+    }
+
+    private static <S extends SdkClient, T extends AwsClientBuilder<? extends T, S>>
+            void updateEndpointOverride(final Properties configProps, final T clientBuilder) {
+        if (configProps.containsKey(AWSConfigConstants.AWS_ENDPOINT)) {
+            final URI endpointOverride =
+                    URI.create(configProps.getProperty(AWSConfigConstants.AWS_ENDPOINT));
+            clientBuilder.endpointOverride(endpointOverride);
+        }
     }
 }
