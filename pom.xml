@@ -83,6 +83,8 @@ under the License.
         <module>flink-sql-connector-aws-kinesis-streams</module>
         <module>flink-sql-connector-kinesis</module>
 
+        <module>flink-catalog-aws-glue</module>
+
         <module>flink-connector-aws-e2e-tests</module>
     </modules>
 
