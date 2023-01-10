@@ -25,60 +25,39 @@ under the License.
 
     <parent>
         <groupId>org.apache.flink</groupId>
-        <artifactId>flink-connector-aws</artifactId>
+        <artifactId>flink-catalog-aws-parent</artifactId>
         <version>4.2-SNAPSHOT</version>
     </parent>
 
-    <artifactId>flink-connector-aws-base</artifactId>
-    <name>Flink : Connectors : AWS : Base</name>
+    <artifactId>flink-catalog-aws-glue</artifactId>
+    <name>Flink : Catalog : AWS : Glue</name>
+
+
     <packaging>jar</packaging>
 
     <dependencies>
+
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-streaming-java</artifactId>
+            <artifactId>flink-table-api-java</artifactId>
             <version>${flink.version}</version>
             <scope>provided</scope>
         </dependency>
 
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-connector-base</artifactId>
-            <version>${flink.version}</version>
+            <artifactId>flink-connector-aws-base</artifactId>
+            <version>${project.version}</version>
         </dependency>
 
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
-            <artifactId>netty-nio-client</artifactId>
+            <artifactId>glue</artifactId>
         </dependency>
 
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>apache-client</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>sts</artifactId>
-        </dependency>
-
-        <!-- Test dependencies -->
-        <dependency>
-            <groupId>org.testcontainers</groupId>
-            <artifactId>testcontainers</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>s3</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>iam</artifactId>
-            <scope>test</scope>
         </dependency>
 
         <!-- ArchUit test dependencies -->
@@ -88,32 +67,30 @@ under the License.
             <artifactId>flink-architecture-tests-test</artifactId>
             <scope>test</scope>
         </dependency>
+
         <dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>url-connection-client</artifactId>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-table-common</artifactId>
+            <version>${flink.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-table-api-java</artifactId>
+            <version>${flink.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>1.18.22</version>
+            <scope>test</scope>
         </dependency>
 
     </dependencies>
 
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-jar-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>test-jar</goal>
-                        </goals>
-                        <configuration>
-                            <excludes>
-                                <!-- test-jar is still used by JUnit4 modules -->
-                                <exclude>META-INF/services/org.junit.jupiter.api.extension.Extension</exclude>
-                            </excludes>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-        </plugins>
-    </build>
 </project>
