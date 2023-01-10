@@ -40,6 +40,7 @@ import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 import software.amazon.awssdk.http.nio.netty.Http2Configuration;
 import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
+import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 import software.amazon.awssdk.profiles.ProfileFile;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sts.StsClient;
@@ -267,7 +268,7 @@ public class AWSGeneralUtil {
                                         configProps.getProperty(
                                                 AWSConfigConstants.externalId(configPrefix)))
                                 .build())
-                .stsClient(stsClientBuilder.build())
+                .stsClient(stsClientBuilder.httpClientBuilder(ApacheHttpClient.builder()).build())
                 .build();
     }
 
@@ -356,8 +357,48 @@ public class AWSGeneralUtil {
     }
 
     public static SdkHttpClient createSyncHttpClient(
+            final Properties configProperties, final ApacheHttpClient.Builder httpClientBuilder) {
+        final AttributeMap.Builder clientConfiguration = AttributeMap.builder();
+
+        clientConfiguration.put(SdkHttpConfigurationOption.TCP_KEEPALIVE, true);
+        Optional.ofNullable(
+                        configProperties.getProperty(
+                                SdkHttpConfigurationOption.TCP_KEEPALIVE.name()))
+                .map(Boolean::parseBoolean)
+                .ifPresent(
+                        booleanValue ->
+                                clientConfiguration.put(
+                                        SdkHttpConfigurationOption.TCP_KEEPALIVE, booleanValue));
+        Optional.ofNullable(
+                        configProperties.getProperty(
+                                AWSConfigConstants.HTTP_CLIENT_CONNECTION_TIMEOUT_MS))
+                .map(Long::parseLong)
+                .ifPresent(
+                        longValue ->
+                                clientConfiguration.put(
+                                        SdkHttpConfigurationOption.CONNECTION_TIMEOUT,
+                                        Duration.ofMillis(longValue)));
+        Optional.ofNullable(
+                        configProperties.getProperty(
+                                AWSConfigConstants.HTTP_CLIENT_SOCKET_TIMEOUT_MS))
+                .map(Long::parseLong)
+                .ifPresent(
+                        longValue ->
+                                clientConfiguration.put(
+                                        SdkHttpConfigurationOption.READ_TIMEOUT,
+                                        Duration.ofMillis(longValue)));
+
+        return createSyncHttpClient(clientConfiguration.build(), httpClientBuilder);
+    }
+
+    public static SdkHttpClient createSyncHttpClient(
             final AttributeMap config, final ApacheHttpClient.Builder httpClientBuilder) {
         httpClientBuilder.connectionAcquisitionTimeout(CONNECTION_ACQUISITION_TIMEOUT);
+        return httpClientBuilder.buildWithDefaults(config.merge(HTTP_CLIENT_DEFAULTS));
+    }
+
+    public static SdkHttpClient createSyncHttpClient(
+            final AttributeMap config, final UrlConnectionHttpClient.Builder httpClientBuilder) {
         return httpClientBuilder.buildWithDefaults(config.merge(HTTP_CLIENT_DEFAULTS));
     }
 
