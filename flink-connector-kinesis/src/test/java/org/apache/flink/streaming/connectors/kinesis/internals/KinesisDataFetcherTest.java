@@ -31,8 +31,8 @@ import org.apache.flink.streaming.connectors.kinesis.model.KinesisStreamShardSta
 import org.apache.flink.streaming.connectors.kinesis.model.SequenceNumber;
 import org.apache.flink.streaming.connectors.kinesis.model.StreamShardHandle;
 import org.apache.flink.streaming.connectors.kinesis.model.StreamShardMetadata;
+import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyAsyncV2Interface;
 import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyInterface;
-import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyV2Interface;
 import org.apache.flink.streaming.connectors.kinesis.serialization.KinesisDeserializationSchema;
 import org.apache.flink.streaming.connectors.kinesis.serialization.KinesisDeserializationSchemaWrapper;
 import org.apache.flink.streaming.connectors.kinesis.testutils.AlwaysThrowsDeserializationSchema;
@@ -1016,7 +1016,7 @@ public class KinesisDataFetcherTest extends TestLogger {
 
     @Test(timeout = 1000L)
     public void testRecordPublisherFactoryIsTornDown() throws InterruptedException {
-        KinesisProxyV2Interface kinesisV2 = mock(KinesisProxyV2Interface.class);
+        KinesisProxyAsyncV2Interface kinesisV2 = mock(KinesisProxyAsyncV2Interface.class);
 
         TestableKinesisDataFetcher<String> fetcher =
                 new TestableKinesisDataFetcher<String>(
@@ -1040,7 +1040,7 @@ public class KinesisDataFetcherTest extends TestLogger {
     @Test(timeout = 10000)
     public void testRecordPublisherFactoryIsTornDownWhenDeregisterStreamConsumerThrowsException()
             throws InterruptedException {
-        KinesisProxyV2Interface kinesisV2 = mock(KinesisProxyV2Interface.class);
+        KinesisProxyAsyncV2Interface kinesisV2 = mock(KinesisProxyAsyncV2Interface.class);
 
         TestableKinesisDataFetcher<String> fetcher =
                 new TestableKinesisDataFetcher<String>(
@@ -1082,7 +1082,7 @@ public class KinesisDataFetcherTest extends TestLogger {
                         new LinkedList<>(),
                         new HashMap<>(),
                         mock(KinesisProxyInterface.class),
-                        mock(KinesisProxyV2Interface.class)) {
+                        mock(KinesisProxyAsyncV2Interface.class)) {
                     @Override
                     protected void closeRecordPublisherFactory() {
                         throw new RuntimeException();

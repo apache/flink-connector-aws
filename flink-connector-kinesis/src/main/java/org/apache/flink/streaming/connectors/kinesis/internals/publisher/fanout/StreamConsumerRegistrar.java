@@ -21,7 +21,7 @@ import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.streaming.connectors.kinesis.FlinkKinesisException.FlinkKinesisTimeoutException;
 import org.apache.flink.streaming.connectors.kinesis.proxy.FullJitterBackoff;
-import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyV2Interface;
+import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxySyncV2Interface;
 import org.apache.flink.util.Preconditions;
 
 import org.slf4j.Logger;
@@ -36,9 +36,11 @@ import javax.annotation.Nullable;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
 import static org.apache.flink.streaming.connectors.kinesis.config.ConsumerConfigConstants.EFORegistrationType.LAZY;
+import static org.apache.flink.util.ExceptionUtils.findThrowable;
 import static software.amazon.awssdk.services.kinesis.model.ConsumerStatus.ACTIVE;
 import static software.amazon.awssdk.services.kinesis.model.ConsumerStatus.DELETING;
 
@@ -51,14 +53,14 @@ public class StreamConsumerRegistrar {
 
     private static final Logger LOG = LoggerFactory.getLogger(StreamConsumerRegistrar.class);
 
-    private final KinesisProxyV2Interface kinesisProxyV2Interface;
+    private final KinesisProxySyncV2Interface kinesisProxyV2Interface;
 
     private final FanOutRecordPublisherConfiguration configuration;
 
     private final FullJitterBackoff backoff;
 
     public StreamConsumerRegistrar(
-            final KinesisProxyV2Interface kinesisProxyV2Interface,
+            final KinesisProxySyncV2Interface kinesisProxyV2Interface,
             final FanOutRecordPublisherConfiguration configuration,
             final FullJitterBackoff backoff) {
         this.kinesisProxyV2Interface = Preconditions.checkNotNull(kinesisProxyV2Interface);
@@ -77,7 +79,7 @@ public class StreamConsumerRegistrar {
      * @throws InterruptedException
      */
     public String registerStreamConsumer(final String stream, final String streamConsumerName)
-            throws ExecutionException, InterruptedException {
+            throws Exception {
         LOG.debug("Registering stream consumer - {}::{}", stream, streamConsumerName);
 
         int attempt = 1;
@@ -121,8 +123,7 @@ public class StreamConsumerRegistrar {
      * @throws ExecutionException
      * @throws InterruptedException
      */
-    public void deregisterStreamConsumer(final String stream)
-            throws InterruptedException, ExecutionException {
+    public void deregisterStreamConsumer(final String stream) throws Exception {
         LOG.debug("Deregistering stream consumer - {}", stream);
 
         int attempt = 1;
@@ -218,7 +219,7 @@ public class StreamConsumerRegistrar {
             @Nullable final DescribeStreamConsumerResponse describeStreamConsumerResponse,
             final String streamConsumerArn,
             final int initialAttempt)
-            throws InterruptedException, ExecutionException {
+            throws Exception {
         int attempt = initialAttempt;
 
         Instant start = Instant.now();
@@ -243,8 +244,7 @@ public class StreamConsumerRegistrar {
     }
 
     private Optional<DescribeStreamConsumerResponse> describeStreamConsumer(
-            final String streamArn, final String streamConsumerName)
-            throws InterruptedException, ExecutionException {
+            final String streamArn, final String streamConsumerName) throws Exception {
         return describeStreamConsumer(
                 () ->
                         kinesisProxyV2Interface.describeStreamConsumer(
@@ -252,19 +252,18 @@ public class StreamConsumerRegistrar {
     }
 
     private Optional<DescribeStreamConsumerResponse> describeStreamConsumer(
-            final String streamConsumerArn) throws InterruptedException, ExecutionException {
+            final String streamConsumerArn) throws Exception {
         return describeStreamConsumer(
                 () -> kinesisProxyV2Interface.describeStreamConsumer(streamConsumerArn));
     }
 
     private Optional<DescribeStreamConsumerResponse> describeStreamConsumer(
-            final ResponseSupplier<DescribeStreamConsumerResponse> responseSupplier)
-            throws InterruptedException, ExecutionException {
+            final Callable<DescribeStreamConsumerResponse> responseSupplier) throws Exception {
         DescribeStreamConsumerResponse response;
 
         try {
-            response = responseSupplier.get();
-        } catch (ExecutionException ex) {
+            response = responseSupplier.call();
+        } catch (Exception ex) {
             if (isResourceNotFound(ex)) {
                 return Optional.empty();
             }
@@ -275,11 +274,11 @@ public class StreamConsumerRegistrar {
         return Optional.ofNullable(response);
     }
 
-    private <T> void invokeIgnoringResourceInUse(final ResponseSupplier<T> responseSupplier)
-            throws InterruptedException, ExecutionException {
+    private <T> void invokeIgnoringResourceInUse(final Callable<T> responseSupplier)
+            throws Exception {
         try {
-            responseSupplier.get();
-        } catch (ExecutionException ex) {
+            responseSupplier.call();
+        } catch (Exception ex) {
             if (isResourceInUse(ex)) {
                 // The stream consumer may have been created since we performed the describe
                 return;
@@ -289,12 +288,12 @@ public class StreamConsumerRegistrar {
         }
     }
 
-    private boolean isResourceNotFound(final ExecutionException ex) {
-        return ex.getCause() instanceof ResourceNotFoundException;
+    private boolean isResourceNotFound(final Exception ex) {
+        return findThrowable(ex, ResourceNotFoundException.class).isPresent();
     }
 
-    private boolean isResourceInUse(final ExecutionException ex) {
-        return ex.getCause() instanceof ResourceInUseException;
+    private boolean isResourceInUse(final Exception ex) {
+        return findThrowable(ex, ResourceInUseException.class).isPresent();
     }
 
     private String getStreamConsumerArn(final String stream) {
@@ -305,9 +304,5 @@ public class StreamConsumerRegistrar {
         }
 
         return streamConsumerArn.get();
-    }
-
-    private interface ResponseSupplier<T> {
-        T get() throws ExecutionException, InterruptedException;
     }
 }

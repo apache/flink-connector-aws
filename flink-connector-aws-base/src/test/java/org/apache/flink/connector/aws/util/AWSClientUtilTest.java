@@ -38,7 +38,7 @@ import java.util.Properties;
 
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.AWS_ENDPOINT;
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.AWS_REGION;
-import static org.apache.flink.connector.aws.util.AWSAsyncSinkUtil.formatFlinkUserAgentPrefix;
+import static org.apache.flink.connector.aws.util.AWSClientUtil.formatFlinkUserAgentPrefix;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
@@ -46,8 +46,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** Tests for {@link AWSAsyncSinkUtil}. */
-class AWSAsyncSinkUtilTest {
+/** Tests for {@link AWSClientUtil}. */
+class AWSClientUtilTest {
 
     private static final String DEFAULT_USER_AGENT_PREFIX_FORMAT =
             "Apache Flink %s (%s) *Destination* Connector";
@@ -62,7 +62,7 @@ class AWSAsyncSinkUtilTest {
                 ClientOverrideConfiguration.builder().build();
         SdkAsyncHttpClient httpClient = NettyNioAsyncHttpClient.builder().build();
 
-        AWSAsyncSinkUtil.createAwsAsyncClient(
+        AWSClientUtil.createAwsAsyncClient(
                 properties, builder, httpClient, clientOverrideConfiguration);
 
         verify(builder).overrideConfiguration(clientOverrideConfiguration);
@@ -83,7 +83,7 @@ class AWSAsyncSinkUtilTest {
                 ClientOverrideConfiguration.builder().build();
         SdkAsyncHttpClient httpClient = NettyNioAsyncHttpClient.builder().build();
 
-        AWSAsyncSinkUtil.createAwsAsyncClient(
+        AWSClientUtil.createAwsAsyncClient(
                 properties, builder, httpClient, clientOverrideConfiguration);
 
         verify(builder).endpointOverride(URI.create("https://localhost"));
@@ -95,11 +95,11 @@ class AWSAsyncSinkUtilTest {
 
         ClientOverrideConfiguration.Builder builder = mockClientOverrideConfigurationBuilder();
 
-        AWSAsyncSinkUtil.createClientOverrideConfiguration(
+        AWSClientUtil.createClientOverrideConfiguration(
                 clientConfiguration,
                 builder,
                 formatFlinkUserAgentPrefix(
-                        DEFAULT_USER_AGENT_PREFIX_FORMAT + AWSAsyncSinkUtil.V2_USER_AGENT_SUFFIX));
+                        DEFAULT_USER_AGENT_PREFIX_FORMAT + AWSClientUtil.V2_USER_AGENT_SUFFIX));
 
         verify(builder).build();
         verify(builder)
@@ -120,11 +120,11 @@ class AWSAsyncSinkUtilTest {
 
         ClientOverrideConfiguration.Builder builder = mockClientOverrideConfigurationBuilder();
 
-        AWSAsyncSinkUtil.createClientOverrideConfiguration(
+        AWSClientUtil.createClientOverrideConfiguration(
                 clientConfiguration,
                 builder,
                 formatFlinkUserAgentPrefix(
-                        DEFAULT_USER_AGENT_PREFIX_FORMAT + AWSAsyncSinkUtil.V2_USER_AGENT_SUFFIX));
+                        DEFAULT_USER_AGENT_PREFIX_FORMAT + AWSClientUtil.V2_USER_AGENT_SUFFIX));
 
         verify(builder).putAdvancedOption(SdkAdvancedClientOption.USER_AGENT_SUFFIX, "suffix");
     }
@@ -138,12 +138,11 @@ class AWSAsyncSinkUtilTest {
 
         ClientOverrideConfiguration.Builder builder = mockClientOverrideConfigurationBuilder();
 
-        AWSAsyncSinkUtil.createClientOverrideConfiguration(
+        AWSClientUtil.createClientOverrideConfiguration(
                 clientConfiguration,
                 builder,
                 formatFlinkUserAgentPrefix(
-                        DEFAULT_USER_AGENT_PREFIX_FORMAT_V2
-                                + AWSAsyncSinkUtil.V2_USER_AGENT_SUFFIX));
+                        DEFAULT_USER_AGENT_PREFIX_FORMAT_V2 + AWSClientUtil.V2_USER_AGENT_SUFFIX));
 
         verify(builder).apiCallAttemptTimeout(Duration.ofMillis(500));
     }
@@ -157,12 +156,11 @@ class AWSAsyncSinkUtilTest {
 
         ClientOverrideConfiguration.Builder builder = mockClientOverrideConfigurationBuilder();
 
-        AWSAsyncSinkUtil.createClientOverrideConfiguration(
+        AWSClientUtil.createClientOverrideConfiguration(
                 clientConfiguration,
                 builder,
                 formatFlinkUserAgentPrefix(
-                        DEFAULT_USER_AGENT_PREFIX_FORMAT_V2
-                                + AWSAsyncSinkUtil.V2_USER_AGENT_SUFFIX));
+                        DEFAULT_USER_AGENT_PREFIX_FORMAT_V2 + AWSClientUtil.V2_USER_AGENT_SUFFIX));
 
         verify(builder).apiCallTimeout(Duration.ofMillis(600));
     }

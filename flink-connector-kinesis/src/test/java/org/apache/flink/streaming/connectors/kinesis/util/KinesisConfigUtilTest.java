@@ -1012,11 +1012,11 @@ public class KinesisConfigUtilTest {
     }
 
     @Test
-    public void testGetV2ConsumerAsyncClientProperties() {
+    public void testGetV2ConsumerClientProperties() {
         Properties properties = new Properties();
         properties.setProperty("retained", "property");
 
-        assertThat(KinesisConfigUtil.getV2ConsumerAsyncClientProperties(properties))
+        assertThat(KinesisConfigUtil.getV2ConsumerClientProperties(properties))
                 .containsEntry("retained", "property")
                 .containsKey("aws.kinesis.client.user-agent-prefix")
                 .hasSize(2);

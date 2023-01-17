@@ -23,10 +23,7 @@ import software.amazon.awssdk.services.kinesis.model.DeregisterStreamConsumerRes
 import software.amazon.awssdk.services.kinesis.model.DescribeStreamConsumerResponse;
 import software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryResponse;
 import software.amazon.awssdk.services.kinesis.model.RegisterStreamConsumerResponse;
-import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
-import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
 
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
 /**
@@ -34,7 +31,7 @@ import java.util.concurrent.ExecutionException;
  * same AWS service region.
  */
 @Internal
-public interface KinesisProxyV2Interface {
+public interface KinesisProxySyncV2Interface {
 
     DescribeStreamSummaryResponse describeStreamSummary(String stream)
             throws InterruptedException, ExecutionException;
@@ -53,11 +50,6 @@ public interface KinesisProxyV2Interface {
     DeregisterStreamConsumerResponse deregisterStreamConsumer(final String consumerArn)
             throws InterruptedException, ExecutionException;
 
-    CompletableFuture<Void> subscribeToShard(
-            SubscribeToShardRequest request, SubscribeToShardResponseHandler responseHandler);
-
     /** Destroy any open resources used by the factory. */
-    default void close() {
-        // Do nothing by default
-    }
+    void close();
 }

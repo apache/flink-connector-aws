@@ -21,8 +21,11 @@ import org.apache.flink.streaming.connectors.kinesis.config.AWSConfigConstants;
 import org.apache.flink.streaming.connectors.kinesis.testutils.TestUtils;
 
 import org.junit.Test;
+import software.amazon.awssdk.http.SdkHttpConfigurationOption;
+import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
 import software.amazon.awssdk.http.nio.netty.internal.NettyConfiguration;
+import software.amazon.awssdk.utils.AttributeMap;
 
 import java.lang.reflect.Field;
 import java.util.Properties;
@@ -38,10 +41,18 @@ public class KinesisProxyV2FactoryTest {
     public void testReadTimeoutPopulatedFromDefaults() throws Exception {
         Properties properties = properties();
 
-        KinesisProxyV2Interface proxy = KinesisProxyV2Factory.createKinesisProxyV2(properties);
-        NettyConfiguration nettyConfiguration = getNettyConfiguration(proxy);
+        KinesisProxyAsyncV2Interface asyncProxy =
+                KinesisProxyV2Factory.createKinesisProxyAsyncV2(properties);
+        NettyConfiguration nettyConfiguration = getNettyConfiguration(asyncProxy);
 
         assertThat(nettyConfiguration.readTimeoutMillis())
+                .isEqualTo(DEFAULT_EFO_HTTP_CLIENT_READ_TIMEOUT.toMillis());
+
+        KinesisProxySyncV2Interface syncProxy =
+                KinesisProxyV2Factory.createKinesisProxySyncV2(properties);
+        AttributeMap apacheHttpConfiguration = getApacheHttpConfiguration(syncProxy);
+
+        assertThat(apacheHttpConfiguration.get(SdkHttpConfigurationOption.READ_TIMEOUT).toMillis())
                 .isEqualTo(DEFAULT_EFO_HTTP_CLIENT_READ_TIMEOUT.toMillis());
     }
 
@@ -50,26 +61,47 @@ public class KinesisProxyV2FactoryTest {
         Properties properties = properties();
         properties.setProperty(EFO_HTTP_CLIENT_READ_TIMEOUT_MILLIS, "12345");
 
-        KinesisProxyV2Interface proxy = KinesisProxyV2Factory.createKinesisProxyV2(properties);
-        NettyConfiguration nettyConfiguration = getNettyConfiguration(proxy);
+        KinesisProxyAsyncV2Interface asyncProxy =
+                KinesisProxyV2Factory.createKinesisProxyAsyncV2(properties);
+        NettyConfiguration nettyConfiguration = getNettyConfiguration(asyncProxy);
 
         assertThat(nettyConfiguration.readTimeoutMillis()).isEqualTo(12345);
+
+        KinesisProxySyncV2Interface syncProxy =
+                KinesisProxyV2Factory.createKinesisProxySyncV2(properties);
+        AttributeMap apacheHttpConfiguration = getApacheHttpConfiguration(syncProxy);
+
+        assertThat(apacheHttpConfiguration.get(SdkHttpConfigurationOption.READ_TIMEOUT).toMillis())
+                .isEqualTo(12345);
     }
 
     @Test
     public void testClientConfigurationPopulatedTcpKeepAliveDefaults() throws Exception {
         Properties properties = properties();
 
-        KinesisProxyV2Interface proxy = KinesisProxyV2Factory.createKinesisProxyV2(properties);
-        NettyConfiguration nettyConfiguration = getNettyConfiguration(proxy);
+        KinesisProxyAsyncV2Interface asyncProxy =
+                KinesisProxyV2Factory.createKinesisProxyAsyncV2(properties);
+        NettyConfiguration nettyConfiguration = getNettyConfiguration(asyncProxy);
 
         assertThat(nettyConfiguration.tcpKeepAlive()).isTrue();
+
+        KinesisProxySyncV2Interface syncProxy =
+                KinesisProxyV2Factory.createKinesisProxySyncV2(properties);
+        AttributeMap apacheHttpConfiguration = getApacheHttpConfiguration(syncProxy);
+
+        assertThat(apacheHttpConfiguration.get(SdkHttpConfigurationOption.TCP_KEEPALIVE)).isTrue();
     }
 
-    private NettyConfiguration getNettyConfiguration(final KinesisProxyV2Interface kinesis)
+    private NettyConfiguration getNettyConfiguration(final KinesisProxyAsyncV2Interface kinesis)
             throws Exception {
-        NettyNioAsyncHttpClient httpClient = getField("httpClient", kinesis);
+        NettyNioAsyncHttpClient httpClient = getField("asyncHttpClient", kinesis);
         return getField("configuration", httpClient);
+    }
+
+    private AttributeMap getApacheHttpConfiguration(final KinesisProxySyncV2Interface kinesis)
+            throws Exception {
+        ApacheHttpClient httpClient = getField("httpClient", kinesis);
+        return getField("resolvedOptions", httpClient);
     }
 
     private <T> T getField(String fieldName, Object obj) throws Exception {

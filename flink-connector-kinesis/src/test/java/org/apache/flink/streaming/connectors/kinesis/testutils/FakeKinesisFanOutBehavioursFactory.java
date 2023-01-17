@@ -17,7 +17,8 @@
 
 package org.apache.flink.streaming.connectors.kinesis.testutils;
 
-import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyV2Interface;
+import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyAsyncV2Interface;
+import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxySyncV2Interface;
 
 import com.amazonaws.kinesis.agg.RecordAggregator;
 import org.reactivestreams.Subscriber;
@@ -63,8 +64,8 @@ import static software.amazon.awssdk.services.kinesis.model.ConsumerStatus.CREAT
 import static software.amazon.awssdk.services.kinesis.model.ConsumerStatus.DELETING;
 
 /**
- * Factory for different kinds of fake Kinesis behaviours using the {@link KinesisProxyV2Interface}
- * interface.
+ * Factory for different kinds of fake Kinesis behaviours using the {@link
+ * KinesisProxyAsyncV2Interface} interface.
  */
 public class FakeKinesisFanOutBehavioursFactory {
 
@@ -76,41 +77,42 @@ public class FakeKinesisFanOutBehavioursFactory {
     //  Behaviours related to subscribe to shard and consuming data
     // ------------------------------------------------------------------------
 
-    public static SingleShardFanOutKinesisV2.Builder boundedShard() {
-        return new SingleShardFanOutKinesisV2.Builder();
+    public static SingleShardFanOutKinesisAsyncV2.Builder boundedShard() {
+        return new SingleShardFanOutKinesisAsyncV2.Builder();
     }
 
-    public static KinesisProxyV2Interface singletonShard(final SubscribeToShardEvent event) {
-        return new SingletonEventFanOutKinesisV2(event);
+    public static KinesisProxyAsyncV2Interface singletonShard(final SubscribeToShardEvent event) {
+        return new SingletonEventFanOutKinesisAsyncV2(event);
     }
 
-    public static AbstractSingleShardFanOutKinesisV2 singleShardWithEvents(
+    public static AbstractSingleShardFanOutKinesisAsyncV2 singleShardWithEvents(
             final List<SubscribeToShardEvent> events) {
-        return new EventFanOutKinesisV2(events);
+        return new EventFanOutKinesisAsyncV2(events);
     }
 
-    public static SingleShardFanOutKinesisV2 emptyShard() {
-        return new SingleShardFanOutKinesisV2.Builder().withBatchCount(0).build();
+    public static SingleShardFanOutKinesisAsyncV2 emptyShard() {
+        return new SingleShardFanOutKinesisAsyncV2.Builder().withBatchCount(0).build();
     }
 
-    public static KinesisProxyV2Interface resourceNotFoundWhenObtainingSubscription() {
-        return new ExceptionalKinesisV2(ResourceNotFoundException.builder().build());
+    public static KinesisProxyAsyncV2Interface resourceNotFoundWhenObtainingSubscription() {
+        return new ExceptionalKinesisAsyncV2(ResourceNotFoundException.builder().build());
     }
 
-    public static SubscriptionErrorKinesisV2 errorDuringSubscription(
+    public static SubscriptionErrorKinesisAsyncV2 errorDuringSubscription(
             final Throwable... throwables) {
-        return new SubscriptionErrorKinesisV2(throwables);
+        return new SubscriptionErrorKinesisAsyncV2(throwables);
     }
 
-    public static SubscriptionErrorKinesisV2 alternatingSuccessErrorDuringSubscription() {
-        return new AlternatingSubscriptionErrorKinesisV2(LimitExceededException.builder().build());
+    public static SubscriptionErrorKinesisAsyncV2 alternatingSuccessErrorDuringSubscription() {
+        return new AlternatingSubscriptionErrorKinesisAsyncV2(
+                LimitExceededException.builder().build());
     }
 
-    public static KinesisProxyV2Interface failsToAcquireSubscription() {
-        return new FailsToAcquireSubscriptionKinesis();
+    public static KinesisProxyAsyncV2Interface failsToAcquireSubscription() {
+        return new FailsToAcquireSubscriptionKinesisAsync();
     }
 
-    public static AbstractSingleShardFanOutKinesisV2 shardThatCreatesBackpressureOnQueue() {
+    public static AbstractSingleShardFanOutKinesisAsyncV2 shardThatCreatesBackpressureOnQueue() {
         return new MultipleEventsForSingleRequest();
     }
 
@@ -118,8 +120,8 @@ public class FakeKinesisFanOutBehavioursFactory {
     //  Behaviours related to describing streams
     // ------------------------------------------------------------------------
 
-    public static KinesisProxyV2Interface streamNotFound() {
-        return new StreamConsumerFakeKinesis.Builder()
+    public static KinesisProxySyncV2Interface streamNotFound() {
+        return new StreamConsumerFakeKinesisSync.Builder()
                 .withThrowsWhileDescribingStream(ResourceNotFoundException.builder().build())
                 .build();
     }
@@ -128,20 +130,23 @@ public class FakeKinesisFanOutBehavioursFactory {
     //  Behaviours related to stream consumer registration/deregistration
     // ------------------------------------------------------------------------
 
-    public static StreamConsumerFakeKinesis streamConsumerNotFound() {
-        return new StreamConsumerFakeKinesis.Builder().withStreamConsumerNotFound(true).build();
+    public static StreamConsumerFakeKinesisSync streamConsumerNotFound() {
+        return new StreamConsumerFakeKinesisSync.Builder().withStreamConsumerNotFound(true).build();
     }
 
-    public static StreamConsumerFakeKinesis existingActiveConsumer() {
-        return new StreamConsumerFakeKinesis.Builder().build();
+    public static StreamConsumerFakeKinesisSync existingActiveConsumer() {
+        return new StreamConsumerFakeKinesisSync.Builder().build();
     }
 
-    public static StreamConsumerFakeKinesis registerExistingConsumerAndWaitToBecomeActive() {
-        return new StreamConsumerFakeKinesis.Builder().withStreamConsumerStatus(CREATING).build();
+    public static StreamConsumerFakeKinesisSync registerExistingConsumerAndWaitToBecomeActive() {
+        return new StreamConsumerFakeKinesisSync.Builder()
+                .withStreamConsumerStatus(CREATING)
+                .build();
     }
 
     /** A dummy EFO implementation that fails to acquire subscription (no response). */
-    private static class FailsToAcquireSubscriptionKinesis extends KinesisProxyV2InterfaceAdapter {
+    private static class FailsToAcquireSubscriptionKinesisAsync
+            extends KinesisProxyAsyncV2InterfaceAdapter {
 
         @Override
         public CompletableFuture<Void> subscribeToShard(
@@ -152,8 +157,8 @@ public class FakeKinesisFanOutBehavioursFactory {
         }
     }
 
-    public static AbstractSingleShardFanOutKinesisV2 emptyBatchFollowedBySingleRecord() {
-        return new AbstractSingleShardFanOutKinesisV2(2) {
+    public static AbstractSingleShardFanOutKinesisAsyncV2 emptyBatchFollowedBySingleRecord() {
+        return new AbstractSingleShardFanOutKinesisAsyncV2(2) {
             private int subscriptionCount = 0;
 
             @Override
@@ -177,11 +182,12 @@ public class FakeKinesisFanOutBehavioursFactory {
      * An unbounded fake Kinesis that offers subscriptions with 5 records, alternating throwing the
      * given exception. The first subscription is exceptional, second successful, and so on.
      */
-    private static class AlternatingSubscriptionErrorKinesisV2 extends SubscriptionErrorKinesisV2 {
+    private static class AlternatingSubscriptionErrorKinesisAsyncV2
+            extends SubscriptionErrorKinesisAsyncV2 {
 
         int index = 0;
 
-        private AlternatingSubscriptionErrorKinesisV2(final Throwable throwable) {
+        private AlternatingSubscriptionErrorKinesisAsyncV2(final Throwable throwable) {
             super(throwable);
         }
 
@@ -201,7 +207,8 @@ public class FakeKinesisFanOutBehavioursFactory {
      * A fake Kinesis that throws the given exception after sending 5 records. A total of 5
      * subscriptions can be acquired.
      */
-    public static class SubscriptionErrorKinesisV2 extends AbstractSingleShardFanOutKinesisV2 {
+    public static class SubscriptionErrorKinesisAsyncV2
+            extends AbstractSingleShardFanOutKinesisAsyncV2 {
 
         public static final int NUMBER_OF_SUBSCRIPTIONS = 5;
 
@@ -211,7 +218,7 @@ public class FakeKinesisFanOutBehavioursFactory {
 
         AtomicInteger sequenceNumber = new AtomicInteger();
 
-        private SubscriptionErrorKinesisV2(final Throwable... throwables) {
+        private SubscriptionErrorKinesisAsyncV2(final Throwable... throwables) {
             super(NUMBER_OF_SUBSCRIPTIONS);
             this.throwables = throwables;
         }
@@ -236,11 +243,11 @@ public class FakeKinesisFanOutBehavioursFactory {
         }
     }
 
-    private static class ExceptionalKinesisV2 extends KinesisProxyV2InterfaceAdapter {
+    private static class ExceptionalKinesisAsyncV2 extends KinesisProxyAsyncV2InterfaceAdapter {
 
         private final RuntimeException exception;
 
-        private ExceptionalKinesisV2(RuntimeException exception) {
+        private ExceptionalKinesisAsyncV2(RuntimeException exception) {
             this.exception = exception;
         }
 
@@ -252,11 +259,12 @@ public class FakeKinesisFanOutBehavioursFactory {
         }
     }
 
-    private static class SingletonEventFanOutKinesisV2 extends AbstractSingleShardFanOutKinesisV2 {
+    private static class SingletonEventFanOutKinesisAsyncV2
+            extends AbstractSingleShardFanOutKinesisAsyncV2 {
 
         private final SubscribeToShardEvent event;
 
-        private SingletonEventFanOutKinesisV2(SubscribeToShardEvent event) {
+        private SingletonEventFanOutKinesisAsyncV2(SubscribeToShardEvent event) {
             super(1);
             this.event = event;
         }
@@ -267,11 +275,11 @@ public class FakeKinesisFanOutBehavioursFactory {
         }
     }
 
-    private static class EventFanOutKinesisV2 extends AbstractSingleShardFanOutKinesisV2 {
+    private static class EventFanOutKinesisAsyncV2 extends AbstractSingleShardFanOutKinesisAsyncV2 {
 
         private final List<SubscribeToShardEvent> events;
 
-        private EventFanOutKinesisV2(List<SubscribeToShardEvent> events) {
+        private EventFanOutKinesisAsyncV2(List<SubscribeToShardEvent> events) {
             super(1);
             this.events = events;
         }
@@ -282,7 +290,8 @@ public class FakeKinesisFanOutBehavioursFactory {
         }
     }
 
-    private static class MultipleEventsForSingleRequest extends AbstractSingleShardFanOutKinesisV2 {
+    private static class MultipleEventsForSingleRequest
+            extends AbstractSingleShardFanOutKinesisAsyncV2 {
 
         private MultipleEventsForSingleRequest() {
             super(1);
@@ -305,7 +314,8 @@ public class FakeKinesisFanOutBehavioursFactory {
      * subscriptions. Aggregated and non-aggregated records are supported with various batch and
      * subscription sizes.
      */
-    public static class SingleShardFanOutKinesisV2 extends AbstractSingleShardFanOutKinesisV2 {
+    public static class SingleShardFanOutKinesisAsyncV2
+            extends AbstractSingleShardFanOutKinesisAsyncV2 {
 
         private final int batchesPerSubscription;
 
@@ -319,7 +329,7 @@ public class FakeKinesisFanOutBehavioursFactory {
 
         private final AtomicInteger sequenceNumber = new AtomicInteger();
 
-        private SingleShardFanOutKinesisV2(final Builder builder) {
+        private SingleShardFanOutKinesisAsyncV2(final Builder builder) {
             super(builder.getSubscriptionCount());
             this.batchesPerSubscription = builder.batchesPerSubscription;
             this.recordsPerBatch = builder.recordsPerBatch;
@@ -366,7 +376,7 @@ public class FakeKinesisFanOutBehavioursFactory {
             return events;
         }
 
-        /** A convenience builder for {@link SingleShardFanOutKinesisV2}. */
+        /** A convenience builder for {@link SingleShardFanOutKinesisAsyncV2}. */
         public static class Builder {
             private int batchesPerSubscription = 100000;
             private int recordsPerBatch = 10;
@@ -411,8 +421,8 @@ public class FakeKinesisFanOutBehavioursFactory {
                 return this;
             }
 
-            public SingleShardFanOutKinesisV2 build() {
-                return new SingleShardFanOutKinesisV2(this);
+            public SingleShardFanOutKinesisAsyncV2 build() {
+                return new SingleShardFanOutKinesisAsyncV2(this);
             }
         }
     }
@@ -421,13 +431,13 @@ public class FakeKinesisFanOutBehavioursFactory {
      * A single shard dummy EFO implementation that provides basic responses and subscription
      * management. Does not provide any records.
      */
-    public abstract static class AbstractSingleShardFanOutKinesisV2
-            extends KinesisProxyV2InterfaceAdapter {
+    public abstract static class AbstractSingleShardFanOutKinesisAsyncV2
+            extends KinesisProxyAsyncV2InterfaceAdapter {
 
         private final List<SubscribeToShardRequest> requests = new ArrayList<>();
         private int remainingSubscriptions;
 
-        private AbstractSingleShardFanOutKinesisV2(final int remainingSubscriptions) {
+        private AbstractSingleShardFanOutKinesisAsyncV2(final int remainingSubscriptions) {
             this.remainingSubscriptions = remainingSubscriptions;
         }
 
@@ -500,7 +510,7 @@ public class FakeKinesisFanOutBehavioursFactory {
     }
 
     /** A fake Kinesis Proxy V2 that implements dummy logic for stream consumer related methods. */
-    public static class StreamConsumerFakeKinesis extends KinesisProxyV2InterfaceAdapter {
+    public static class StreamConsumerFakeKinesisSync extends KinesisProxySyncV2InterfaceAdapter {
 
         public static final int NUMBER_OF_DESCRIBE_REQUESTS_TO_ACTIVATE = 5;
         public static final int NUMBER_OF_DESCRIBE_REQUESTS_TO_DELETE = 5;
@@ -511,7 +521,7 @@ public class FakeKinesisFanOutBehavioursFactory {
         private boolean streamConsumerNotFound;
         private int numberOfDescribeStreamConsumerInvocations = 0;
 
-        private StreamConsumerFakeKinesis(final Builder builder) {
+        private StreamConsumerFakeKinesisSync(final Builder builder) {
             this.throwsWhileDescribingStream = builder.throwsWhileDescribingStream;
             this.streamConsumerStatus = builder.streamConsumerStatus;
             this.streamConsumerNotFound = builder.streamConsumerNotFound;
@@ -603,8 +613,8 @@ public class FakeKinesisFanOutBehavioursFactory {
             private ConsumerStatus streamConsumerStatus = ACTIVE;
             private boolean streamConsumerNotFound = false;
 
-            public StreamConsumerFakeKinesis build() {
-                return new StreamConsumerFakeKinesis(this);
+            public StreamConsumerFakeKinesisSync build() {
+                return new StreamConsumerFakeKinesisSync(this);
             }
 
             public Builder withStreamConsumerNotFound(final boolean streamConsumerNotFound) {
@@ -625,7 +635,23 @@ public class FakeKinesisFanOutBehavioursFactory {
         }
     }
 
-    private static class KinesisProxyV2InterfaceAdapter implements KinesisProxyV2Interface {
+    private static class KinesisProxyAsyncV2InterfaceAdapter
+            implements KinesisProxyAsyncV2Interface {
+
+        @Override
+        public CompletableFuture<Void> subscribeToShard(
+                SubscribeToShardRequest request, SubscribeToShardResponseHandler responseHandler) {
+            throw new UnsupportedOperationException("This method is not implemented.");
+        }
+
+        /** Destroy any open resources used by the factory. */
+        @Override
+        public void close() {
+            // Do nothing by default
+        }
+    }
+
+    private static class KinesisProxySyncV2InterfaceAdapter implements KinesisProxySyncV2Interface {
 
         @Override
         public DescribeStreamSummaryResponse describeStreamSummary(String stream)
@@ -659,10 +685,10 @@ public class FakeKinesisFanOutBehavioursFactory {
             throw new UnsupportedOperationException("This method is not implemented.");
         }
 
+        /** Destroy any open resources used by the factory. */
         @Override
-        public CompletableFuture<Void> subscribeToShard(
-                SubscribeToShardRequest request, SubscribeToShardResponseHandler responseHandler) {
-            throw new UnsupportedOperationException("This method is not implemented.");
+        public void close() {
+            // Do nothing by default
         }
     }
 

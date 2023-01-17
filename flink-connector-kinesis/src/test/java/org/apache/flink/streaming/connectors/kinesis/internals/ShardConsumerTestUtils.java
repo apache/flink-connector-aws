@@ -29,8 +29,8 @@ import org.apache.flink.streaming.connectors.kinesis.model.KinesisStreamShardSta
 import org.apache.flink.streaming.connectors.kinesis.model.SequenceNumber;
 import org.apache.flink.streaming.connectors.kinesis.model.StartingPosition;
 import org.apache.flink.streaming.connectors.kinesis.model.StreamShardHandle;
+import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyAsyncV2Interface;
 import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyInterface;
-import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyV2Interface;
 import org.apache.flink.streaming.connectors.kinesis.serialization.KinesisDeserializationSchemaWrapper;
 import org.apache.flink.streaming.connectors.kinesis.testutils.KinesisShardIdGenerator;
 import org.apache.flink.streaming.connectors.kinesis.testutils.TestSourceContext;
@@ -122,7 +122,7 @@ public class ShardConsumerTestUtils {
                                 .createInitialSubscribedStreamsToLastDiscoveredShardsState(
                                         Collections.singletonList("fakeStream")),
                         Mockito.mock(KinesisProxyInterface.class),
-                        Mockito.mock(KinesisProxyV2Interface.class));
+                        Mockito.mock(KinesisProxyAsyncV2Interface.class));
 
         final StreamShardHandle shardHandle =
                 subscribedShardsStateUnderTest.get(0).getStreamShardHandle();
