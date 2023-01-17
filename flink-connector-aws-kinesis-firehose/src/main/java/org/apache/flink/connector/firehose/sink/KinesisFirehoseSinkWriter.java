@@ -19,7 +19,7 @@ package org.apache.flink.connector.firehose.sink;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.connector.sink2.Sink;
-import org.apache.flink.connector.aws.util.AWSAsyncSinkUtil;
+import org.apache.flink.connector.aws.util.AWSClientUtil;
 import org.apache.flink.connector.aws.util.AWSGeneralUtil;
 import org.apache.flink.connector.base.sink.throwable.FatalExceptionClassifier;
 import org.apache.flink.connector.base.sink.writer.AsyncSinkWriter;
@@ -73,7 +73,7 @@ class KinesisFirehoseSinkWriter<InputT> extends AsyncSinkWriter<InputT, Record> 
     private static FirehoseAsyncClient createFirehoseClient(
             Properties firehoseClientProperties, SdkAsyncHttpClient httpClient) {
         AWSGeneralUtil.validateAwsCredentials(firehoseClientProperties);
-        return AWSAsyncSinkUtil.createAwsAsyncClient(
+        return AWSClientUtil.createAwsAsyncClient(
                 firehoseClientProperties,
                 httpClient,
                 FirehoseAsyncClient.builder(),

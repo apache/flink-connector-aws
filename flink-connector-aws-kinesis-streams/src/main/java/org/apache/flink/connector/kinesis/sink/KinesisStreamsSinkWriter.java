@@ -18,7 +18,7 @@
 package org.apache.flink.connector.kinesis.sink;
 
 import org.apache.flink.api.connector.sink2.Sink;
-import org.apache.flink.connector.aws.util.AWSAsyncSinkUtil;
+import org.apache.flink.connector.aws.util.AWSClientUtil;
 import org.apache.flink.connector.aws.util.AWSGeneralUtil;
 import org.apache.flink.connector.base.sink.throwable.FatalExceptionClassifier;
 import org.apache.flink.connector.base.sink.writer.AsyncSinkWriter;
@@ -158,7 +158,7 @@ class KinesisStreamsSinkWriter<InputT> extends AsyncSinkWriter<InputT, PutRecord
             Properties kinesisClientProperties, SdkAsyncHttpClient httpClient) {
         AWSGeneralUtil.validateAwsCredentials(kinesisClientProperties);
 
-        return AWSAsyncSinkUtil.createAwsAsyncClient(
+        return AWSClientUtil.createAwsAsyncClient(
                 kinesisClientProperties,
                 httpClient,
                 KinesisAsyncClient.builder(),

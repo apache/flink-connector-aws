@@ -23,12 +23,11 @@ import org.apache.flink.streaming.connectors.kinesis.FlinkKinesisException;
 import org.apache.flink.streaming.connectors.kinesis.internals.publisher.fanout.FanOutRecordPublisherConfiguration;
 import org.apache.flink.streaming.connectors.kinesis.internals.publisher.fanout.StreamConsumerRegistrar;
 import org.apache.flink.streaming.connectors.kinesis.proxy.FullJitterBackoff;
+import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxySyncV2Interface;
 import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyV2Factory;
-import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyV2Interface;
 
 import java.util.List;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
 
 import static org.apache.flink.streaming.connectors.kinesis.config.ConsumerConfigConstants.EFO_CONSUMER_NAME;
 import static org.apache.flink.streaming.connectors.kinesis.config.ConsumerConfigConstants.efoConsumerArn;
@@ -121,11 +120,10 @@ public class StreamConsumerRegistrarUtil {
                 String streamConsumerArn =
                         registrar.registerStreamConsumer(stream, streamConsumerName);
                 configProps.setProperty(efoConsumerArn(stream), streamConsumerArn);
-            } catch (ExecutionException ex) {
-                throw new FlinkKinesisStreamConsumerRegistrarException(
-                        "Error registering stream: " + stream, ex);
-            } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
+            } catch (Exception ex) {
+                if (ex instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
                 throw new FlinkKinesisStreamConsumerRegistrarException(
                         "Error registering stream: " + stream, ex);
             }
@@ -141,13 +139,9 @@ public class StreamConsumerRegistrarUtil {
             for (String stream : streams) {
                 try {
                     registrar.deregisterStreamConsumer(stream);
-                } catch (ExecutionException ex) {
+                } catch (Exception ex) {
                     throw new FlinkKinesisStreamConsumerRegistrarException(
                             "Error deregistering stream: " + stream, ex);
-                } catch (InterruptedException ex) {
-                    Thread.currentThread().interrupt();
-                    throw new FlinkKinesisStreamConsumerRegistrarException(
-                            "Error registering stream: " + stream, ex);
                 }
             }
         }
@@ -158,7 +152,8 @@ public class StreamConsumerRegistrarUtil {
         FullJitterBackoff backoff = new FullJitterBackoff();
         FanOutRecordPublisherConfiguration configuration =
                 new FanOutRecordPublisherConfiguration(configProps, streams);
-        KinesisProxyV2Interface kinesis = KinesisProxyV2Factory.createKinesisProxyV2(configProps);
+        KinesisProxySyncV2Interface kinesis =
+                KinesisProxyV2Factory.createKinesisProxySyncV2(configProps);
 
         return new StreamConsumerRegistrar(kinesis, configuration, backoff);
     }

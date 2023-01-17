@@ -24,8 +24,8 @@ import org.apache.flink.util.Preconditions;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
-import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.awssdk.http.SdkHttpClient;
+import software.amazon.awssdk.services.kinesis.KinesisClient;
 import software.amazon.awssdk.services.kinesis.model.DeregisterStreamConsumerRequest;
 import software.amazon.awssdk.services.kinesis.model.DeregisterStreamConsumerResponse;
 import software.amazon.awssdk.services.kinesis.model.DescribeStreamConsumerRequest;
@@ -34,10 +34,7 @@ import software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryReques
 import software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryResponse;
 import software.amazon.awssdk.services.kinesis.model.RegisterStreamConsumerRequest;
 import software.amazon.awssdk.services.kinesis.model.RegisterStreamConsumerResponse;
-import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
-import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
 
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
 /**
@@ -46,14 +43,14 @@ import java.util.concurrent.ExecutionException;
  * consumers, subscribing to a shard and receiving records from a shard.
  */
 @Internal
-public class KinesisProxyV2 implements KinesisProxyV2Interface {
+public class KinesisProxySyncV2 implements KinesisProxySyncV2Interface {
 
-    private static final Logger LOG = LoggerFactory.getLogger(KinesisProxyV2.class);
+    private static final Logger LOG = LoggerFactory.getLogger(KinesisProxySyncV2.class);
 
     /** An Asynchronous client used to communicate with AWS services. */
-    private final KinesisAsyncClient kinesisAsyncClient;
+    private final KinesisClient kinesisClient;
 
-    private final SdkAsyncHttpClient httpClient;
+    private final SdkHttpClient httpClient;
 
     private final FanOutRecordPublisherConfiguration fanOutRecordPublisherConfiguration;
 
@@ -62,32 +59,25 @@ public class KinesisProxyV2 implements KinesisProxyV2Interface {
     /**
      * Create a new KinesisProxyV2.
      *
-     * @param kinesisAsyncClient AWS SDK v2 Kinesis client used to communicate with AWS services
+     * @param kinesisClient AWS SDK v2 Kinesis client used to communicate with AWS services
      * @param httpClient the underlying HTTP client, reference required for close only
      * @param fanOutRecordPublisherConfiguration the configuration for Fan Out features
      * @param backoff the backoff utility used to introduce Full Jitter delays
      */
-    public KinesisProxyV2(
-            final KinesisAsyncClient kinesisAsyncClient,
-            final SdkAsyncHttpClient httpClient,
+    public KinesisProxySyncV2(
+            final KinesisClient kinesisClient,
+            final SdkHttpClient httpClient,
             final FanOutRecordPublisherConfiguration fanOutRecordPublisherConfiguration,
             final FullJitterBackoff backoff) {
-        this.kinesisAsyncClient = Preconditions.checkNotNull(kinesisAsyncClient);
+        this.kinesisClient = Preconditions.checkNotNull(kinesisClient);
         this.httpClient = httpClient;
         this.fanOutRecordPublisherConfiguration = fanOutRecordPublisherConfiguration;
         this.backoff = backoff;
     }
 
     @Override
-    public CompletableFuture<Void> subscribeToShard(
-            final SubscribeToShardRequest request,
-            final SubscribeToShardResponseHandler responseHandler) {
-        return kinesisAsyncClient.subscribeToShard(request, responseHandler);
-    }
-
-    @Override
     public void close() {
-        kinesisAsyncClient.close();
+        kinesisClient.close();
         httpClient.close();
     }
 
@@ -98,7 +88,7 @@ public class KinesisProxyV2 implements KinesisProxyV2Interface {
                 DescribeStreamSummaryRequest.builder().streamName(stream).build();
 
         return invokeWithRetryAndBackoff(
-                () -> kinesisAsyncClient.describeStreamSummary(describeStreamRequest).get(),
+                () -> kinesisClient.describeStreamSummary(describeStreamRequest),
                 fanOutRecordPublisherConfiguration.getDescribeStreamBaseBackoffMillis(),
                 fanOutRecordPublisherConfiguration.getDescribeStreamMaxBackoffMillis(),
                 fanOutRecordPublisherConfiguration.getDescribeStreamExpConstant(),
@@ -131,7 +121,7 @@ public class KinesisProxyV2 implements KinesisProxyV2Interface {
             final DescribeStreamConsumerRequest request)
             throws InterruptedException, ExecutionException {
         return invokeWithRetryAndBackoff(
-                () -> kinesisAsyncClient.describeStreamConsumer(request).get(),
+                () -> kinesisClient.describeStreamConsumer(request),
                 fanOutRecordPublisherConfiguration.getDescribeStreamConsumerBaseBackoffMillis(),
                 fanOutRecordPublisherConfiguration.getDescribeStreamConsumerMaxBackoffMillis(),
                 fanOutRecordPublisherConfiguration.getDescribeStreamConsumerExpConstant(),
@@ -149,10 +139,7 @@ public class KinesisProxyV2 implements KinesisProxyV2Interface {
                         .build();
 
         return invokeWithRetryAndBackoff(
-                () ->
-                        kinesisAsyncClient
-                                .registerStreamConsumer(registerStreamConsumerRequest)
-                                .get(),
+                () -> kinesisClient.registerStreamConsumer(registerStreamConsumerRequest),
                 fanOutRecordPublisherConfiguration.getRegisterStreamBaseBackoffMillis(),
                 fanOutRecordPublisherConfiguration.getRegisterStreamMaxBackoffMillis(),
                 fanOutRecordPublisherConfiguration.getRegisterStreamExpConstant(),
@@ -166,10 +153,7 @@ public class KinesisProxyV2 implements KinesisProxyV2Interface {
                 DeregisterStreamConsumerRequest.builder().consumerARN(consumerArn).build();
 
         return invokeWithRetryAndBackoff(
-                () ->
-                        kinesisAsyncClient
-                                .deregisterStreamConsumer(deregisterStreamConsumerRequest)
-                                .get(),
+                () -> kinesisClient.deregisterStreamConsumer(deregisterStreamConsumerRequest),
                 fanOutRecordPublisherConfiguration.getDeregisterStreamBaseBackoffMillis(),
                 fanOutRecordPublisherConfiguration.getDeregisterStreamMaxBackoffMillis(),
                 fanOutRecordPublisherConfiguration.getDeregisterStreamExpConstant(),
