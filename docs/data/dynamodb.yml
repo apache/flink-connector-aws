@@ -1,0 +1,3 @@
+variants:
+  - maven: flink-connector-dynamodb
+    sql_url: https://repo.maven.apache.org/maven2/org/apache/flink/flink-sql-connector-dynamodb/$full_version/flink-sql-connector-dynamodb-$full_version.jar
