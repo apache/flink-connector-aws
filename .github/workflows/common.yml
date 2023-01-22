@@ -16,22 +16,42 @@
 # limitations under the License.
 ################################################################################
 
-name: Build flink-connector-aws
-on: [push, pull_request]
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+on:
+  workflow_call:
+    inputs:
+      flink_url:
+        description: "Url to Flink binary."
+        required: true
+        type: string
+      flink_version:
+        description: "Flink version to test against."
+        required: true
+        type: string
+      cache_flink_binary:
+        description: "Whether to cache the Flink binary. Should be false for SNAPSHOT URLs, true otherwise."
+        required: true
+        type: boolean
+      timeout_global:
+        description: "The timeout in minutes for the entire workflow."
+        required: false
+        type: number
+        default: 60
+      timeout_test:
+        description: "The timeout in minutes for the compile and test step."
+        required: false
+        type: number
+        default: 50
+
 jobs:
   compile_and_test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         jdk: [ 8, 11 ]
-        flink: [ 1.16.0 ]
+    timeout-minutes: ${{ inputs.timeout_global }}
     env:
-      MVN_COMMON_OPTIONS: -U -B --no-transfer-progress
+      MVN_COMMON_OPTIONS: -U -B --no-transfer-progress -Dflink.version=${{ inputs.flink_version }}
       MVN_CONNECTION_OPTIONS: -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120
-      FLINK_URL: https://dlcdn.apache.org/flink/flink-${{ matrix.flink }}/flink-${{ matrix.flink }}-bin-scala_2.12.tgz
       FLINK_CACHE_DIR: "/tmp/cache/flink"
       MVN_BUILD_OUTPUT_FILE: "/tmp/mvn_build_output.out"
       MVN_VALIDATION_DIR: "/tmp/flink-validation-deployment"
@@ -39,17 +59,17 @@ jobs:
       - run: echo "Running CI pipeline for JDK version ${{ matrix.jdk }}"
 
       - name: Check out repository code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Set JDK
-        uses: actions/setup-java@v2
+        uses: actions/setup-java@v3
         with:
           java-version: ${{ matrix.jdk }}
           distribution: 'temurin'
           cache: 'maven'
 
       - name: Set Maven 3.8.5
-        uses: stCarolas/setup-maven@v4.2
+        uses: stCarolas/setup-maven@v4.5
         with:
           maven-version: 3.8.5
 
@@ -57,25 +77,26 @@ jobs:
         run: mkdir -p ${{ env.FLINK_CACHE_DIR }}
 
       - name: Cache Flink binary
-        if: ${{ inputs.cache_flink_binary == 'true' }}
+        if: ${{ inputs.cache_flink_binary }}
         uses: actions/cache@v3
         id: cache-flink
         with:
           path: ${{ env.FLINK_CACHE_DIR }}
-          key: ${{ env.FLINK_URL }}
+          key: ${{ inputs.flink_url }}
 
       - name: Download Flink binary
         working-directory: ${{ env.FLINK_CACHE_DIR }}
         if: steps.cache-flink.outputs.cache-hit != 'true'
-        run: wget -q -c ${{ env.FLINK_URL }} -O - | tar -xz
+        run: wget -q -c ${{ inputs.flink_url }} -O - | tar -xz
 
       - name: Compile and test flink-connector-aws
+        timeout-minutes: ${{ inputs.timeout_test }}
         run: |
           set -o pipefail
           
           mvn clean install -Dflink.convergence.phase=install -Pcheck-convergence -U -B ${{ env.MVN_CONNECTION_OPTIONS }} \
             -DaltDeploymentRepository=validation_repository::default::file:${{ env.MVN_VALIDATION_DIR }} \
-            -Dflink.version=${{ matrix.flink }} | tee ${{ env.MVN_BUILD_OUTPUT_FILE }} 
+            -Dflink.version=${{ inputs.flink_version }} | tee ${{ env.MVN_BUILD_OUTPUT_FILE }}
 
       - name: Run e2e tests
         run: |
@@ -85,8 +106,8 @@ jobs:
           
           mvn clean verify ${{ env.MVN_CONNECTION_OPTIONS }} \
             -DaltDeploymentRepository=validation_repository::default::file:${{ env.MVN_VALIDATION_DIR }} \
-            -Dflink.version=${{ matrix.flink }}  \
-            -Prun-end-to-end-tests -DdistDir=${{ env.FLINK_CACHE_DIR }}/flink-${{ matrix.flink }} \
+            -Dflink.version=${{ inputs.flink_version }}  \
+            -Prun-end-to-end-tests -DdistDir=${{ env.FLINK_CACHE_DIR }}/flink-${{ inputs.flink_version }} \
             | tee ${{ env.MVN_BUILD_OUTPUT_FILE }}
           
           mvn clean
