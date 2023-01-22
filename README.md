@@ -14,7 +14,7 @@ Prerequisites:
 
 * Unix-like environment (we use Linux, Mac OS X)
 * Git
-* Maven (we recommend version 3.8.6)
+* Maven (we recommend version 3.8.5)
 * Java 11
 
 ```
