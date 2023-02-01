@@ -353,6 +353,14 @@ Connector Options
       <td>Maximum number of allowed concurrent requests for the EFO client. See <a href="#enhanced-fan-out">Enhanced Fan-Out</a> for details.</td>
     </tr>
     <tr>
+      <td><h5>scan.shard-assigner</h5></td>
+      <td>optional</td>
+      <td>no</td>
+      <td style="word-wrap: break-word;">default</td>
+      <td>String</td>
+      <td>The shard assigner used to map shards to Flink subtasks (default|uniform). You can also supply your own shard assigner via the Java Service Provider Interfaces (SPI).</td></td>
+    </tr>
+    <tr>
       <td><h5>scan.stream.describe.maxretries</h5></td>
       <td>optional</td>
       <td>no</td>

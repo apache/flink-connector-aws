@@ -37,6 +37,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.flink.connector.kinesis.table.KinesisConnectorOptions.SHARD_ASSIGNER;
 import static org.apache.flink.connector.kinesis.table.KinesisConnectorOptions.SINK_PARTITIONER;
 import static org.apache.flink.connector.kinesis.table.KinesisConnectorOptions.SINK_PARTITIONER_FIELD_DELIMITER;
 import static org.apache.flink.connector.kinesis.table.KinesisConnectorOptions.STREAM;
@@ -67,7 +68,11 @@ public class KinesisDynamicTableFactory implements DynamicTableSourceFactory {
         Properties properties = optionsUtils.getValidatedSourceConfigurations();
 
         return new KinesisDynamicSource(
-                physicalDataType, tableOptions.get(STREAM), properties, decodingFormat);
+                physicalDataType,
+                tableOptions.get(STREAM),
+                tableOptions.get(SHARD_ASSIGNER),
+                properties,
+                decodingFormat);
     }
 
     @Override
@@ -88,12 +93,13 @@ public class KinesisDynamicTableFactory implements DynamicTableSourceFactory {
         final Set<ConfigOption<?>> options = new HashSet<>();
         options.add(SINK_PARTITIONER);
         options.add(SINK_PARTITIONER_FIELD_DELIMITER);
+        options.add(SHARD_ASSIGNER);
         return options;
     }
 
     @Override
     public Set<ConfigOption<?>> forwardOptions() {
-        return Stream.of(STREAM, SINK_PARTITIONER, SINK_PARTITIONER_FIELD_DELIMITER)
+        return Stream.of(STREAM, SINK_PARTITIONER, SINK_PARTITIONER_FIELD_DELIMITER, SHARD_ASSIGNER)
                 .collect(Collectors.toSet());
     }
 }

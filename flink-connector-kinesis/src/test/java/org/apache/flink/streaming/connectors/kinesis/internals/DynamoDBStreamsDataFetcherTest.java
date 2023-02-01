@@ -22,6 +22,7 @@ import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.streaming.connectors.kinesis.model.StreamShardHandle;
 import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyInterface;
 import org.apache.flink.streaming.connectors.kinesis.serialization.KinesisDeserializationSchemaWrapper;
+import org.apache.flink.streaming.connectors.kinesis.table.DefaultShardAssignerFactory;
 import org.apache.flink.streaming.connectors.kinesis.testutils.TestSourceContext;
 import org.apache.flink.streaming.connectors.kinesis.testutils.TestUtils;
 
@@ -31,7 +32,6 @@ import java.util.Properties;
 
 import static com.amazonaws.services.kinesis.model.ShardIteratorType.LATEST;
 import static java.util.Collections.singletonList;
-import static org.apache.flink.streaming.connectors.kinesis.internals.KinesisDataFetcher.DEFAULT_SHARD_ASSIGNER;
 import static org.apache.flink.streaming.connectors.kinesis.internals.ShardConsumerTestUtils.createFakeShardConsumerMetricGroup;
 import static org.apache.flink.streaming.connectors.kinesis.model.SentinelSequenceNumber.SENTINEL_LATEST_SEQUENCE_NUM;
 import static org.mockito.Mockito.mock;
@@ -52,7 +52,7 @@ public class DynamoDBStreamsDataFetcherTest {
                         runtimeContext,
                         TestUtils.getStandardProperties(),
                         new KinesisDeserializationSchemaWrapper<>(new SimpleStringSchema()),
-                        DEFAULT_SHARD_ASSIGNER,
+                        new DefaultShardAssignerFactory().getShardAssigner(),
                         config -> kinesis);
 
         StreamShardHandle dummyStreamShardHandle =

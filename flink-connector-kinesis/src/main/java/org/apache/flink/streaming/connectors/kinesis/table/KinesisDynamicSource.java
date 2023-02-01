@@ -21,6 +21,7 @@ package org.apache.flink.streaming.connectors.kinesis.table;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.streaming.connectors.kinesis.FlinkKinesisConsumer;
+import org.apache.flink.streaming.connectors.kinesis.KinesisShardAssigner;
 import org.apache.flink.streaming.connectors.kinesis.serialization.KinesisDeserializationSchema;
 import org.apache.flink.streaming.connectors.kinesis.serialization.KinesisDeserializationSchemaWrapper;
 import org.apache.flink.table.connector.ChangelogMode;
@@ -33,12 +34,18 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.util.Preconditions;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.ServiceConfigurationError;
+import java.util.ServiceLoader;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.streaming.connectors.kinesis.table.RowDataKinesisDeserializationSchema.Metadata;
@@ -46,6 +53,8 @@ import static org.apache.flink.streaming.connectors.kinesis.table.RowDataKinesis
 /** Kinesis-backed {@link ScanTableSource}. */
 @Internal
 public class KinesisDynamicSource implements ScanTableSource, SupportsReadingMetadata {
+
+    private static final Logger LOG = LoggerFactory.getLogger(KinesisDynamicSource.class);
 
     /** List of read-only metadata fields that the source can provide upstream upon request. */
     private static final Map<String, DataType> READABLE_METADATA =
@@ -84,17 +93,22 @@ public class KinesisDynamicSource implements ScanTableSource, SupportsReadingMet
     /** The Kinesis stream to consume. */
     private final String stream;
 
+    /** The identifier of the shard assigner to use. */
+    private final String shardAssignerIdentifier;
+
     /** Properties for the Kinesis consumer. */
     private final Properties consumerProperties;
 
     public KinesisDynamicSource(
             DataType physicalDataType,
             String stream,
+            String shardAssignerIdentifier,
             Properties consumerProperties,
             DecodingFormat<DeserializationSchema<RowData>> decodingFormat) {
         this(
                 physicalDataType,
                 stream,
+                shardAssignerIdentifier,
                 consumerProperties,
                 decodingFormat,
                 physicalDataType,
@@ -104,6 +118,7 @@ public class KinesisDynamicSource implements ScanTableSource, SupportsReadingMet
     public KinesisDynamicSource(
             DataType physicalDataType,
             String stream,
+            String shardAssignerIdentifier,
             Properties consumerProperties,
             DecodingFormat<DeserializationSchema<RowData>> decodingFormat,
             DataType producedDataType,
@@ -113,6 +128,9 @@ public class KinesisDynamicSource implements ScanTableSource, SupportsReadingMet
                 Preconditions.checkNotNull(
                         physicalDataType, "Physical data type must not be null.");
         this.stream = Preconditions.checkNotNull(stream, "Stream must not be null.");
+        this.shardAssignerIdentifier =
+                Preconditions.checkNotNull(
+                        shardAssignerIdentifier, "Shard assigner must not be null.");
         this.consumerProperties =
                 Preconditions.checkNotNull(
                         consumerProperties,
@@ -153,6 +171,15 @@ public class KinesisDynamicSource implements ScanTableSource, SupportsReadingMet
         FlinkKinesisConsumer<RowData> kinesisConsumer =
                 new FlinkKinesisConsumer<>(stream, deserializationSchema, consumerProperties);
 
+        KinesisShardAssigner shardAssigner = getShardAssigner(shardAssignerIdentifier);
+        if (shardAssigner != null) {
+            kinesisConsumer.setShardAssigner(shardAssigner);
+        } else {
+            LOG.warn(
+                    "Unable to load shard assigner with id: '{}'. Falling back to default shard assigner.",
+                    shardAssignerIdentifier);
+        }
+
         return SourceFunctionProvider.of(kinesisConsumer, false);
     }
 
@@ -161,6 +188,7 @@ public class KinesisDynamicSource implements ScanTableSource, SupportsReadingMet
         return new KinesisDynamicSource(
                 physicalDataType,
                 stream,
+                shardAssignerIdentifier,
                 consumerProperties,
                 decodingFormat,
                 producedDataType,
@@ -218,5 +246,35 @@ public class KinesisDynamicSource implements ScanTableSource, SupportsReadingMet
                 stream,
                 consumerProperties,
                 decodingFormat);
+    }
+
+    private KinesisShardAssigner getShardAssigner(String shardAssignerIdentifier) {
+        ServiceLoader<KinesisDynamicShardAssignerFactory> loader =
+                ServiceLoader.load(KinesisDynamicShardAssignerFactory.class);
+        Iterator<KinesisDynamicShardAssignerFactory> factories = loader.iterator();
+        while (true) {
+            try {
+                if (!factories.hasNext()) {
+                    break;
+                }
+
+                KinesisDynamicShardAssignerFactory factory = factories.next();
+                if (factory.shardAssignerIdentifer().equals(shardAssignerIdentifier)) {
+                    return factory.getShardAssigner();
+                }
+            } catch (ServiceConfigurationError serviceConfigurationError) {
+                LOG.error(
+                        "Error while attempting to iterate over shard assigner factories to "
+                                + "locate shard assigner with identifier: '{}'",
+                        shardAssignerIdentifier,
+                        serviceConfigurationError);
+            }
+        }
+
+        LOG.error(
+                "Unable to locate shard assigner factory for identifier: '{}'",
+                shardAssignerIdentifier);
+
+        return null;
     }
 }

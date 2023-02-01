@@ -111,10 +111,6 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
 @SuppressWarnings("unchecked")
 @Internal
 public class KinesisDataFetcher<T> {
-
-    public static final KinesisShardAssigner DEFAULT_SHARD_ASSIGNER =
-            (shard, subtasks) -> shard.hashCode();
-
     private static final Logger LOG = LoggerFactory.getLogger(KinesisDataFetcher.class);
 
     // ------------------------------------------------------------------------
