@@ -33,6 +33,7 @@ import org.apache.flink.streaming.connectors.kinesis.model.StreamShardHandle;
 import org.apache.flink.streaming.connectors.kinesis.model.StreamShardMetadata;
 import org.apache.flink.streaming.connectors.kinesis.serialization.KinesisDeserializationSchema;
 import org.apache.flink.streaming.connectors.kinesis.serialization.KinesisDeserializationSchemaWrapper;
+import org.apache.flink.streaming.connectors.kinesis.table.DefaultShardAssignerFactory;
 import org.apache.flink.streaming.connectors.kinesis.testutils.KinesisShardIdGenerator;
 import org.apache.flink.streaming.connectors.kinesis.testutils.TestRuntimeContext;
 import org.apache.flink.streaming.connectors.kinesis.testutils.TestSourceContext;
@@ -498,7 +499,7 @@ public class FlinkKinesisConsumerMigrationTest {
                     runtimeContext,
                     configProps,
                     deserializationSchema,
-                    DEFAULT_SHARD_ASSIGNER,
+                    new DefaultShardAssignerFactory().getShardAssigner(),
                     null,
                     null);
 

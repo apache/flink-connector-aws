@@ -49,6 +49,17 @@ public class KinesisConnectorOptions extends AsyncSinkConnectorOptions {
                     .withDescription("AWS region of used Kinesis stream.");
 
     // -----------------------------------------------------------------------------------------
+    // Source options
+    // -----------------------------------------------------------------------------------------
+
+    public static final ConfigOption<String> SHARD_ASSIGNER =
+            ConfigOptions.key("scan.shard-assigner")
+                    .stringType()
+                    .defaultValue("default")
+                    .withDescription(
+                            "Shard assigner to use when mapping shards to Flink subtasks.");
+
+    // -----------------------------------------------------------------------------------------
     // Sink options
     // -----------------------------------------------------------------------------------------
 

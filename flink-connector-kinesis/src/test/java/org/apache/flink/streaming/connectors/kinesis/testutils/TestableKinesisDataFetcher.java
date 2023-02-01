@@ -25,6 +25,7 @@ import org.apache.flink.streaming.connectors.kinesis.model.StreamShardHandle;
 import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyAsyncV2Interface;
 import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyInterface;
 import org.apache.flink.streaming.connectors.kinesis.serialization.KinesisDeserializationSchema;
+import org.apache.flink.streaming.connectors.kinesis.table.DefaultShardAssignerFactory;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -91,7 +92,7 @@ public class TestableKinesisDataFetcher<T> extends KinesisDataFetcher<T> {
                 TestUtils.getMockedRuntimeContext(fakeTotalCountOfSubtasks, fakeIndexOfThisSubtask),
                 fakeConfiguration,
                 deserializationSchema,
-                DEFAULT_SHARD_ASSIGNER,
+                new DefaultShardAssignerFactory().getShardAssigner(),
                 null,
                 null,
                 thrownErrorUnderTest,

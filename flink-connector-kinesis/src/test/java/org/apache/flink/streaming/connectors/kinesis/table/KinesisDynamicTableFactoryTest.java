@@ -23,6 +23,8 @@ import org.apache.flink.connector.kinesis.table.KinesisDynamicSink;
 import org.apache.flink.connector.kinesis.table.RowDataFieldsKinesisPartitionKeyGenerator;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.streaming.connectors.kinesis.FlinkKinesisConsumer;
+import org.apache.flink.streaming.connectors.kinesis.KinesisShardAssigner;
+import org.apache.flink.streaming.connectors.kinesis.util.UniformShardAssigner;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.catalog.Column;
 import org.apache.flink.table.catalog.ResolvedSchema;
@@ -66,6 +68,10 @@ public class KinesisDynamicTableFactoryTest extends TestLogger {
 
     private static final String STREAM_NAME = "myStream";
 
+    private static final String DEFAULT_SHARD_ASSIGNER_ID = "default";
+
+    private static final String UNIFORM_SHARD_ASSIGNER_ID = "uniform";
+
     @Rule public ExpectedException thrown = ExpectedException.none();
 
     // --------------------------------------------------------------------------------------------
@@ -86,6 +92,7 @@ public class KinesisDynamicTableFactoryTest extends TestLogger {
                 new KinesisDynamicSource(
                         sourceSchema.toPhysicalRowDataType(),
                         STREAM_NAME,
+                        DEFAULT_SHARD_ASSIGNER_ID,
                         defaultConsumerProperties(),
                         new TestFormatFactory.DecodingFormatMock(",", true));
 
@@ -95,12 +102,21 @@ public class KinesisDynamicTableFactoryTest extends TestLogger {
         // verify that the copy of the constructed DynamicTableSink is as expected
         assertThat(actualSource.copy()).isEqualTo(expectedSource);
 
-        // verify produced sink
+        // verify produced source
         ScanTableSource.ScanRuntimeProvider functionProvider =
                 actualSource.getScanRuntimeProvider(ScanRuntimeProviderContext.INSTANCE);
         SourceFunction<RowData> sourceFunction =
                 as(functionProvider, SourceFunctionProvider.class).createSourceFunction();
         assertThat(sourceFunction).isInstanceOf(FlinkKinesisConsumer.class);
+
+        KinesisShardAssigner defaultShardAssigner =
+                new DefaultShardAssignerFactory().getShardAssigner();
+
+        // verify that default shard assigner is configured
+        FlinkKinesisConsumer kinesisConsumer = (FlinkKinesisConsumer) sourceFunction;
+        Class<? extends KinesisShardAssigner> defaultShardAssignerClass =
+                defaultShardAssigner.getClass();
+        assertThat(kinesisConsumer.getShardAssigner().getClass().equals(defaultShardAssignerClass));
     }
 
     @Test
@@ -122,6 +138,7 @@ public class KinesisDynamicTableFactoryTest extends TestLogger {
                 new KinesisDynamicSource(
                         sourceSchema.toPhysicalRowDataType(),
                         STREAM_NAME,
+                        DEFAULT_SHARD_ASSIGNER_ID,
                         defaultConsumerProperties(),
                         new TestFormatFactory.DecodingFormatMock(",", true),
                         producedDataType,
@@ -160,6 +177,72 @@ public class KinesisDynamicTableFactoryTest extends TestLogger {
                                 .build();
         Assertions.assertThat(actualSink).isEqualTo(expectedSink.copy());
         Assertions.assertThat(expectedSink).isNotSameAs(expectedSink.copy());
+    }
+
+    @Test
+    public void testGoodUniformShardAssignerConfig() {
+        ResolvedSchema sourceSchema = defaultSourceSchema();
+        Map<String, String> sourceOptions = defaultTableOptions().build();
+
+        // Construct actual DynamicTableSource using FactoryUtil
+        KinesisDynamicSource actualSource =
+                (KinesisDynamicSource) createTableSource(sourceSchema, sourceOptions);
+
+        // Construct expected DynamicTableSink using factory under test
+        KinesisDynamicSource expectedSource =
+                new KinesisDynamicSource(
+                        sourceSchema.toPhysicalRowDataType(),
+                        STREAM_NAME,
+                        UNIFORM_SHARD_ASSIGNER_ID,
+                        defaultConsumerProperties(),
+                        new TestFormatFactory.DecodingFormatMock(",", true));
+
+        // verify produced source
+        ScanTableSource.ScanRuntimeProvider functionProvider =
+                actualSource.getScanRuntimeProvider(ScanRuntimeProviderContext.INSTANCE);
+        SourceFunction<RowData> sourceFunction =
+                as(functionProvider, SourceFunctionProvider.class).createSourceFunction();
+        assertThat(sourceFunction).isInstanceOf(FlinkKinesisConsumer.class);
+
+        // verify that uniform shard assigner is configured
+        FlinkKinesisConsumer kinesisConsumer = (FlinkKinesisConsumer) sourceFunction;
+        assertThat(kinesisConsumer.getShardAssigner() instanceof UniformShardAssigner);
+    }
+
+    @Test
+    public void testUnrecognizedShardAssignerTypeInConfig() {
+        ResolvedSchema sourceSchema = defaultSourceSchema();
+        Map<String, String> sourceOptions = defaultTableOptions().build();
+
+        // Construct actual DynamicTableSource using FactoryUtil
+        KinesisDynamicSource actualSource =
+                (KinesisDynamicSource) createTableSource(sourceSchema, sourceOptions);
+
+        // Construct expected DynamicTableSink using factory under test
+        KinesisDynamicSource expectedSource =
+                new KinesisDynamicSource(
+                        sourceSchema.toPhysicalRowDataType(),
+                        STREAM_NAME,
+                        "unrecognized",
+                        defaultConsumerProperties(),
+                        new TestFormatFactory.DecodingFormatMock(",", true));
+
+        // verify produced source
+        ScanTableSource.ScanRuntimeProvider functionProvider =
+                actualSource.getScanRuntimeProvider(ScanRuntimeProviderContext.INSTANCE);
+        SourceFunction<RowData> sourceFunction =
+                as(functionProvider, SourceFunctionProvider.class).createSourceFunction();
+        assertThat(sourceFunction).isInstanceOf(FlinkKinesisConsumer.class);
+
+        KinesisShardAssigner defaultShardAssigner =
+                new DefaultShardAssignerFactory().getShardAssigner();
+
+        // verify that default shard assigner is configured when unrecognized config string is
+        // passed in
+        FlinkKinesisConsumer kinesisConsumer = (FlinkKinesisConsumer) sourceFunction;
+        Class<? extends KinesisShardAssigner> defaultShardAssignerClass =
+                defaultShardAssigner.getClass();
+        assertThat(kinesisConsumer.getShardAssigner().getClass().equals(defaultShardAssignerClass));
     }
 
     // --------------------------------------------------------------------------------------------

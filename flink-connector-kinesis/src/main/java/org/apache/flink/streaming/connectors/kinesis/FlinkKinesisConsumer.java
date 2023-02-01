@@ -45,6 +45,7 @@ import org.apache.flink.streaming.connectors.kinesis.model.StreamShardHandle;
 import org.apache.flink.streaming.connectors.kinesis.model.StreamShardMetadata;
 import org.apache.flink.streaming.connectors.kinesis.serialization.KinesisDeserializationSchema;
 import org.apache.flink.streaming.connectors.kinesis.serialization.KinesisDeserializationSchemaWrapper;
+import org.apache.flink.streaming.connectors.kinesis.table.DefaultShardAssignerFactory;
 import org.apache.flink.streaming.connectors.kinesis.util.KinesisConfigUtil;
 import org.apache.flink.streaming.connectors.kinesis.util.StreamConsumerRegistrarUtil;
 import org.apache.flink.streaming.connectors.kinesis.util.WatermarkTracker;
@@ -127,7 +128,8 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
     private final KinesisDeserializationSchema<T> deserializer;
 
     /** The function that determines which subtask a shard should be assigned to. */
-    private KinesisShardAssigner shardAssigner = KinesisDataFetcher.DEFAULT_SHARD_ASSIGNER;
+    private KinesisShardAssigner shardAssigner =
+            new DefaultShardAssignerFactory().getShardAssigner();
 
     private AssignerWithPeriodicWatermarks<T> periodicWatermarkAssigner;
     private WatermarkTracker watermarkTracker;
