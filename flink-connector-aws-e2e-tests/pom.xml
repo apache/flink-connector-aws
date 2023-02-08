@@ -42,6 +42,7 @@ under the License.
         <module>flink-connector-aws-kinesis-firehose-e2e-tests</module>
         <module>flink-connector-aws-kinesis-streams-e2e-tests</module>
         <module>flink-connector-kinesis-e2e-tests</module>
+        <module>flink-formats-avro-glue-schema-registry-e2e-tests</module>
     </modules>
 
     <dependencies>
