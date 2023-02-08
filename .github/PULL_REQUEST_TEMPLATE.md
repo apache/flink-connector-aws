@@ -3,7 +3,7 @@
 
 ## Contribution Checklist
 
-- The name of the pull request should coorespond to a [JIRA issue](https://issues.apache.org/jira/projects/FLINK/issues). Exceptions are made for typos in JavaDoc or documentation files, which need no JIRA issue.
+- The name of the pull request should correspond to a [JIRA issue](https://issues.apache.org/jira/projects/FLINK/issues). Exceptions are made for typos in JavaDoc or documentation files, which need no JIRA issue.
 - Commits should be in the form of "[FLINK-XXXX][component] Title of the pull request", where [FLINK-XXXX] should be replaced by the actual issue number. 
     Generally, [component] should be the connector you are working on.
     For example: "[FLINK-XXXX][Connectors/Kinesis] XXXX" if you are working on the Kinesis connector or "[FLINK-XXXX][Connectors/AWS] XXXX" if you are working on components shared among all the connectors.
@@ -37,7 +37,7 @@ This change added tests and can be verified as follows:
 - *Manually verified by running the Kinesis connector on a local Flink cluster.*
 
 ## Significant changes
-*(Please check any boxes [x] if the answer is "yes" )*
+*(Please check any boxes [x] if the answer is "yes". You can first publish the PR and check them afterwards, for convenience.)*
 - [ ] Dependencies have been added or upgraded
 - [ ] Public API has been changed (Public API is any class annotated with `@Public(Evolving)`)
 - [ ] Serializers have been changed
