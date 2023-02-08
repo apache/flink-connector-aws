@@ -59,6 +59,7 @@ under the License.
         <flink.version>1.16.0</flink.version>
         <flink.shaded.version>16.0</flink.shaded.version>
         <jackson-bom.version>2.13.4.20221013</jackson-bom.version>
+        <glue.schema.registry.version>1.1.14</glue.schema.registry.version>
 
         <junit5.version>5.8.1</junit5.version>
         <assertj.version>3.21.0</assertj.version>
@@ -66,6 +67,7 @@ under the License.
         <testcontainers.version>1.17.2</testcontainers.version>
         <mockito.version>3.4.6</mockito.version>
         <powermock.version>2.0.9</powermock.version>
+        <kotlin.version>1.7.10</kotlin.version>
 
         <flink.parent.artifactId>flink-connector-aws-parent</flink.parent.artifactId>
     </properties>
@@ -82,6 +84,8 @@ under the License.
         <module>flink-sql-connector-aws-kinesis-firehose</module>
         <module>flink-sql-connector-aws-kinesis-streams</module>
         <module>flink-sql-connector-kinesis</module>
+
+        <module>flink-formats-aws</module>
 
         <module>flink-connector-aws-e2e-tests</module>
     </modules>
@@ -329,6 +333,56 @@ under the License.
                 <groupId>com.amazonaws</groupId>
                 <artifactId>amazon-kinesis-client</artifactId>
                 <version>1.14.8</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jetbrains.kotlin</groupId>
+                <artifactId>kotlin-stdlib-common</artifactId>
+                <version>${kotlin.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jetbrains.kotlin</groupId>
+                <artifactId>kotlin-reflect</artifactId>
+                <version>${kotlin.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jetbrains.kotlin</groupId>
+                <artifactId>kotlin-stdlib-jdk8</artifactId>
+                <version>${kotlin.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jetbrains.kotlin</groupId>
+                <artifactId>kotlin-stdlib</artifactId>
+                <version>${kotlin.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jetbrains.kotlin</groupId>
+                <artifactId>kotlin-scripting-compiler-embeddable</artifactId>
+                <version>${kotlin.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>joda-time</groupId>
+                <artifactId>joda-time</artifactId>
+                <version>2.8.1</version>
+            </dependency>
+            <dependency>
+                <groupId>org.lz4</groupId>
+                <artifactId>lz4-java</artifactId>
+                <version>1.8.0</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jetbrains.kotlinx</groupId>
+                <artifactId>kotlinx-serialization-core-jvm</artifactId>
+                <version>1.4.0</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.avro</groupId>
+                <artifactId>avro</artifactId>
+                <version>1.11.1</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jetbrains</groupId>
+                <artifactId>annotations</artifactId>
+                <version>17.0.0</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

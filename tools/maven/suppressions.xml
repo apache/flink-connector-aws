@@ -29,4 +29,8 @@ under the License.
     <suppress
             files="FanOutRecordPublisherTest.java|FanOutShardSubscriber.java|FanOutShardSubscriberTest.java"
             checks="IllegalImport"/>
+    <!-- User file is generated from avro schema -->
+    <suppress
+            files="org[\\/]apache[\\/]flink[\\/]formats[\\/]avro[\\/]glue[\\/]schema[\\/]registry[\\/]User.java"
+            checks=".*"/>
 </suppressions>
