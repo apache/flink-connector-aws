@@ -313,6 +313,9 @@ public class KinesisProxy implements KinesisProxyInterface {
                 } else {
                     throw ex;
                 }
+            } catch (RuntimeException ex) {
+                LOG.error("Encountered non-recoverable error while invoking getRecords.", ex);
+                throw ex;
             }
         }
 

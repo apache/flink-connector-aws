@@ -43,10 +43,10 @@ import org.apache.http.conn.ConnectTimeoutException;
 import org.hamcrest.Description;
 import org.hamcrest.TypeSafeDiagnosingMatcher;
 import org.junit.Test;
-import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 import org.powermock.reflect.Whitebox;
+import org.slf4j.Logger;
 
 import java.io.EOFException;
 import java.net.InetAddress;
@@ -64,9 +64,14 @@ import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.mockito.hamcrest.MockitoHamcrest.argThat;
 
 /** Test for methods in the {@link KinesisProxy} class. */
@@ -143,7 +148,7 @@ public class KinesisProxyTest {
                 };
 
         AmazonKinesisClient mockClient = mock(AmazonKinesisClient.class);
-        Mockito.when(mockClient.getRecords(any()))
+        when(mockClient.getRecords(any()))
                 .thenAnswer(
                         new Answer<GetRecordsResult>() {
                             @Override
@@ -163,6 +168,36 @@ public class KinesisProxyTest {
         GetRecordsResult result = kinesisProxy.getRecords("fakeShardIterator", 1);
         assertThat(retries.intValue()).isEqualTo(retriableExceptions.length);
         assertThat(result).isEqualTo(expectedResult);
+    }
+
+    @Test
+    public void testGetRecordsNonRetriableExceptionIsLoggedBeforeThrown() throws Exception {
+        // Given a KinesisProxy object
+        final Properties kinesisConsumerConfig = new Properties();
+        kinesisConsumerConfig.setProperty(ConsumerConfigConstants.AWS_REGION, "us-east-1");
+        KinesisProxy kinesisProxy = new KinesisProxy(kinesisConsumerConfig);
+        // And given a mock client that throws a non-retriable RuntimeException
+        AmazonKinesisClient mockClient = mock(AmazonKinesisClient.class);
+        RuntimeException ex = new RuntimeException("Rate Exceeded for getRecords operation");
+        when(mockClient.getRecords(any()))
+                .thenAnswer(
+                        (Answer<GetRecordsResult>)
+                                invocation -> {
+                                    throw ex;
+                                });
+        Whitebox.getField(KinesisProxy.class, "kinesisClient").set(kinesisProxy, mockClient);
+        // And given a mock Logger
+        Logger logger = mock(Logger.class);
+        Whitebox.setInternalState(KinesisProxy.class, "LOG", logger);
+        try {
+            // When getRecords is called
+            kinesisProxy.getRecords("test", 1);
+        } catch (RuntimeException re) {
+            // Then the RuntimeException should be logged and thrown
+            verify(logger).error(anyString(), eq(ex));
+            return;
+        }
+        fail("Expected RuntimeException to be thrown but did not receive any");
     }
 
     @Test
@@ -325,12 +360,11 @@ public class KinesisProxyTest {
         AmazonKinesis mockClient = mock(AmazonKinesis.class);
         KinesisProxy kinesisProxy = getProxy(mockClient);
 
-        Mockito.when(
-                        mockClient.listShards(
-                                new ListShardsRequest()
-                                        .withStreamName(fakeStreamName)
-                                        .withExclusiveStartShardId(
-                                                KinesisShardIdGenerator.generateFromShardOrder(1))))
+        when(mockClient.listShards(
+                        new ListShardsRequest()
+                                .withStreamName(fakeStreamName)
+                                .withExclusiveStartShardId(
+                                        KinesisShardIdGenerator.generateFromShardOrder(1))))
                 .thenReturn(new ListShardsResult().withShards(Collections.emptyList()));
 
         HashMap<String, String> streamHashMap = new HashMap<>();
@@ -360,7 +394,7 @@ public class KinesisProxyTest {
                 };
 
         AmazonKinesisClient mockClient = mock(AmazonKinesisClient.class);
-        Mockito.when(mockClient.listShards(any()))
+        when(mockClient.listShards(any()))
                 .thenAnswer(
                         new Answer<ListShardsResult>() {
 
