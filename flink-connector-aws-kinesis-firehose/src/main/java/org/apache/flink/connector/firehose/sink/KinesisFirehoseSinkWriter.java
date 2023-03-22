@@ -19,6 +19,7 @@ package org.apache.flink.connector.firehose.sink;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.connector.sink2.Sink;
+import org.apache.flink.connector.aws.sink.throwable.AWSExceptionHandler;
 import org.apache.flink.connector.aws.util.AWSClientUtil;
 import org.apache.flink.connector.aws.util.AWSGeneralUtil;
 import org.apache.flink.connector.base.sink.throwable.FatalExceptionClassifier;
@@ -37,7 +38,6 @@ import software.amazon.awssdk.services.firehose.model.PutRecordBatchRequest;
 import software.amazon.awssdk.services.firehose.model.PutRecordBatchResponse;
 import software.amazon.awssdk.services.firehose.model.PutRecordBatchResponseEntry;
 import software.amazon.awssdk.services.firehose.model.Record;
-import software.amazon.awssdk.services.firehose.model.ResourceNotFoundException;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -81,20 +81,16 @@ class KinesisFirehoseSinkWriter<InputT> extends AsyncSinkWriter<InputT, Record> 
                 KinesisFirehoseConfigConstants.FIREHOSE_CLIENT_USER_AGENT_PREFIX);
     }
 
-    private static final FatalExceptionClassifier RESOURCE_NOT_FOUND_EXCEPTION_CLASSIFIER =
-            FatalExceptionClassifier.withRootCauseOfType(
-                    ResourceNotFoundException.class,
-                    err ->
-                            new KinesisFirehoseException(
-                                    "Encountered non-recoverable exception relating to not being able to find the specified resources",
-                                    err));
-
-    private static final FatalExceptionClassifier FIREHOSE_FATAL_EXCEPTION_CLASSIFIER =
-            FatalExceptionClassifier.createChain(
-                    getInterruptedExceptionClassifier(),
-                    getInvalidCredentialsExceptionClassifier(),
-                    RESOURCE_NOT_FOUND_EXCEPTION_CLASSIFIER,
-                    getSdkClientMisconfiguredExceptionClassifier());
+    private static final AWSExceptionHandler FIREHOSE_EXCEPTION_HANDLER =
+            AWSExceptionHandler.withClassifier(
+                    FatalExceptionClassifier.createChain(
+                            getInterruptedExceptionClassifier(),
+                            getInvalidCredentialsExceptionClassifier(),
+                            AWSFirehoseExceptionClassifiers
+                                    .getResourceNotFoundExceptionClassifier(),
+                            AWSFirehoseExceptionClassifiers.getAccessDeniedExceptionClassifier(),
+                            AWSFirehoseExceptionClassifiers.getNotAuthorizedExceptionClassifier(),
+                            getSdkClientMisconfiguredExceptionClassifier()));
 
     private final Counter numRecordsOutErrorsCounter;
 
@@ -210,33 +206,42 @@ class KinesisFirehoseSinkWriter<InputT> extends AsyncSinkWriter<InputT, Record> 
 
     private void handleFullyFailedRequest(
             Throwable err, List<Record> requestEntries, Consumer<List<Record>> requestResult) {
-        LOG.debug(
+
+        numRecordsOutErrorsCounter.inc(requestEntries.size());
+        boolean isFatal = FIREHOSE_EXCEPTION_HANDLER.consumeIfFatal(err, getFatalExceptionCons());
+        if (isFatal) {
+            return;
+        }
+
+        if (failOnError) {
+            getFatalExceptionCons()
+                    .accept(new KinesisFirehoseException.KinesisFirehoseFailFastException(err));
+            return;
+        }
+
+        LOG.warn(
                 "KDF Sink failed to write and will retry {} entries to KDF first request was {}",
                 requestEntries.size(),
                 requestEntries.get(0).toString(),
                 err);
-        numRecordsOutErrorsCounter.inc(requestEntries.size());
-
-        if (isRetryable(err)) {
-            requestResult.accept(requestEntries);
-        }
+        requestResult.accept(requestEntries);
     }
 
     private void handlePartiallyFailedRequest(
             PutRecordBatchResponse response,
             List<Record> requestEntries,
             Consumer<List<Record>> requestResult) {
-        LOG.debug(
-                "KDF Sink failed to write and will retry {} entries to KDF first request was {}",
-                requestEntries.size(),
-                requestEntries.get(0).toString());
         numRecordsOutErrorsCounter.inc(response.failedPutCount());
-
         if (failOnError) {
             getFatalExceptionCons()
                     .accept(new KinesisFirehoseException.KinesisFirehoseFailFastException());
             return;
         }
+
+        LOG.debug(
+                "KDF Sink failed to write and will retry {} entries to KDF first request was {}",
+                requestEntries.size(),
+                requestEntries.get(0).toString());
         List<Record> failedRequestEntries = new ArrayList<>(response.failedPutCount());
         List<PutRecordBatchResponseEntry> records = response.requestResponses();
 
@@ -247,18 +252,5 @@ class KinesisFirehoseSinkWriter<InputT> extends AsyncSinkWriter<InputT, Record> 
         }
 
         requestResult.accept(failedRequestEntries);
-    }
-
-    private boolean isRetryable(Throwable err) {
-        if (!FIREHOSE_FATAL_EXCEPTION_CLASSIFIER.isFatal(err, getFatalExceptionCons())) {
-            return false;
-        }
-        if (failOnError) {
-            getFatalExceptionCons()
-                    .accept(new KinesisFirehoseException.KinesisFirehoseFailFastException(err));
-            return false;
-        }
-
-        return true;
     }
 }
