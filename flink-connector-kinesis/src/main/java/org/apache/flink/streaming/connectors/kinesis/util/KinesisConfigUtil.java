@@ -91,7 +91,7 @@ public class KinesisConfigUtil {
     }
 
     /** Validate configuration properties for {@link FlinkKinesisConsumer}. */
-    public static void validateConsumerConfiguration(Properties config, List<String> streams) {
+    public static void validateConsumerConfiguration(Properties config, List<String> streamArns) {
         checkNotNull(config, "config can not be null");
 
         validateAwsConfiguration(config);
@@ -99,7 +99,7 @@ public class KinesisConfigUtil {
         RecordPublisherType recordPublisherType = validateRecordPublisherType(config);
 
         if (recordPublisherType == RecordPublisherType.EFO) {
-            validateEfoConfiguration(config, streams);
+            validateEfoConfiguration(config, streamArns);
         }
 
         if (!(config.containsKey(AWSConfigConstants.AWS_REGION)
@@ -357,10 +357,10 @@ public class KinesisConfigUtil {
      * Validate if the given config is a valid EFO configuration.
      *
      * @param config config properties.
-     * @param streams the streams which is sent to match the EFO consumer arn if the EFO
+     * @param streamArns the stream ARNs which is sent to match the EFO consumer arn if the EFO
      *     registration mode is set to `NONE`.
      */
-    public static void validateEfoConfiguration(Properties config, List<String> streams) {
+    public static void validateEfoConfiguration(Properties config, List<String> streamArns) {
         EFORegistrationType efoRegistrationType;
         if (config.containsKey(ConsumerConfigConstants.EFO_REGISTRATION_TYPE)) {
             String typeInString = config.getProperty(ConsumerConfigConstants.EFO_REGISTRATION_TYPE);
@@ -383,9 +383,10 @@ public class KinesisConfigUtil {
             // if the registration type is NONE, then for each stream there must be an according
             // consumer ARN
             List<String> missingConsumerArnKeys = new ArrayList<>();
-            for (String stream : streams) {
+            for (String streamArn : streamArns) {
+                String streamName = StreamConverterUtil.getStreamName(streamArn);
                 String efoConsumerARNKey =
-                        ConsumerConfigConstants.EFO_CONSUMER_ARN_PREFIX + "." + stream;
+                        ConsumerConfigConstants.EFO_CONSUMER_ARN_PREFIX + "." + streamName;
                 if (!config.containsKey(efoConsumerARNKey)) {
                     missingConsumerArnKeys.add(efoConsumerARNKey);
                 }

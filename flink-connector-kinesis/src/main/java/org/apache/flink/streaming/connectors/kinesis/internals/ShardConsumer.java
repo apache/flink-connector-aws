@@ -116,7 +116,7 @@ public class ShardConsumer<T> implements Runnable {
                                     if (!batch.getDeaggregatedRecords().isEmpty()) {
                                         LOG.debug(
                                                 "stream: {}, shard: {}, millis behind latest: {}, batch size: {}",
-                                                subscribedShard.getStreamName(),
+                                                subscribedShard.getStreamArn(),
                                                 subscribedShard.getShard().getShardId(),
                                                 batch.getMillisBehindLatest(),
                                                 batch.getDeaggregatedRecordSize());

@@ -79,11 +79,11 @@ public class FanOutRecordPublisherFactory implements RecordPublisherFactory {
         Preconditions.checkNotNull(metricGroup);
         Preconditions.checkNotNull(streamShardHandle);
 
-        String stream = streamShardHandle.getStreamName();
+        String streamArn = streamShardHandle.getStreamArn();
         FanOutRecordPublisherConfiguration configuration =
-                new FanOutRecordPublisherConfiguration(consumerConfig, singletonList(stream));
+                new FanOutRecordPublisherConfiguration(consumerConfig, singletonList(streamArn));
 
-        Optional<String> streamConsumerArn = configuration.getStreamConsumerArn(stream);
+        Optional<String> streamConsumerArn = configuration.getStreamConsumerArn(streamArn);
         Preconditions.checkState(streamConsumerArn.isPresent());
 
         return new FanOutRecordPublisher(

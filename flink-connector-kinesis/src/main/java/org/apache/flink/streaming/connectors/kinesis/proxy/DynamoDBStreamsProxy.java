@@ -98,15 +98,16 @@ public class DynamoDBStreamsProxy extends KinesisProxy {
     }
 
     @Override
-    public GetShardListResult getShardList(Map<String, String> streamNamesWithLastSeenShardIds)
+    public GetShardListResult getShardList(Map<String, String> streamArnsWithLastSeenShardIds)
             throws InterruptedException {
         GetShardListResult result = new GetShardListResult();
 
         for (Map.Entry<String, String> streamNameWithLastSeenShardId :
-                streamNamesWithLastSeenShardIds.entrySet()) {
-            String stream = streamNameWithLastSeenShardId.getKey();
+                streamArnsWithLastSeenShardIds.entrySet()) {
+            String streamArn = streamNameWithLastSeenShardId.getKey();
             String lastSeenShardId = streamNameWithLastSeenShardId.getValue();
-            result.addRetrievedShardsToStream(stream, getShardsOfStream(stream, lastSeenShardId));
+            result.addRetrievedShardsToStream(
+                    streamArn, getShardsOfStream(streamArn, lastSeenShardId));
         }
         return result;
     }
@@ -122,7 +123,7 @@ public class DynamoDBStreamsProxy extends KinesisProxy {
                     "Received ResourceNotFoundException. "
                             + "Shard {} of stream {} is no longer valid, marking it as complete.",
                     shard.getShard().getShardId(),
-                    shard.getStreamName());
+                    shard.getStreamArn());
             return null;
         }
     }

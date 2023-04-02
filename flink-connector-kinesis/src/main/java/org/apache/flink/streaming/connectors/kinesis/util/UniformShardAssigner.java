@@ -53,6 +53,6 @@ public class UniformShardAssigner implements KinesisShardAssigner {
         // distributed in the same way, even if they are sharded in the same way.
         // (The caller takes result modulo nSubtasks.)
         return hashKeyMid.multiply(BigInteger.valueOf(nSubtasks)).divide(HASH_KEY_BOUND).intValue()
-                + streamShardHandle.getStreamName().hashCode();
+                + streamShardHandle.getStreamArn().hashCode();
     }
 }

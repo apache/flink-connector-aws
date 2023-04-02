@@ -43,50 +43,51 @@ import static org.apache.flink.streaming.connectors.kinesis.util.AwsV2Util.isUsi
 public class StreamConsumerRegistrarUtil {
 
     /**
-     * Registers stream consumers for the given streams if EFO is enabled with EAGER registration
+     * Registers stream consumers for the given streamArns if EFO is enabled with EAGER registration
      * strategy.
      *
      * @param configProps the properties to parse configuration from
-     * @param streams the stream to register consumers against
+     * @param streamArns the stream ARNs to register consumers against
      */
     public static void eagerlyRegisterStreamConsumers(
-            final Properties configProps, final List<String> streams) {
+            final Properties configProps, final List<String> streamArns) {
         if (!isUsingEfoRecordPublisher(configProps) || !isEagerEfoRegistrationType(configProps)) {
             return;
         }
 
-        registerStreamConsumers(configProps, streams);
+        registerStreamConsumers(configProps, streamArns);
     }
 
     /**
-     * Registers stream consumers for the given streams if EFO is enabled with LAZY registration
+     * Registers stream consumers for the given stream ARNs if EFO is enabled with LAZY registration
      * strategy.
      *
      * @param configProps the properties to parse configuration from
-     * @param streams the stream to register consumers against
+     * @param streamArns the stream ARNs to register consumers against
      */
     public static void lazilyRegisterStreamConsumers(
-            final Properties configProps, final List<String> streams) {
+            final Properties configProps, final List<String> streamArns) {
         if (!isUsingEfoRecordPublisher(configProps) || !isLazyEfoRegistrationType(configProps)) {
             return;
         }
 
-        registerStreamConsumers(configProps, streams);
+        registerStreamConsumers(configProps, streamArns);
     }
 
     /**
-     * Deregisters stream consumers for the given streams if EFO is enabled with EAGER|LAZY
+     * Deregisters stream consumers for the given stream ARNs if EFO is enabled with EAGER|LAZY
      * registration strategy.
      *
      * @param configProps the properties to parse configuration from
-     * @param streams the stream to register consumers against
+     * @param streamArns the stream ARNs to register consumers against
      */
     public static void deregisterStreamConsumers(
-            final Properties configProps, final List<String> streams) {
+            final Properties configProps, final List<String> streamArns) {
         if (isConsumerDeregistrationRequired(configProps)) {
-            StreamConsumerRegistrar registrar = createStreamConsumerRegistrar(configProps, streams);
+            StreamConsumerRegistrar registrar =
+                    createStreamConsumerRegistrar(configProps, streamArns);
             try {
-                deregisterStreamConsumers(registrar, configProps, streams);
+                deregisterStreamConsumers(registrar, configProps, streamArns);
             } finally {
                 registrar.close();
             }
@@ -98,11 +99,11 @@ public class StreamConsumerRegistrarUtil {
     }
 
     private static void registerStreamConsumers(
-            final Properties configProps, final List<String> streams) {
-        StreamConsumerRegistrar registrar = createStreamConsumerRegistrar(configProps, streams);
+            final Properties configProps, final List<String> streamArns) {
+        StreamConsumerRegistrar registrar = createStreamConsumerRegistrar(configProps, streamArns);
 
         try {
-            registerStreamConsumers(registrar, configProps, streams);
+            registerStreamConsumers(registrar, configProps, streamArns);
         } finally {
             registrar.close();
         }
@@ -112,20 +113,20 @@ public class StreamConsumerRegistrarUtil {
     static void registerStreamConsumers(
             final StreamConsumerRegistrar registrar,
             final Properties configProps,
-            final List<String> streams) {
+            final List<String> streamArns) {
         String streamConsumerName = configProps.getProperty(EFO_CONSUMER_NAME);
 
-        for (String stream : streams) {
+        for (String streamArn : streamArns) {
             try {
                 String streamConsumerArn =
-                        registrar.registerStreamConsumer(stream, streamConsumerName);
-                configProps.setProperty(efoConsumerArn(stream), streamConsumerArn);
+                        registrar.registerStreamConsumer(streamArn, streamConsumerName);
+                configProps.setProperty(efoConsumerArn(streamArn), streamConsumerArn);
             } catch (Exception ex) {
                 if (ex instanceof InterruptedException) {
                     Thread.currentThread().interrupt();
                 }
                 throw new FlinkKinesisStreamConsumerRegistrarException(
-                        "Error registering stream: " + stream, ex);
+                        "Error registering stream: " + streamArn, ex);
             }
         }
     }
@@ -134,24 +135,24 @@ public class StreamConsumerRegistrarUtil {
     static void deregisterStreamConsumers(
             final StreamConsumerRegistrar registrar,
             final Properties configProps,
-            final List<String> streams) {
+            final List<String> streamArns) {
         if (isConsumerDeregistrationRequired(configProps)) {
-            for (String stream : streams) {
+            for (String streamArn : streamArns) {
                 try {
-                    registrar.deregisterStreamConsumer(stream);
+                    registrar.deregisterStreamConsumer(streamArn);
                 } catch (Exception ex) {
                     throw new FlinkKinesisStreamConsumerRegistrarException(
-                            "Error deregistering stream: " + stream, ex);
+                            "Error deregistering stream: " + streamArn, ex);
                 }
             }
         }
     }
 
     private static StreamConsumerRegistrar createStreamConsumerRegistrar(
-            final Properties configProps, final List<String> streams) {
+            final Properties configProps, final List<String> streamArns) {
         FullJitterBackoff backoff = new FullJitterBackoff();
         FanOutRecordPublisherConfiguration configuration =
-                new FanOutRecordPublisherConfiguration(configProps, streams);
+                new FanOutRecordPublisherConfiguration(configProps, streamArns);
         KinesisProxySyncV2Interface kinesis =
                 KinesisProxyV2Factory.createKinesisProxySyncV2(configProps);
 

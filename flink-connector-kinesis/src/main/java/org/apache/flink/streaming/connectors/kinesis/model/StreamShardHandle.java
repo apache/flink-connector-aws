@@ -18,13 +18,15 @@
 package org.apache.flink.streaming.connectors.kinesis.model;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.streaming.connectors.kinesis.serialization.KinesisDeserializationSchema;
+import org.apache.flink.streaming.connectors.kinesis.util.StreamConverterUtil;
 
 import com.amazonaws.services.kinesis.model.Shard;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /**
- * A wrapper class around the information provided along with streamName and {@link
+ * A wrapper class around the information provided along with stream ARN and {@link
  * com.amazonaws.services.kinesis.model.Shard}, with some extra utility methods to determine whether
  * or not a shard is closed and whether or not the shard is a result of parent shard splits or
  * merges.
@@ -32,6 +34,7 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
 @Internal
 public class StreamShardHandle {
 
+    private final String streamArn;
     private final String streamName;
     private final Shard shard;
 
@@ -40,23 +43,31 @@ public class StreamShardHandle {
     /**
      * Create a new StreamShardHandle.
      *
-     * @param streamName the name of the Kinesis stream that this shard belongs to
+     * @param streamArn the ARN of the Kinesis stream that this shard belongs to
      * @param shard the actual AWS Shard instance that will be wrapped within this StreamShardHandle
      */
-    public StreamShardHandle(String streamName, Shard shard) {
-        this.streamName = checkNotNull(streamName);
+    public StreamShardHandle(String streamArn, Shard shard) {
+        this.streamArn = checkNotNull(streamArn);
+        this.streamName = StreamConverterUtil.getStreamName(streamArn);
         this.shard = checkNotNull(shard);
 
-        // since our description of Kinesis Streams shards can be fully defined with the stream name
+        // since our description of Kinesis Streams shards can be fully defined with the stream ARN
         // and shard id,
         // our hash doesn't need to use hash code of Amazon's description of Shards, which uses
         // other info for calculation
         int hash = 17;
-        hash = 37 * hash + streamName.hashCode();
+        hash = 37 * hash + streamArn.hashCode();
         hash = 37 * hash + shard.getShardId().hashCode();
         this.cachedHash = hash;
     }
 
+    public String getStreamArn() {
+        return streamArn;
+    }
+
+    /**
+     * This method is here for backwards compatibility in API exposed in {@link KinesisDeserializationSchema}.
+     */
     public String getStreamName() {
         return streamName;
     }
@@ -72,8 +83,8 @@ public class StreamShardHandle {
     @Override
     public String toString() {
         return "StreamShardHandle{"
-                + "streamName='"
-                + streamName
+                + "streamArn='"
+                + streamArn
                 + "'"
                 + ", shard='"
                 + shard.toString()
@@ -92,7 +103,7 @@ public class StreamShardHandle {
 
         StreamShardHandle other = (StreamShardHandle) obj;
 
-        return streamName.equals(other.getStreamName()) && shard.equals(other.getShard());
+        return streamArn.equals(other.getStreamArn()) && shard.equals(other.getShard());
     }
 
     @Override

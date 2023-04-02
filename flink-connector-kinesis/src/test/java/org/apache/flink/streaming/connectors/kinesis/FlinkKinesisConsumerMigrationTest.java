@@ -78,7 +78,7 @@ public class FlinkKinesisConsumerMigrationTest {
      */
     private final FlinkVersion flinkGenerateSavepointVersion = null;
 
-    private static final String TEST_STREAM_NAME = "fakeStream1";
+    private static final String TEST_STREAM_NAME = "arn:aws:kinesis:us-east-1:123456789012:stream/fakeStream1";
     private static final SequenceNumber TEST_SEQUENCE_NUMBER = new SequenceNumber("987654321");
     private static final String TEST_SHARD_ID = KinesisShardIdGenerator.generateFromShardOrder(0);
 
@@ -86,7 +86,7 @@ public class FlinkKinesisConsumerMigrationTest {
 
     static {
         StreamShardMetadata shardMetadata = new StreamShardMetadata();
-        shardMetadata.setStreamName(TEST_STREAM_NAME);
+        shardMetadata.setStreamArn(TEST_STREAM_NAME);
         shardMetadata.setShardId(TEST_SHARD_ID);
 
         TEST_STATE.put(shardMetadata, TEST_SEQUENCE_NUMBER);
@@ -141,7 +141,7 @@ public class FlinkKinesisConsumerMigrationTest {
             sequenceNumberRange.withStartingSequenceNumber("1");
             shard.setSequenceNumberRange(sequenceNumberRange);
 
-            initialDiscoveryShards.add(new StreamShardHandle(shardMetadata.getStreamName(), shard));
+            initialDiscoveryShards.add(new StreamShardHandle(shardMetadata.getStreamArn(), shard));
         }
 
         final TestFetcher<String> fetcher =
@@ -184,7 +184,7 @@ public class FlinkKinesisConsumerMigrationTest {
         // job wasn't running,
         // and therefore should be consumed from the earliest sequence number
         KinesisStreamShardState restoredShardState = fetcher.getSubscribedShardsState().get(0);
-        assertThat(restoredShardState.getStreamShardHandle().getStreamName())
+        assertThat(restoredShardState.getStreamShardHandle().getStreamArn())
                 .isEqualTo(TEST_STREAM_NAME);
         assertThat(restoredShardState.getStreamShardHandle().getShard().getShardId())
                 .isEqualTo(TEST_SHARD_ID);
@@ -207,7 +207,7 @@ public class FlinkKinesisConsumerMigrationTest {
             sequenceNumberRange.withStartingSequenceNumber("1");
             shard.setSequenceNumberRange(sequenceNumberRange);
 
-            initialDiscoveryShards.add(new StreamShardHandle(shardMetadata.getStreamName(), shard));
+            initialDiscoveryShards.add(new StreamShardHandle(shardMetadata.getStreamArn(), shard));
         }
 
         final TestFetcher<String> fetcher =
@@ -251,7 +251,7 @@ public class FlinkKinesisConsumerMigrationTest {
                 .isEqualTo(TEST_SEQUENCE_NUMBER);
 
         KinesisStreamShardState restoredShardState = fetcher.getSubscribedShardsState().get(0);
-        assertThat(restoredShardState.getStreamShardHandle().getStreamName())
+        assertThat(restoredShardState.getStreamShardHandle().getStreamArn())
                 .isEqualTo(TEST_STREAM_NAME);
         assertThat(restoredShardState.getStreamShardHandle().getShard().getShardId())
                 .isEqualTo(TEST_SHARD_ID);
@@ -278,7 +278,7 @@ public class FlinkKinesisConsumerMigrationTest {
             closedShard.setSequenceNumberRange(closedSequenceNumberRange);
 
             initialDiscoveryShards.add(
-                    new StreamShardHandle(shardMetadata.getStreamName(), closedShard));
+                    new StreamShardHandle(shardMetadata.getStreamArn(), closedShard));
 
             // setup the new shards
             Shard newSplitShard1 = new Shard();
@@ -300,9 +300,9 @@ public class FlinkKinesisConsumerMigrationTest {
             newSplitShard2.setParentShardId(TEST_SHARD_ID);
 
             initialDiscoveryShards.add(
-                    new StreamShardHandle(shardMetadata.getStreamName(), newSplitShard1));
+                    new StreamShardHandle(shardMetadata.getStreamArn(), newSplitShard1));
             initialDiscoveryShards.add(
-                    new StreamShardHandle(shardMetadata.getStreamName(), newSplitShard2));
+                    new StreamShardHandle(shardMetadata.getStreamArn(), newSplitShard2));
         }
 
         final TestFetcher<String> fetcher =
@@ -347,7 +347,7 @@ public class FlinkKinesisConsumerMigrationTest {
 
         KinesisStreamShardState restoredClosedShardState =
                 fetcher.getSubscribedShardsState().get(0);
-        assertThat(restoredClosedShardState.getStreamShardHandle().getStreamName())
+        assertThat(restoredClosedShardState.getStreamShardHandle().getStreamArn())
                 .isEqualTo(TEST_STREAM_NAME);
         assertThat(restoredClosedShardState.getStreamShardHandle().getShard().getShardId())
                 .isEqualTo(TEST_SHARD_ID);
@@ -356,7 +356,7 @@ public class FlinkKinesisConsumerMigrationTest {
                 .isEqualTo(TEST_SEQUENCE_NUMBER);
 
         KinesisStreamShardState restoredNewSplitShard1 = fetcher.getSubscribedShardsState().get(1);
-        assertThat(restoredNewSplitShard1.getStreamShardHandle().getStreamName())
+        assertThat(restoredNewSplitShard1.getStreamShardHandle().getStreamArn())
                 .isEqualTo(TEST_STREAM_NAME);
         assertThat(restoredNewSplitShard1.getStreamShardHandle().getShard().getShardId())
                 .isEqualTo(KinesisShardIdGenerator.generateFromShardOrder(1));
@@ -366,7 +366,7 @@ public class FlinkKinesisConsumerMigrationTest {
                 .isEqualTo(SentinelSequenceNumber.SENTINEL_EARLIEST_SEQUENCE_NUM.get());
 
         KinesisStreamShardState restoredNewSplitShard2 = fetcher.getSubscribedShardsState().get(2);
-        assertThat(restoredNewSplitShard2.getStreamShardHandle().getStreamName())
+        assertThat(restoredNewSplitShard2.getStreamShardHandle().getStreamArn())
                 .isEqualTo(TEST_STREAM_NAME);
         assertThat(restoredNewSplitShard2.getStreamShardHandle().getShard().getShardId())
                 .isEqualTo(KinesisShardIdGenerator.generateFromShardOrder(2));
@@ -393,7 +393,7 @@ public class FlinkKinesisConsumerMigrationTest {
             sequenceNumberRange.withStartingSequenceNumber("1");
             shard.setSequenceNumberRange(sequenceNumberRange);
 
-            initialDiscoveryShards.add(new StreamShardHandle(shardMetadata.getStreamName(), shard));
+            initialDiscoveryShards.add(new StreamShardHandle(shardMetadata.getStreamArn(), shard));
         }
 
         final TestFetcher<String> fetcher =
@@ -468,7 +468,7 @@ public class FlinkKinesisConsumerMigrationTest {
 
         @Override
         protected KinesisDataFetcher<T> createFetcher(
-                List<String> streams,
+                List<String> streamArns,
                 SourceContext<T> sourceContext,
                 RuntimeContext runtimeContext,
                 Properties configProps,

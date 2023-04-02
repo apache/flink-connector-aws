@@ -17,6 +17,7 @@
 
 package org.apache.flink.streaming.connectors.kinesis;
 
+import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.ExecutionConfig;
@@ -48,17 +49,20 @@ import org.apache.flink.streaming.connectors.kinesis.serialization.KinesisDeseri
 import org.apache.flink.streaming.connectors.kinesis.table.DefaultShardAssignerFactory;
 import org.apache.flink.streaming.connectors.kinesis.util.KinesisConfigUtil;
 import org.apache.flink.streaming.connectors.kinesis.util.StreamConsumerRegistrarUtil;
+import org.apache.flink.streaming.connectors.kinesis.util.StreamConverterUtil;
 import org.apache.flink.streaming.connectors.kinesis.util.WatermarkTracker;
 import org.apache.flink.util.InstantiationUtil;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 
 import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
@@ -115,8 +119,8 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
     //  Consumer properties
     // ------------------------------------------------------------------------
 
-    /** The names of the Kinesis streams that we will be consuming from. */
-    private final List<String> streams;
+    /** The ARNs of the Kinesis streams that we will be consuming from. */
+    private final List<String> streamArns;
 
     /**
      * Properties to parametrize settings such as AWS service region, initial position in stream,
@@ -215,14 +219,15 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
             KinesisDeserializationSchema<T> deserializer,
             Properties configProps) {
         checkNotNull(streams, "streams can not be null");
-        checkArgument(streams.size() != 0, "must be consuming at least 1 stream");
-        checkArgument(!streams.contains(""), "stream names cannot be empty Strings");
-        this.streams = streams;
+        checkArgument(!streams.isEmpty(), "must be consuming at least 1 stream");
+        checkArgument(!streams.contains(""), "stream names or ARNs cannot be empty Strings");
+
+        this.streamArns = mapToArn(streams, configProps);
 
         this.configProps = checkNotNull(configProps, "configProps can not be null");
 
         // check the configuration properties for any conflicting settings
-        KinesisConfigUtil.validateConsumerConfiguration(this.configProps, streams);
+        KinesisConfigUtil.validateConsumerConfiguration(this.configProps, this.streamArns);
 
         checkNotNull(deserializer, "deserializer can not be null");
         checkArgument(
@@ -233,16 +238,15 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
                         + "Please check that it does not contain references to non-serializable instances.");
         this.deserializer = deserializer;
 
-        StreamConsumerRegistrarUtil.eagerlyRegisterStreamConsumers(configProps, streams);
+        StreamConsumerRegistrarUtil.eagerlyRegisterStreamConsumers(
+                this.configProps, this.streamArns);
 
         if (LOG.isInfoEnabled()) {
             StringBuilder sb = new StringBuilder();
-            for (String stream : streams) {
-                sb.append(stream).append(", ");
+            for (String streamArn : this.streamArns) {
+                sb.append(streamArn).append(", ");
             }
-            LOG.info(
-                    "Flink Kinesis Consumer is going to read the following streams: {}",
-                    sb.toString());
+            LOG.info("Flink Kinesis Consumer is going to read the following streams: {}", sb);
         }
     }
 
@@ -308,7 +312,7 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
         // can potentially have new shards to subscribe to later on
         KinesisDataFetcher<T> fetcher =
                 createFetcher(
-                        streams, sourceContext, getRuntimeContext(), configProps, deserializer);
+                        streamArns, sourceContext, getRuntimeContext(), configProps, deserializer);
 
         // initial discovery
         List<StreamShardHandle> allShards = fetcher.discoverNewShardsToSubscribe();
@@ -459,13 +463,13 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
                         sequenceNumsStateForCheckpoint.get()) {
                     sequenceNumsToRestore.put(
                             // we wrap the restored metadata inside an equivalence wrapper that
-                            // checks only stream name and shard id,
+                            // checks only stream ARN and shard id,
                             // so that if a shard had been closed (due to a Kinesis reshard
                             // operation, for example) since
                             // the savepoint and has a different metadata than what we last stored,
                             // we will still be able to match it in sequenceNumsToRestore. Please
                             // see FLINK-8484 for details.
-                            new StreamShardMetadata.EquivalenceWrapper(kinesisSequenceNumber.f0),
+                            StreamShardMetadata.EquivalenceWrapper.create(kinesisSequenceNumber.f0, configProps),
                             kinesisSequenceNumber.f1);
                 }
 
@@ -534,14 +538,14 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
      * This method is exposed for tests that need to mock the KinesisDataFetcher in the consumer.
      */
     protected KinesisDataFetcher<T> createFetcher(
-            List<String> streams,
+            List<String> streamArns,
             SourceFunction.SourceContext<T> sourceContext,
             RuntimeContext runtimeContext,
             Properties configProps,
             KinesisDeserializationSchema<T> deserializationSchema) {
 
         return new KinesisDataFetcher<>(
-                streams,
+                streamArns,
                 sourceContext,
                 runtimeContext,
                 configProps,
@@ -554,5 +558,28 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
     @VisibleForTesting
     HashMap<StreamShardMetadata.EquivalenceWrapper, SequenceNumber> getRestoredState() {
         return sequenceNumsToRestore;
+    }
+
+    private List<String> mapToArn(final List<String> streamNames, final Properties configProps) {
+        try {
+            List<String> arns = new ArrayList<>();
+            for (String streamName : streamNames) {
+                arns.add(StreamConverterUtil.getStreamArn(streamName, configProps));
+            }
+            return arns;
+        } catch (ExecutionException | InterruptedException e) {
+            throw new FlinkKinesisParsingException("Unable to parse stream ARN for streams: " + streamNames, e);
+        }
+    }
+
+    /**
+     * A semantic {@link RuntimeException} thrown to indicate parsing errors for in the Kinesis stream ARN.
+     */
+    @Internal
+    public static class FlinkKinesisParsingException extends FlinkKinesisException {
+
+        public FlinkKinesisParsingException(final String message, final Throwable cause) {
+            super(message, cause);
+        }
     }
 }

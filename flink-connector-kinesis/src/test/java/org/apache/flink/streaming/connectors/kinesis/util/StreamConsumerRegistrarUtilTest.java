@@ -39,22 +39,24 @@ import static org.mockito.Mockito.when;
 
 /** Tests for {@link StreamConsumerRegistrar}. */
 public class StreamConsumerRegistrarUtilTest {
+    private static final String STREAM_1_ARN = "arn:aws:kinesis:us-east-1:123456789012:stream/stream-1";
+    private static final String STREAM_2_ARN = "arn:aws:kinesis:us-east-1:123456789012:stream/stream-2";
 
     @Test
     public void testRegisterStreamConsumers() throws Exception {
         Properties configProps = getDefaultConfiguration();
         StreamConsumerRegistrar registrar = mock(StreamConsumerRegistrar.class);
-        when(registrar.registerStreamConsumer("stream-1", "consumer-name"))
+        when(registrar.registerStreamConsumer(STREAM_1_ARN, "consumer-name"))
                 .thenReturn("stream-1-consumer-arn");
-        when(registrar.registerStreamConsumer("stream-2", "consumer-name"))
+        when(registrar.registerStreamConsumer(STREAM_2_ARN, "consumer-name"))
                 .thenReturn("stream-2-consumer-arn");
 
         StreamConsumerRegistrarUtil.registerStreamConsumers(
-                registrar, configProps, Arrays.asList("stream-1", "stream-2"));
+                registrar, configProps, Arrays.asList(STREAM_1_ARN, STREAM_2_ARN));
 
-        assertThat(configProps.getProperty(efoConsumerArn("stream-1")))
+        assertThat(configProps.getProperty(efoConsumerArn(STREAM_1_ARN)))
                 .isEqualTo("stream-1-consumer-arn");
-        assertThat(configProps.getProperty(efoConsumerArn("stream-2")))
+        assertThat(configProps.getProperty(efoConsumerArn(STREAM_2_ARN)))
                 .isEqualTo("stream-2-consumer-arn");
     }
 
@@ -62,13 +64,13 @@ public class StreamConsumerRegistrarUtilTest {
     public void testDeregisterStreamConsumersMissingStreamArn() throws Exception {
         Properties configProps = getDefaultConfiguration();
         configProps.setProperty(RECORD_PUBLISHER_TYPE, EFO.name());
-        List<String> streams = Arrays.asList("stream-1", "stream-2");
+        List<String> streams = Arrays.asList(STREAM_1_ARN, STREAM_2_ARN);
         StreamConsumerRegistrar registrar = mock(StreamConsumerRegistrar.class);
 
         StreamConsumerRegistrarUtil.deregisterStreamConsumers(registrar, configProps, streams);
 
-        verify(registrar).deregisterStreamConsumer("stream-1");
-        verify(registrar).deregisterStreamConsumer("stream-2");
+        verify(registrar).deregisterStreamConsumer(STREAM_1_ARN);
+        verify(registrar).deregisterStreamConsumer(STREAM_2_ARN);
     }
 
     @Test
@@ -76,7 +78,7 @@ public class StreamConsumerRegistrarUtilTest {
         Properties configProps = getDefaultConfiguration();
         configProps.setProperty(RECORD_PUBLISHER_TYPE, EFO.name());
         configProps.put(EFO_REGISTRATION_TYPE, EAGER.name());
-        List<String> streams = Arrays.asList("stream-1");
+        List<String> streams = Arrays.asList(STREAM_1_ARN);
         StreamConsumerRegistrar registrar = mock(StreamConsumerRegistrar.class);
 
         StreamConsumerRegistrarUtil.deregisterStreamConsumers(registrar, configProps, streams);

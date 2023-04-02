@@ -24,12 +24,15 @@ import org.apache.flink.streaming.connectors.kinesis.proxy.GetShardListResult;
 import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyInterface;
 import org.apache.flink.util.Preconditions;
 
+import com.amazonaws.services.kinesis.model.DescribeStreamResult;
 import com.amazonaws.services.kinesis.model.ExpiredIteratorException;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.amazonaws.services.kinesis.model.HashKeyRange;
 import com.amazonaws.services.kinesis.model.Record;
 import com.amazonaws.services.kinesis.model.SequenceNumberRange;
 import com.amazonaws.services.kinesis.model.Shard;
+import com.amazonaws.services.kinesis.model.StreamDescription;
+import org.jetbrains.annotations.Nullable;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -62,8 +65,13 @@ public class FakeKinesisBehavioursFactory {
         return new KinesisProxyInterface() {
             @Override
             public GetShardListResult getShardList(
-                    Map<String, String> streamNamesWithLastSeenShardIds) {
+                    Map<String, String> streamArnsWithLastSeenShardIds) {
                 return new GetShardListResult(); // not setting any retrieved shards for result
+            }
+
+            @Override
+            public DescribeStreamResult describeStream(String streamName, @Nullable String startShardId) throws InterruptedException {
+                return null;
             }
 
             @Override
@@ -141,6 +149,10 @@ public class FakeKinesisBehavioursFactory {
         return new BlockingQueueKinesis(streamsToShardQueues);
     }
 
+    public static KinesisProxyInterface withStreamArn(String streamArn) {
+        return new DescribeStreamKinesis(streamArn);
+    }
+
     private static class SingleShardEmittingZeroRecords implements KinesisProxyInterface {
 
         private int remainingIterators;
@@ -166,8 +178,13 @@ public class FakeKinesisBehavioursFactory {
         }
 
         @Override
-        public GetShardListResult getShardList(Map<String, String> streamNamesWithLastSeenShardIds)
+        public GetShardListResult getShardList(Map<String, String> streamArnsWithLastSeenShardIds)
                 throws InterruptedException {
+            return null;
+        }
+
+        @Override
+        public DescribeStreamResult describeStream(String streamName, @Nullable String startShardId) throws InterruptedException {
             return null;
         }
     }
@@ -302,8 +319,12 @@ public class FakeKinesisBehavioursFactory {
         }
 
         @Override
-        public GetShardListResult getShardList(
-                Map<String, String> streamNamesWithLastSeenShardIds) {
+        public GetShardListResult getShardList(Map<String, String> streamArnsWithLastSeenShardIds) {
+            return null;
+        }
+
+        @Override
+        public DescribeStreamResult describeStream(String streamName, @Nullable String startShardId) throws InterruptedException {
             return null;
         }
 
@@ -398,6 +419,11 @@ public class FakeKinesisBehavioursFactory {
             char[] data = new char[(int) msgSize];
             return new String(data);
         }
+
+        @Override
+        public DescribeStreamResult describeStream(String streamName, @Nullable String startShardId) throws InterruptedException {
+            return null;
+        }
     }
 
     private static class SingleShardEmittingAggregatedRecordsKinesis
@@ -429,6 +455,11 @@ public class FakeKinesisBehavioursFactory {
             }
 
             return shardToRecordBatch;
+        }
+
+        @Override
+        public DescribeStreamResult describeStream(String streamName, @Nullable String startShardId) throws InterruptedException {
+            return null;
         }
     }
 
@@ -474,8 +505,7 @@ public class FakeKinesisBehavioursFactory {
         }
 
         @Override
-        public GetShardListResult getShardList(
-                Map<String, String> streamNamesWithLastSeenShardIds) {
+        public GetShardListResult getShardList(Map<String, String> streamArnsWithLastSeenShardIds) {
             return null;
         }
     }
@@ -506,19 +536,18 @@ public class FakeKinesisBehavioursFactory {
         }
 
         @Override
-        public GetShardListResult getShardList(
-                Map<String, String> streamNamesWithLastSeenShardIds) {
+        public GetShardListResult getShardList(Map<String, String> streamArnsWithLastSeenShardIds) {
             GetShardListResult result = new GetShardListResult();
             for (Map.Entry<String, List<StreamShardHandle>> streamsWithShards :
                     streamsWithListOfShards.entrySet()) {
                 String streamName = streamsWithShards.getKey();
                 for (StreamShardHandle shard : streamsWithShards.getValue()) {
-                    if (streamNamesWithLastSeenShardIds.get(streamName) == null) {
+                    if (streamArnsWithLastSeenShardIds.get(streamName) == null) {
                         result.addRetrievedShardToStream(streamName, shard);
                     } else {
                         if (compareShardIds(
                                         shard.getShard().getShardId(),
-                                        streamNamesWithLastSeenShardIds.get(streamName))
+                                        streamArnsWithLastSeenShardIds.get(streamName))
                                 > 0) {
                             result.addRetrievedShardToStream(streamName, shard);
                         }
@@ -526,6 +555,11 @@ public class FakeKinesisBehavioursFactory {
                 }
             }
             return result;
+        }
+
+        @Override
+        public DescribeStreamResult describeStream(String streamName, @Nullable String startShardId) throws InterruptedException {
+            return null;
         }
 
         @Override
@@ -585,7 +619,7 @@ public class FakeKinesisBehavioursFactory {
         private final Map<String, BlockingQueue<String>> shardIteratorToQueueMap = new HashMap<>();
 
         private static String getShardIterator(StreamShardHandle shardHandle) {
-            return shardHandle.getStreamName() + "-" + shardHandle.getShard().getShardId();
+            return shardHandle.getStreamArn() + "-" + shardHandle.getShard().getShardId();
         }
 
         public BlockingQueueKinesis(Map<String, List<BlockingQueue<String>>> streamsToShardCount) {
@@ -624,19 +658,18 @@ public class FakeKinesisBehavioursFactory {
         }
 
         @Override
-        public GetShardListResult getShardList(
-                Map<String, String> streamNamesWithLastSeenShardIds) {
+        public GetShardListResult getShardList(Map<String, String> streamArnsWithLastSeenShardIds) {
             GetShardListResult result = new GetShardListResult();
             for (Map.Entry<String, List<StreamShardHandle>> streamsWithShards :
                     streamsWithListOfShards.entrySet()) {
                 String streamName = streamsWithShards.getKey();
                 for (StreamShardHandle shard : streamsWithShards.getValue()) {
-                    if (streamNamesWithLastSeenShardIds.get(streamName) == null) {
+                    if (streamArnsWithLastSeenShardIds.get(streamName) == null) {
                         result.addRetrievedShardToStream(streamName, shard);
                     } else {
                         if (StreamShardHandle.compareShardIds(
                                         shard.getShard().getShardId(),
-                                        streamNamesWithLastSeenShardIds.get(streamName))
+                                        streamArnsWithLastSeenShardIds.get(streamName))
                                 > 0) {
                             result.addRetrievedShardToStream(streamName, shard);
                         }
@@ -644,6 +677,11 @@ public class FakeKinesisBehavioursFactory {
                 }
             }
             return result;
+        }
+
+        @Override
+        public DescribeStreamResult describeStream(String streamName, @Nullable String startShardId) throws InterruptedException {
+            return null;
         }
 
         @Override
@@ -681,6 +719,39 @@ public class FakeKinesisBehavioursFactory {
                     .withRecords(records)
                     .withMillisBehindLatest(0L)
                     .withNextShardIterator(shardIterator);
+        }
+    }
+
+    private static class DescribeStreamKinesis implements KinesisProxyInterface {
+
+        private final String streamArn;
+
+        public DescribeStreamKinesis(final String streamArn) {
+            this.streamArn = streamArn;
+        }
+
+        @Override
+        public String getShardIterator(StreamShardHandle shard, String shardIteratorType, Object startingMarker) throws InterruptedException {
+            return null;
+        }
+
+        @Override
+        public GetRecordsResult getRecords(String shardIterator, int maxRecordsToGet) throws InterruptedException {
+            return null;
+        }
+
+        @Override
+        public GetShardListResult getShardList(Map<String, String> streamArnsWithLastSeenShardIds) throws InterruptedException {
+            return null;
+        }
+
+        @Override
+        public DescribeStreamResult describeStream(String streamName, @Nullable String startShardId) throws InterruptedException {
+            DescribeStreamResult result = new DescribeStreamResult();
+            StreamDescription description = new StreamDescription();
+            description.setStreamARN(streamArn);
+            result.setStreamDescription(description);
+            return result;
         }
     }
 }

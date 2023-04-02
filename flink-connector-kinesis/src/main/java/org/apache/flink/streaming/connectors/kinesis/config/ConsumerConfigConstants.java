@@ -21,6 +21,7 @@ import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.streaming.connectors.kinesis.FlinkKinesisConsumer;
 import org.apache.flink.streaming.connectors.kinesis.internals.ShardConsumer;
 import org.apache.flink.streaming.connectors.kinesis.model.SentinelSequenceNumber;
+import org.apache.flink.streaming.connectors.kinesis.util.StreamConverterUtil;
 
 import java.time.Duration;
 
@@ -416,12 +417,13 @@ public class ConsumerConfigConstants extends AWSConfigConstants {
     public static final long MAX_SHARD_GETRECORDS_INTERVAL_MILLIS = 300000L;
 
     /**
-     * Build the key of an EFO consumer ARN according to a stream name.
+     * Build the key of an EFO consumer ARN according to a stream ARN. Only the stream name is
+     * included
      *
-     * @param streamName the stream name the key is built upon.
+     * @param streamArn the stream ARN the key is built upon.
      * @return a key of EFO consumer ARN.
      */
-    public static String efoConsumerArn(final String streamName) {
-        return EFO_CONSUMER_ARN_PREFIX + "." + streamName;
+    public static String efoConsumerArn(final String streamArn) {
+        return EFO_CONSUMER_ARN_PREFIX + "." + StreamConverterUtil.getStreamName(streamArn);
     }
 }

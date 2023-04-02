@@ -344,7 +344,7 @@ public class KinesisDataFetcherTest extends TestLogger {
         for (Map.Entry<StreamShardHandle, String> restoredState :
                 restoredStateUnderTest.entrySet()) {
             fetcher.advanceLastDiscoveredShardOfStream(
-                    restoredState.getKey().getStreamName(),
+                    restoredState.getKey().getStreamArn(),
                     restoredState.getKey().getShard().getShardId());
             fetcher.registerNewSubscribedShardState(
                     new KinesisStreamShardState(
@@ -451,7 +451,7 @@ public class KinesisDataFetcherTest extends TestLogger {
         for (Map.Entry<StreamShardHandle, String> restoredState :
                 restoredStateUnderTest.entrySet()) {
             fetcher.advanceLastDiscoveredShardOfStream(
-                    restoredState.getKey().getStreamName(),
+                    restoredState.getKey().getStreamArn(),
                     restoredState.getKey().getShard().getShardId());
             fetcher.registerNewSubscribedShardState(
                     new KinesisStreamShardState(
@@ -558,7 +558,7 @@ public class KinesisDataFetcherTest extends TestLogger {
         for (Map.Entry<StreamShardHandle, String> restoredState :
                 restoredStateUnderTest.entrySet()) {
             fetcher.advanceLastDiscoveredShardOfStream(
-                    restoredState.getKey().getStreamName(),
+                    restoredState.getKey().getStreamArn(),
                     restoredState.getKey().getShard().getShardId());
             fetcher.registerNewSubscribedShardState(
                     new KinesisStreamShardState(
@@ -668,7 +668,7 @@ public class KinesisDataFetcherTest extends TestLogger {
         for (Map.Entry<StreamShardHandle, String> restoredState :
                 restoredStateUnderTest.entrySet()) {
             fetcher.advanceLastDiscoveredShardOfStream(
-                    restoredState.getKey().getStreamName(),
+                    restoredState.getKey().getStreamArn(),
                     restoredState.getKey().getShard().getShardId());
             fetcher.registerNewSubscribedShardState(
                     new KinesisStreamShardState(
@@ -716,7 +716,7 @@ public class KinesisDataFetcherTest extends TestLogger {
         String endingSequenceNumber = "seq-00000031";
 
         StreamShardMetadata kinesisStreamShard = new StreamShardMetadata();
-        kinesisStreamShard.setStreamName(streamName);
+        kinesisStreamShard.setStreamArn(streamName);
         kinesisStreamShard.setShardId(shardId);
         kinesisStreamShard.setParentShardId(parentShardId);
         kinesisStreamShard.setAdjacentParentShardId(adjacentParentShardId);
@@ -760,7 +760,7 @@ public class KinesisDataFetcherTest extends TestLogger {
                 KinesisDataFetcher<T> fetcher,
                 int numParallelSubtasks,
                 int subtaskIndex) {
-            super("test", mock(KinesisDeserializationSchema.class), properties);
+            super("arn:aws:kinesis:us-east-1:123456789012:stream/test", mock(KinesisDeserializationSchema.class), properties);
             this.fetcher = fetcher;
             this.numParallelSubtasks = numParallelSubtasks;
             this.subtaskIndex = subtaskIndex;
@@ -768,7 +768,7 @@ public class KinesisDataFetcherTest extends TestLogger {
 
         @Override
         protected KinesisDataFetcher<T> createFetcher(
-                List<String> streams,
+                List<String> streamArns,
                 SourceFunction.SourceContext<T> sourceContext,
                 RuntimeContext runtimeContext,
                 Properties configProps,
@@ -951,7 +951,7 @@ public class KinesisDataFetcherTest extends TestLogger {
 
     @Test
     public void testOriginalExceptionIsPreservedWhenInterruptedDuringShutdown() throws Exception {
-        String stream = "fakeStream";
+        String stream = "arn:aws:kinesis:us-east-1:123456789012:stream/fakeStream";
 
         Map<String, List<BlockingQueue<String>>> streamsToShardQueues = new HashMap<>();
         LinkedBlockingQueue<String> queue = new LinkedBlockingQueue<>(10);

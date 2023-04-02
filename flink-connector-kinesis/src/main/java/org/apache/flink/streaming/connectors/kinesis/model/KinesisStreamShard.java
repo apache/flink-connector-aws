@@ -118,7 +118,7 @@ public class KinesisStreamShard implements Serializable {
             KinesisStreamShard kinesisStreamShard) {
         StreamShardMetadata streamShardMetadata = new StreamShardMetadata();
 
-        streamShardMetadata.setStreamName(kinesisStreamShard.getStreamName());
+        streamShardMetadata.setStreamArn(kinesisStreamShard.getStreamName());
         streamShardMetadata.setShardId(kinesisStreamShard.getShard().getShardId());
         streamShardMetadata.setParentShardId(kinesisStreamShard.getShard().getParentShardId());
         streamShardMetadata.setAdjacentParentShardId(

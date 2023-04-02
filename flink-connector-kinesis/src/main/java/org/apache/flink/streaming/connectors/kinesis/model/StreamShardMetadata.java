@@ -18,9 +18,13 @@
 package org.apache.flink.streaming.connectors.kinesis.model;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyInterface;
+import org.apache.flink.streaming.connectors.kinesis.util.StreamConverterUtil;
 
 import java.io.Serializable;
 import java.util.Objects;
+import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -35,6 +39,7 @@ public class StreamShardMetadata implements Serializable {
 
     private static final long serialVersionUID = 5134869582298563604L;
 
+    private String streamArn;
     private String streamName;
     private String shardId;
     private String parentShardId;
@@ -44,8 +49,8 @@ public class StreamShardMetadata implements Serializable {
     private String startingSequenceNumber;
     private String endingSequenceNumber;
 
-    public void setStreamName(String streamName) {
-        this.streamName = streamName;
+    public void setStreamArn(String streamArn) {
+        this.streamArn = streamArn;
     }
 
     public void setShardId(String shardId) {
@@ -76,8 +81,16 @@ public class StreamShardMetadata implements Serializable {
         this.endingSequenceNumber = endingSequenceNumber;
     }
 
+    /**
+     * This method is for backwards compatibility of serialized state.
+     * @return stream name if serialized state has the name
+     */
     public String getStreamName() {
         return this.streamName;
+    }
+
+    public String getStreamArn() {
+        return this.streamArn;
     }
 
     public String getShardId() {
@@ -111,8 +124,8 @@ public class StreamShardMetadata implements Serializable {
     @Override
     public String toString() {
         return "StreamShardMetadata{"
-                + "streamName='"
-                + streamName
+                + "streamArn='"
+                + streamArn
                 + "'"
                 + ", shardId='"
                 + shardId
@@ -149,7 +162,7 @@ public class StreamShardMetadata implements Serializable {
 
         StreamShardMetadata other = (StreamShardMetadata) obj;
 
-        return streamName.equals(other.getStreamName())
+        return streamArn.equals(other.getStreamArn())
                 && shardId.equals(other.getShardId())
                 && Objects.equals(parentShardId, other.getParentShardId())
                 && Objects.equals(adjacentParentShardId, other.getAdjacentParentShardId())
@@ -163,8 +176,8 @@ public class StreamShardMetadata implements Serializable {
     public int hashCode() {
         int hash = 17;
 
-        if (streamName != null) {
-            hash = 37 * hash + streamName.hashCode();
+        if (streamArn != null) {
+            hash = 37 * hash + streamArn.hashCode();
         }
         if (shardId != null) {
             hash = 37 * hash + shardId.hashCode();
@@ -191,7 +204,7 @@ public class StreamShardMetadata implements Serializable {
         return hash;
     }
 
-    /** An equivalence wrapper that only checks for the stream name and shard id for equality. */
+    /** An equivalence wrapper that only checks for the stream ARN and shard id for equality. */
     public static class EquivalenceWrapper {
 
         private final StreamShardMetadata shardMetadata;
@@ -212,7 +225,7 @@ public class StreamShardMetadata implements Serializable {
 
             EquivalenceWrapper other = (EquivalenceWrapper) obj;
 
-            return shardMetadata.getStreamName().equals(other.shardMetadata.getStreamName())
+            return shardMetadata.getStreamArn().equals(other.shardMetadata.getStreamArn())
                     && shardMetadata.getShardId().equals(other.shardMetadata.getShardId());
         }
 
@@ -220,8 +233,8 @@ public class StreamShardMetadata implements Serializable {
         public int hashCode() {
             int hash = 17;
 
-            if (shardMetadata.getStreamName() != null) {
-                hash = 37 * hash + shardMetadata.getStreamName().hashCode();
+            if (shardMetadata.getStreamArn() != null) {
+                hash = 37 * hash + shardMetadata.getStreamArn().hashCode();
             }
             if (shardMetadata.getShardId() != null) {
                 hash = 37 * hash + shardMetadata.getShardId().hashCode();
@@ -231,6 +244,23 @@ public class StreamShardMetadata implements Serializable {
 
         public StreamShardMetadata getShardMetadata() {
             return shardMetadata;
+        }
+
+        /**
+         * This method is used to convert from old shard metadata with only stream name to one with stream ARN.
+         */
+        public static EquivalenceWrapper create(StreamShardMetadata shardMetadata, Properties kinesisConfig) {
+            try {
+                if (shardMetadata.getStreamArn() == null) {
+                    StreamShardMetadata convertedMetadata = new StreamShardMetadata();
+                    convertedMetadata.setShardId(shardMetadata.shardId);
+                    convertedMetadata.setStreamArn(StreamConverterUtil.getStreamArn(shardMetadata.streamName, kinesisConfig));
+                    return new StreamShardMetadata.EquivalenceWrapper(convertedMetadata);
+                }
+                return new StreamShardMetadata.EquivalenceWrapper(shardMetadata);
+            } catch (ExecutionException | InterruptedException e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 }

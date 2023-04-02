@@ -36,35 +36,32 @@ public class GetShardListResult {
     private final Map<String, LinkedList<StreamShardHandle>> streamsToRetrievedShardList =
             new HashMap<>();
 
-    public void addRetrievedShardToStream(String stream, StreamShardHandle retrievedShard) {
-        if (!streamsToRetrievedShardList.containsKey(stream)) {
-            streamsToRetrievedShardList.put(stream, new LinkedList<StreamShardHandle>());
+    public void addRetrievedShardToStream(String streamArn, StreamShardHandle retrievedShard) {
+        if (!streamsToRetrievedShardList.containsKey(streamArn)) {
+            streamsToRetrievedShardList.put(streamArn, new LinkedList<>());
         }
-        streamsToRetrievedShardList.get(stream).add(retrievedShard);
+        streamsToRetrievedShardList.get(streamArn).add(retrievedShard);
     }
 
-    public void addRetrievedShardsToStream(String stream, List<StreamShardHandle> retrievedShards) {
+    public void addRetrievedShardsToStream(
+            String streamArn, List<StreamShardHandle> retrievedShards) {
         if (retrievedShards.size() != 0) {
-            if (!streamsToRetrievedShardList.containsKey(stream)) {
-                streamsToRetrievedShardList.put(stream, new LinkedList<StreamShardHandle>());
+            if (!streamsToRetrievedShardList.containsKey(streamArn)) {
+                streamsToRetrievedShardList.put(streamArn, new LinkedList<>());
             }
-            streamsToRetrievedShardList.get(stream).addAll(retrievedShards);
+            streamsToRetrievedShardList.get(streamArn).addAll(retrievedShards);
         }
     }
 
-    public List<StreamShardHandle> getRetrievedShardListOfStream(String stream) {
-        if (!streamsToRetrievedShardList.containsKey(stream)) {
-            return null;
-        } else {
-            return streamsToRetrievedShardList.get(stream);
-        }
+    public List<StreamShardHandle> getRetrievedShardListOfStream(String streamArn) {
+        return streamsToRetrievedShardList.getOrDefault(streamArn, null);
     }
 
-    public StreamShardHandle getLastSeenShardOfStream(String stream) {
-        if (!streamsToRetrievedShardList.containsKey(stream)) {
+    public StreamShardHandle getLastSeenShardOfStream(String streamArn) {
+        if (!streamsToRetrievedShardList.containsKey(streamArn)) {
             return null;
         } else {
-            return streamsToRetrievedShardList.get(stream).getLast();
+            return streamsToRetrievedShardList.get(streamArn).getLast();
         }
     }
 

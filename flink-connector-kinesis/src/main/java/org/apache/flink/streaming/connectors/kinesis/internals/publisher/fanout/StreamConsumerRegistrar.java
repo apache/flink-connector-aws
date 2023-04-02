@@ -27,7 +27,6 @@ import org.apache.flink.util.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.model.DescribeStreamConsumerResponse;
-import software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryResponse;
 import software.amazon.awssdk.services.kinesis.model.ResourceInUseException;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 
@@ -72,27 +71,21 @@ public class StreamConsumerRegistrar {
      * Register a stream consumer with the given name against the given stream. Blocks until the
      * consumer becomes active. If the stream consumer already exists, the ARN is returned.
      *
-     * @param stream the stream to register the stream consumer against
+     * @param streamArn the stream ARN to register the stream consumer against
      * @param streamConsumerName the name of the new stream consumer
      * @return the stream consumer ARN
      * @throws ExecutionException
      * @throws InterruptedException
      */
-    public String registerStreamConsumer(final String stream, final String streamConsumerName)
+    public String registerStreamConsumer(final String streamArn, final String streamConsumerName)
             throws Exception {
-        LOG.debug("Registering stream consumer - {}::{}", stream, streamConsumerName);
+        LOG.debug("Registering stream consumer - {}::{}", streamArn, streamConsumerName);
 
         int attempt = 1;
 
         if (configuration.getEfoRegistrationType() == LAZY) {
             registrationBackoff(configuration, backoff, attempt++);
         }
-
-        DescribeStreamSummaryResponse describeStreamSummaryResponse =
-                kinesisProxyV2Interface.describeStreamSummary(stream);
-        String streamArn = describeStreamSummaryResponse.streamDescriptionSummary().streamARN();
-
-        LOG.debug("Found stream ARN - {}", streamArn);
 
         Optional<DescribeStreamConsumerResponse> describeStreamConsumerResponse =
                 describeStreamConsumer(streamArn, streamConsumerName);
@@ -119,15 +112,15 @@ public class StreamConsumerRegistrar {
     /**
      * Deregister the stream consumer with the given ARN. Blocks until the consumer is deleted.
      *
-     * @param stream the stream in which to deregister the consumer
+     * @param streamArn the ARN of stream in which to deregister the consumer
      * @throws ExecutionException
      * @throws InterruptedException
      */
-    public void deregisterStreamConsumer(final String stream) throws Exception {
-        LOG.debug("Deregistering stream consumer - {}", stream);
+    public void deregisterStreamConsumer(final String streamArn) throws Exception {
+        LOG.debug("Deregistering stream consumer - {}", streamArn);
 
         int attempt = 1;
-        String streamConsumerArn = getStreamConsumerArn(stream);
+        String streamConsumerArn = getStreamConsumerArn(streamArn);
 
         deregistrationBackoff(configuration, backoff, attempt++);
 
@@ -141,7 +134,7 @@ public class StreamConsumerRegistrar {
 
         waitForConsumerToDeregister(response.orElse(null), streamConsumerArn, attempt);
 
-        LOG.debug("Deregistered stream consumer - {}", streamConsumerArn);
+        LOG.debug("Deregistered streamArn consumer - {}", streamConsumerArn);
     }
 
     /** Destroy any open resources used by the factory. */
@@ -296,11 +289,11 @@ public class StreamConsumerRegistrar {
         return findThrowable(ex, ResourceInUseException.class).isPresent();
     }
 
-    private String getStreamConsumerArn(final String stream) {
-        Optional<String> streamConsumerArn = configuration.getStreamConsumerArn(stream);
+    private String getStreamConsumerArn(final String streamArn) {
+        Optional<String> streamConsumerArn = configuration.getStreamConsumerArn(streamArn);
         if (!streamConsumerArn.isPresent()) {
             throw new IllegalArgumentException(
-                    "Stream consumer ARN not found for stream: " + stream);
+                    "Stream consumer ARN not found for stream: " + streamArn);
         }
 
         return streamConsumerArn.get();

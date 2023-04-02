@@ -294,7 +294,7 @@ public class KinesisConfigUtilTest {
         testConfig.setProperty(
                 ConsumerConfigConstants.EFO_CONSUMER_ARN_PREFIX + ".stream1", "fakedArn1");
         List<String> streams = new ArrayList<>();
-        streams.add("stream1");
+        streams.add("arn:aws:kinesis:us-east-1:123456789012:stream/stream1");
         KinesisConfigUtil.validateEfoConfiguration(testConfig, streams);
     }
 
@@ -312,7 +312,7 @@ public class KinesisConfigUtilTest {
         testConfig.setProperty(
                 ConsumerConfigConstants.EFO_CONSUMER_ARN_PREFIX + ".stream2", "fakedArn2");
         List<String> streams = new ArrayList<>();
-        streams.add("stream1");
+        streams.add("arn:aws:kinesis:us-east-1:123456789012:stream/stream1");
         KinesisConfigUtil.validateEfoConfiguration(testConfig, streams);
     }
 
@@ -333,7 +333,7 @@ public class KinesisConfigUtilTest {
                 ConsumerConfigConstants.EFORegistrationType.NONE.toString());
         testConfig.setProperty(
                 ConsumerConfigConstants.EFO_CONSUMER_ARN_PREFIX + ".stream1", "fakedArn1");
-        List<String> streams = Arrays.asList("stream1", "stream2");
+        List<String> streams = Arrays.asList("arn:aws:kinesis:us-east-1:123456789012:stream/stream1", "arn:aws:kinesis:us-east-1:123456789012:stream/stream2");
         KinesisConfigUtil.validateEfoConfiguration(testConfig, streams);
     }
 

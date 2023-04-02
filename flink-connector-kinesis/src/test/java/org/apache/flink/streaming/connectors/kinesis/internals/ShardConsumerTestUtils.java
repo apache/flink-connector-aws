@@ -95,7 +95,7 @@ public class ShardConsumerTestUtils {
         ShardConsumerMetricsReporter shardMetricsReporter =
                 new ShardConsumerMetricsReporter(metricGroup);
 
-        StreamShardHandle fakeToBeConsumedShard = getMockStreamShard("fakeStream", 0);
+        StreamShardHandle fakeToBeConsumedShard = getMockStreamShard("arn:aws:kinesis:us-east-1:123456789012:stream/fakeStream", 0);
 
         LinkedList<KinesisStreamShardState> subscribedShardsStateUnderTest = new LinkedList<>();
         subscribedShardsStateUnderTest.add(
@@ -110,7 +110,7 @@ public class ShardConsumerTestUtils {
                 new KinesisDeserializationSchemaWrapper<>(new SimpleStringSchema());
         TestableKinesisDataFetcher<String> fetcher =
                 new TestableKinesisDataFetcher<>(
-                        Collections.singletonList("fakeStream"),
+                        Collections.singletonList("arn:aws:kinesis:us-east-1:123456789012:stream/fakeStream"),
                         sourceContext,
                         consumerProperties,
                         deserializationSchema,
@@ -120,7 +120,7 @@ public class ShardConsumerTestUtils {
                         subscribedShardsStateUnderTest,
                         KinesisDataFetcher
                                 .createInitialSubscribedStreamsToLastDiscoveredShardsState(
-                                        Collections.singletonList("fakeStream")),
+                                        Collections.singletonList("arn:aws:kinesis:us-east-1:123456789012:stream/fakeStream")),
                         Mockito.mock(KinesisProxyInterface.class),
                         Mockito.mock(KinesisProxyAsyncV2Interface.class));
 

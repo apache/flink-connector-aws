@@ -20,7 +20,10 @@ package org.apache.flink.streaming.connectors.kinesis.proxy;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.streaming.connectors.kinesis.model.StreamShardHandle;
 
+import com.amazonaws.services.kinesis.model.DescribeStreamResult;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
+
+import javax.annotation.Nullable;
 
 import java.util.Map;
 
@@ -71,13 +74,24 @@ public interface KinesisProxyInterface {
      * Get shard list of multiple Kinesis streams, ignoring the shards of each stream before a
      * specified last seen shard id.
      *
-     * @param streamNamesWithLastSeenShardIds a map with stream as key, and last seen shard id as
+     * @param streamArnsWithLastSeenShardIds a map with stream as key, and last seen shard id as
      *     value
      * @return result of the shard list query
      * @throws InterruptedException this method will retry with backoff if AWS Kinesis complains
      *     that the operation has exceeded the rate limit; this exception will be thrown if the
      *     backoff is interrupted.
      */
-    GetShardListResult getShardList(Map<String, String> streamNamesWithLastSeenShardIds)
+    GetShardListResult getShardList(Map<String, String> streamArnsWithLastSeenShardIds)
             throws InterruptedException;
+
+    /**
+     * Get metainfo for a Kinesis stream, which contains information about which shards this Kinesis
+     * stream possess.
+     *
+     * @param streamName the stream to describe
+     * @param startShardId which shard to start with for this describe operation
+     * @return the result of the describe stream operation
+     */
+    DescribeStreamResult describeStream(String streamName, @Nullable String startShardId)
+        throws InterruptedException;
 }

@@ -29,9 +29,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 
@@ -48,6 +46,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /** Tests for {@link FanOutRecordPublisherConfiguration}. */
 public class FanOutRecordPublisherConfigurationTest extends TestLogger {
+    private static final String STREAM_1_NAME = "fakedstream1";
+    private static final String STREAM_1_ARN = "arn:aws:kinesis:us-east-1:123456789012:stream/fakedstream1";
+    private static final String STREAM_2_NAME = "fakedstream2";
+    private static final String STREAM_2_ARN = "arn:aws:kinesis:us-east-1:123456789012:stream/fakedstream2";
 
     @Rule public ExpectedException thrown = ExpectedException.none();
 
@@ -88,25 +90,25 @@ public class FanOutRecordPublisherConfigurationTest extends TestLogger {
 
     @Test
     public void testNoneStrategyWithStreams() {
-        List<String> streams = Arrays.asList("fakedstream1", "fakedstream2");
+        List<String> streamNames = Arrays.asList(STREAM_1_NAME, STREAM_2_NAME);
+        List<String> streamArns = Arrays.asList(STREAM_1_ARN, STREAM_2_ARN);
         Properties testConfig = TestUtils.getStandardProperties();
         testConfig.setProperty(RECORD_PUBLISHER_TYPE, EFO.toString());
         testConfig.setProperty(EFO_REGISTRATION_TYPE, NONE.toString());
-        streams.forEach(
+        streamNames.forEach(
                 stream -> testConfig.setProperty(EFO_CONSUMER_ARN_PREFIX + "." + stream, stream));
         FanOutRecordPublisherConfiguration fanOutRecordPublisherConfiguration =
-                new FanOutRecordPublisherConfiguration(testConfig, streams);
-        Map<String, String> expectedStreamArns = new HashMap<>();
-        expectedStreamArns.put("fakedstream1", "fakedstream1");
-        expectedStreamArns.put("fakedstream2", "fakedstream2");
+                new FanOutRecordPublisherConfiguration(testConfig, streamArns);
 
-        assertThat(Optional.of("fakedstream1"))
-                .isEqualTo(fanOutRecordPublisherConfiguration.getStreamConsumerArn("fakedstream1"));
+        assertThat(Optional.of(STREAM_1_NAME))
+                .isEqualTo(fanOutRecordPublisherConfiguration.getStreamConsumerArn(STREAM_1_ARN));
+        assertThat(Optional.of(STREAM_2_NAME))
+            .isEqualTo(fanOutRecordPublisherConfiguration.getStreamConsumerArn(STREAM_2_ARN));
     }
 
     @Test
     public void testNoneStrategyWithNoStreams() {
-        List<String> streams = Arrays.asList("fakedstream1", "fakedstream2");
+        List<String> streams = Arrays.asList(STREAM_1_ARN, STREAM_2_ARN);
 
         String msg =
                 "Invalid efo consumer arn settings for not providing consumer arns: flink.stream.efo.consumerarn.fakedstream1, flink.stream.efo.consumerarn.fakedstream2";
@@ -122,7 +124,7 @@ public class FanOutRecordPublisherConfigurationTest extends TestLogger {
 
     @Test
     public void testNoneStrategyWithNotEnoughStreams() {
-        List<String> streams = Arrays.asList("fakedstream1", "fakedstream2");
+        List<String> streams = Arrays.asList(STREAM_1_ARN, STREAM_2_ARN);
 
         String msg =
                 "Invalid efo consumer arn settings for not providing consumer arns: flink.stream.efo.consumerarn.fakedstream2";
@@ -132,7 +134,7 @@ public class FanOutRecordPublisherConfigurationTest extends TestLogger {
         Properties testConfig = TestUtils.getStandardProperties();
         testConfig.setProperty(RECORD_PUBLISHER_TYPE, EFO.toString());
         testConfig.setProperty(EFO_REGISTRATION_TYPE, NONE.toString());
-        testConfig.setProperty(EFO_CONSUMER_ARN_PREFIX + "." + "fakedstream1", "fakedstream1");
+        testConfig.setProperty(EFO_CONSUMER_ARN_PREFIX + "." + STREAM_1_NAME, STREAM_1_NAME);
 
         new FanOutRecordPublisherConfiguration(testConfig, streams);
     }

@@ -99,7 +99,7 @@ public class FakeKinesisClientFactory {
             @Override
             public GetShardIteratorResult getShardIterator(
                     GetShardIteratorRequest getShardIteratorRequest) {
-                if (getShardIteratorRequest.getStreamName().equals(streamName)
+                if (getShardIteratorRequest.getStreamARN().equals(streamName)
                         && shardIds.contains(getShardIteratorRequest.getShardId())) {
                     return new GetShardIteratorResult().withShardIterator("fakeShardIterator");
                 }

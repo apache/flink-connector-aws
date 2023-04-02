@@ -355,20 +355,20 @@ public class KinesisProxyTest {
     @Test
     public void testGetShardWithNoNewShards() throws Exception {
         // given
-        String fakeStreamName = "fake-stream";
+        String fakeStreamArn = "arn:aws:kinesis:us-east-1:123456789012:stream/fake-stream";
 
         AmazonKinesis mockClient = mock(AmazonKinesis.class);
         KinesisProxy kinesisProxy = getProxy(mockClient);
 
         when(mockClient.listShards(
                         new ListShardsRequest()
-                                .withStreamName(fakeStreamName)
+                                .withStreamARN(fakeStreamArn)
                                 .withExclusiveStartShardId(
                                         KinesisShardIdGenerator.generateFromShardOrder(1))))
                 .thenReturn(new ListShardsResult().withShards(Collections.emptyList()));
 
         HashMap<String, String> streamHashMap = new HashMap<>();
-        streamHashMap.put(fakeStreamName, KinesisShardIdGenerator.generateFromShardOrder(1));
+        streamHashMap.put(fakeStreamArn, KinesisShardIdGenerator.generateFromShardOrder(1));
 
         // when
         GetShardListResult shardListResult = kinesisProxy.getShardList(streamHashMap);

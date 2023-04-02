@@ -122,8 +122,8 @@ public class FakeKinesisFanOutBehavioursFactory {
 
     public static KinesisProxySyncV2Interface streamNotFound() {
         return new StreamConsumerFakeKinesisSync.Builder()
-                .withThrowsWhileDescribingStream(ResourceNotFoundException.builder().build())
-                .build();
+            .withStreamNotFound(true)
+            .build();
     }
 
     // ------------------------------------------------------------------------
@@ -519,12 +519,14 @@ public class FakeKinesisFanOutBehavioursFactory {
         private String streamConsumerArn = STREAM_CONSUMER_ARN_EXISTING;
         private ConsumerStatus streamConsumerStatus;
         private boolean streamConsumerNotFound;
+        private boolean streamNotFound;
         private int numberOfDescribeStreamConsumerInvocations = 0;
 
         private StreamConsumerFakeKinesisSync(final Builder builder) {
             this.throwsWhileDescribingStream = builder.throwsWhileDescribingStream;
             this.streamConsumerStatus = builder.streamConsumerStatus;
             this.streamConsumerNotFound = builder.streamConsumerNotFound;
+            this.streamNotFound = builder.streamNotFound;
         }
 
         public int getNumberOfDescribeStreamConsumerInvocations() {
@@ -548,7 +550,10 @@ public class FakeKinesisFanOutBehavioursFactory {
         public RegisterStreamConsumerResponse registerStreamConsumer(
                 String streamArn, String consumerName)
                 throws InterruptedException, ExecutionException {
-            assertThat(streamArn).isEqualTo(STREAM_ARN);
+
+            if (streamNotFound) {
+                throw new ExecutionException(ResourceNotFoundException.builder().build());
+            }
 
             streamConsumerNotFound = false;
             streamConsumerArn = STREAM_CONSUMER_ARN_NEW;
@@ -573,7 +578,6 @@ public class FakeKinesisFanOutBehavioursFactory {
         public DescribeStreamConsumerResponse describeStreamConsumer(
                 final String streamArn, final String consumerName)
                 throws InterruptedException, ExecutionException {
-            assertThat(streamArn).isEqualTo(STREAM_ARN);
 
             numberOfDescribeStreamConsumerInvocations++;
 
@@ -586,7 +590,7 @@ public class FakeKinesisFanOutBehavioursFactory {
                 streamConsumerStatus = ACTIVE;
             }
 
-            if (streamConsumerNotFound) {
+            if (streamNotFound || streamConsumerNotFound) {
                 throw new ExecutionException(ResourceNotFoundException.builder().build());
             }
 
@@ -612,6 +616,7 @@ public class FakeKinesisFanOutBehavioursFactory {
             private RuntimeException throwsWhileDescribingStream;
             private ConsumerStatus streamConsumerStatus = ACTIVE;
             private boolean streamConsumerNotFound = false;
+            private boolean streamNotFound = false;
 
             public StreamConsumerFakeKinesisSync build() {
                 return new StreamConsumerFakeKinesisSync(this);
@@ -619,6 +624,11 @@ public class FakeKinesisFanOutBehavioursFactory {
 
             public Builder withStreamConsumerNotFound(final boolean streamConsumerNotFound) {
                 this.streamConsumerNotFound = streamConsumerNotFound;
+                return this;
+            }
+
+            public Builder withStreamNotFound(final boolean streamNotFound) {
+                this.streamNotFound = streamNotFound;
                 return this;
             }
 

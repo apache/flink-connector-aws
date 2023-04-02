@@ -29,6 +29,7 @@ import org.junit.rules.ExpectedException;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
@@ -50,6 +51,7 @@ import static org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesi
 import static org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory.STREAM_CONSUMER_ARN_NEW;
 import static org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory.StreamConsumerFakeKinesisSync.NUMBER_OF_DESCRIBE_REQUESTS_TO_ACTIVATE;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.instanceOf;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -64,7 +66,7 @@ import static org.mockito.Mockito.when;
 /** Tests for {@link StreamConsumerRegistrar}. */
 public class StreamConsumerRegistrarTest {
 
-    private static final String STREAM = "stream";
+    private static final String STREAM = "arn:aws:kinesis:us-east-1:123456789012:stream/stream";
 
     private static final long EXPECTED_REGISTRATION_MAX = 1;
     private static final long EXPECTED_REGISTRATION_BASE = 2;
@@ -78,7 +80,8 @@ public class StreamConsumerRegistrarTest {
 
     @Test
     public void testStreamNotFoundWhenRegisteringThrowsException() throws Exception {
-        thrown.expect(ResourceNotFoundException.class);
+        thrown.expect(ExecutionException.class);
+        thrown.expectCause(instanceOf(ResourceNotFoundException.class));
 
         KinesisProxySyncV2Interface kinesis = FakeKinesisFanOutBehavioursFactory.streamNotFound();
         StreamConsumerRegistrar registrar = createRegistrar(kinesis, mock(FullJitterBackoff.class));
@@ -141,7 +144,7 @@ public class StreamConsumerRegistrarTest {
             throws Exception {
         thrown.expect(FlinkKinesisTimeoutException.class);
         thrown.expectMessage(
-                "Timeout waiting for stream consumer to become active: name on stream-arn");
+                "Timeout waiting for stream consumer to become active: name on arn:aws:kinesis:us-east-1:123456789012:stream/stream");
 
         StreamConsumerFakeKinesisSync kinesis =
                 FakeKinesisFanOutBehavioursFactory.registerExistingConsumerAndWaitToBecomeActive();

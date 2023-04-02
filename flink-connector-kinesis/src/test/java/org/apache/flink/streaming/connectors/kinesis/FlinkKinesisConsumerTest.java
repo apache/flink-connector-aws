@@ -44,6 +44,7 @@ import org.apache.flink.streaming.connectors.kinesis.model.SentinelSequenceNumbe
 import org.apache.flink.streaming.connectors.kinesis.model.SequenceNumber;
 import org.apache.flink.streaming.connectors.kinesis.model.StreamShardHandle;
 import org.apache.flink.streaming.connectors.kinesis.model.StreamShardMetadata;
+import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyInterface;
 import org.apache.flink.streaming.connectors.kinesis.serialization.KinesisDeserializationSchema;
 import org.apache.flink.streaming.connectors.kinesis.serialization.KinesisDeserializationSchemaWrapper;
 import org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisBehavioursFactory;
@@ -157,7 +158,7 @@ public class FlinkKinesisConsumerTest extends TestLogger {
         }
 
         FlinkKinesisConsumer<String> consumer =
-                new FlinkKinesisConsumer<>("fakeStream", new SimpleStringSchema(), config);
+                new FlinkKinesisConsumer<>("arn:aws:kinesis:us-east-1:123456789012:stream/fakeStream", new SimpleStringSchema(), config);
         RuntimeContext context = mock(RuntimeContext.class);
         when(context.getIndexOfThisSubtask()).thenReturn(0);
         when(context.getNumberOfParallelSubtasks()).thenReturn(2);
@@ -275,7 +276,7 @@ public class FlinkKinesisConsumerTest extends TestLogger {
         // ----------------------------------------------------------------------
 
         FlinkKinesisConsumer<String> consumer =
-                new FlinkKinesisConsumer<>("fakeStream", new SimpleStringSchema(), config);
+            new FlinkKinesisConsumer<>("arn:aws:kinesis:us-east-1:123456789012:stream/fakeStream", new SimpleStringSchema(), config);
         FlinkKinesisConsumer<?> mockedConsumer = spy(consumer);
 
         RuntimeContext context = mock(RuntimeContext.class);
@@ -320,7 +321,7 @@ public class FlinkKinesisConsumerTest extends TestLogger {
         // assume the given config is correct
         try (MockedStatic<KinesisConfigUtil> kcu = mockStatic(KinesisConfigUtil.class)) {
             TestableFlinkKinesisConsumer consumer =
-                    new TestableFlinkKinesisConsumer("fakeStream", new Properties(), 10, 2);
+                    new TestableFlinkKinesisConsumer("arn:aws:kinesis:us-east-1:123456789012:stream/fakeStream", new Properties(), 10, 2);
             consumer.open(new Configuration());
             consumer.run(Mockito.mock(SourceFunction.SourceContext.class));
         }
@@ -374,7 +375,7 @@ public class FlinkKinesisConsumerTest extends TestLogger {
             // ----------------------------------------------------------------------
 
             TestableFlinkKinesisConsumer consumer =
-                    new TestableFlinkKinesisConsumer("fakeStream", new Properties(), 10, 2);
+                    new TestableFlinkKinesisConsumer("arn:aws:kinesis:us-east-1:123456789012:stream/fakeStream", new Properties(), 10, 2);
             consumer.initializeState(initializationContext);
             consumer.open(new Configuration());
             consumer.run(Mockito.mock(SourceFunction.SourceContext.class));
@@ -451,7 +452,7 @@ public class FlinkKinesisConsumerTest extends TestLogger {
             // ----------------------------------------------------------------------
 
             TestableFlinkKinesisConsumer consumer =
-                    new TestableFlinkKinesisConsumer("fakeStream", new Properties(), 10, 2);
+                    new TestableFlinkKinesisConsumer("arn:aws:kinesis:us-east-1:123456789012:stream/fakeStream", new Properties(), 10, 2);
             consumer.initializeState(initializationContext);
             consumer.open(new Configuration());
             consumer.run(Mockito.mock(SourceFunction.SourceContext.class));
@@ -564,7 +565,7 @@ public class FlinkKinesisConsumerTest extends TestLogger {
             // ----------------------------------------------------------------------
 
             TestableFlinkKinesisConsumer consumer =
-                    new TestableFlinkKinesisConsumer("fakeStream", new Properties(), 10, 2);
+                    new TestableFlinkKinesisConsumer("arn:aws:kinesis:us-east-1:123456789012:stream/fakeStream", new Properties(), 10, 2);
             consumer.initializeState(initializationContext);
             consumer.open(new Configuration());
             consumer.run(Mockito.mock(SourceFunction.SourceContext.class));
@@ -601,7 +602,7 @@ public class FlinkKinesisConsumerTest extends TestLogger {
         String endingSequenceNumber = "seq-00000031";
 
         StreamShardMetadata streamShardMetadata = new StreamShardMetadata();
-        streamShardMetadata.setStreamName(streamName);
+        streamShardMetadata.setStreamArn(streamName);
         streamShardMetadata.setShardId(shardId);
         streamShardMetadata.setParentShardId(parentShardId);
         streamShardMetadata.setAdjacentParentShardId(adjacentParentShardId);
@@ -636,7 +637,7 @@ public class FlinkKinesisConsumerTest extends TestLogger {
 
     /**
      * FLINK-8484: ensure that a state change in the StreamShardMetadata other than {@link
-     * StreamShardMetadata#getShardId()} or {@link StreamShardMetadata#getStreamName()} does not
+     * StreamShardMetadata#getShardId()} or {@link StreamShardMetadata#getStreamArn()} does not
      * result in the shard not being able to be restored. This handles the corner case where the
      * stored shard metadata is open (no ending sequence number), but after the job restore, the
      * shard has been closed (ending number set) due to re-sharding, and we can no longer rely on
@@ -688,7 +689,7 @@ public class FlinkKinesisConsumerTest extends TestLogger {
                 fakeRestoredState.keySet().iterator().next();
         final StreamShardHandle closedStreamShardHandle =
                 new StreamShardHandle(
-                        originalStreamShardHandle.getStreamName(),
+                        originalStreamShardHandle.getStreamArn(),
                         originalStreamShardHandle.getShard());
         // close the shard handle by setting an ending sequence number
         final SequenceNumberRange sequenceNumberRange = new SequenceNumberRange();
@@ -707,7 +708,7 @@ public class FlinkKinesisConsumerTest extends TestLogger {
             // ----------------------------------------------------------------------
 
             TestableFlinkKinesisConsumer consumer =
-                    new TestableFlinkKinesisConsumer("fakeStream", new Properties(), 10, 2);
+                    new TestableFlinkKinesisConsumer("arn:aws:kinesis:us-east-1:123456789012:stream/fakeStream", new Properties(), 10, 2);
             consumer.initializeState(initializationContext);
             consumer.open(new Configuration());
             consumer.run(Mockito.mock(SourceFunction.SourceContext.class));
@@ -839,12 +840,12 @@ public class FlinkKinesisConsumerTest extends TestLogger {
 
     @Test
     public void testPeriodicWatermark() throws Exception {
-        String streamName = "fakeStreamName";
+        String streamArn = "arn:aws:kinesis:us-east-1:123456789012:stream/fakeStreamName";
         Time maxOutOfOrderness = Time.milliseconds(5);
         long autoWatermarkInterval = 1_000;
 
         HashMap<String, String> subscribedStreamsToLastDiscoveredShardIds = new HashMap<>();
-        subscribedStreamsToLastDiscoveredShardIds.put(streamName, null);
+        subscribedStreamsToLastDiscoveredShardIds.put(streamArn, null);
 
         KinesisDeserializationSchema<String> deserializationSchema =
                 new KinesisDeserializationSchemaWrapper<>(new SimpleStringSchema());
@@ -857,14 +858,14 @@ public class FlinkKinesisConsumerTest extends TestLogger {
         BlockingQueue<String> shard2 = new LinkedBlockingQueue<>();
 
         Map<String, List<BlockingQueue<String>>> streamToQueueMap = new HashMap<>();
-        streamToQueueMap.put(streamName, Arrays.asList(shard1, shard2));
+        streamToQueueMap.put(streamArn, Arrays.asList(shard1, shard2));
 
         // override createFetcher to mock Kinesis
         FlinkKinesisConsumer<String> sourceFunc =
-                new FlinkKinesisConsumer<String>(streamName, deserializationSchema, props) {
+                new FlinkKinesisConsumer<String>(streamArn, deserializationSchema, props) {
                     @Override
                     protected KinesisDataFetcher<String> createFetcher(
-                            List<String> streams,
+                            List<String> streamArns,
                             SourceContext<String> sourceContext,
                             RuntimeContext runtimeContext,
                             Properties configProps,
@@ -872,7 +873,7 @@ public class FlinkKinesisConsumerTest extends TestLogger {
 
                         KinesisDataFetcher<String> fetcher =
                                 new KinesisDataFetcher<String>(
-                                        streams,
+                                        streamArns,
                                         sourceContext,
                                         sourceContext.getCheckpointLock(),
                                         runtimeContext,
@@ -979,14 +980,14 @@ public class FlinkKinesisConsumerTest extends TestLogger {
     @Test
     public void testSourceSynchronization() throws Exception {
 
-        final String streamName = "fakeStreamName";
+        final String streamArn = "arn:aws:kinesis:us-east-1:123456789012:stream/fakeStreamName";
         final Time maxOutOfOrderness = Time.milliseconds(5);
         final long autoWatermarkInterval = 1_000;
         final long watermarkSyncInterval = autoWatermarkInterval + 1;
 
         TestWatermarkTracker.WATERMARK.set(0);
         HashMap<String, String> subscribedStreamsToLastDiscoveredShardIds = new HashMap<>();
-        subscribedStreamsToLastDiscoveredShardIds.put(streamName, null);
+        subscribedStreamsToLastDiscoveredShardIds.put(streamArn, null);
 
         final KinesisDeserializationSchema<String> deserializationSchema =
                 new KinesisDeserializationSchemaWrapper<>(new OpenCheckingStringSchema());
@@ -1002,14 +1003,14 @@ public class FlinkKinesisConsumerTest extends TestLogger {
         BlockingQueue<String> shard1 = new LinkedBlockingQueue<>();
 
         Map<String, List<BlockingQueue<String>>> streamToQueueMap = new HashMap<>();
-        streamToQueueMap.put(streamName, Collections.singletonList(shard1));
+        streamToQueueMap.put(streamArn, Collections.singletonList(shard1));
 
         // override createFetcher to mock Kinesis
         FlinkKinesisConsumer<String> sourceFunc =
-                new FlinkKinesisConsumer<String>(streamName, deserializationSchema, props) {
+                new FlinkKinesisConsumer<String>(streamArn, deserializationSchema, props) {
                     @Override
                     protected KinesisDataFetcher<String> createFetcher(
-                            List<String> streams,
+                            List<String> streamArns,
                             SourceFunction.SourceContext<String> sourceContext,
                             RuntimeContext runtimeContext,
                             Properties configProps,
@@ -1017,7 +1018,7 @@ public class FlinkKinesisConsumerTest extends TestLogger {
 
                         KinesisDataFetcher<String> fetcher =
                                 new KinesisDataFetcher<String>(
-                                        streams,
+                                        streamArns,
                                         sourceContext,
                                         sourceContext.getCheckpointLock(),
                                         runtimeContext,
@@ -1184,7 +1185,7 @@ public class FlinkKinesisConsumerTest extends TestLogger {
     public void testCloseConnectorBeforeSubtaskStart() throws Exception {
         Properties config = TestUtils.getStandardProperties();
         FlinkKinesisConsumer<String> consumer =
-                new FlinkKinesisConsumer<>("fakeStream", new SimpleStringSchema(), config);
+            new FlinkKinesisConsumer<>("arn:aws:kinesis:us-east-1:123456789012:stream/fakeStream", new SimpleStringSchema(), config);
         consumer.close();
     }
 

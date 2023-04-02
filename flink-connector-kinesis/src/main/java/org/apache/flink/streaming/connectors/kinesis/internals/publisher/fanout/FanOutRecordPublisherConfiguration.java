@@ -122,17 +122,17 @@ public class FanOutRecordPublisherConfiguration {
      * Creates a FanOutRecordPublisherConfiguration.
      *
      * @param configProps the configuration properties from config file.
-     * @param streams the streams which is sent to match the EFO consumer arn if the EFO
+     * @param streamArns the stream ARNs which is sent to match the EFO consumer arn if the EFO
      *     registration mode is set to `NONE`.
      */
     public FanOutRecordPublisherConfiguration(
-            final Properties configProps, final List<String> streams) {
+            final Properties configProps, final List<String> streamArns) {
         Preconditions.checkArgument(
                 configProps
                         .getProperty(ConsumerConfigConstants.RECORD_PUBLISHER_TYPE)
                         .equals(RecordPublisherType.EFO.toString()),
                 "Only efo record publisher can register a FanOutProperties.");
-        KinesisConfigUtil.validateEfoConfiguration(configProps, streams);
+        KinesisConfigUtil.validateEfoConfiguration(configProps, streamArns);
 
         efoRegistrationType =
                 EFORegistrationType.valueOf(
@@ -146,10 +146,10 @@ public class FanOutRecordPublisherConfiguration {
             consumerName = configProps.getProperty(ConsumerConfigConstants.EFO_CONSUMER_NAME);
         }
 
-        for (String stream : streams) {
-            String key = efoConsumerArn(stream);
+        for (String streamArn : streamArns) {
+            String key = efoConsumerArn(streamArn);
             if (configProps.containsKey(key)) {
-                streamConsumerArns.put(stream, configProps.getProperty(key));
+                streamConsumerArns.put(streamArn, configProps.getProperty(key));
             }
         }
 
@@ -466,10 +466,10 @@ public class FanOutRecordPublisherConfiguration {
     }
 
     /**
-     * Get the according consumer arn to the stream, will be null if efo registration type is 'LAZY'
-     * or 'EAGER'.
+     * Get the according consumer arn to the stream ARN, will be null if efo registration type is
+     * 'LAZY' or 'EAGER'.
      */
-    public Optional<String> getStreamConsumerArn(String stream) {
-        return Optional.ofNullable(streamConsumerArns.get(stream));
+    public Optional<String> getStreamConsumerArn(String streamArn) {
+        return Optional.ofNullable(streamConsumerArns.get(streamArn));
     }
 }

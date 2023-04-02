@@ -111,7 +111,7 @@ public class FanOutRecordPublisher implements RecordPublisher {
             throws InterruptedException {
         LOG.info(
                 "Running fan out record publisher on {}::{} from {} - {}",
-                subscribedShard.getStreamName(),
+                subscribedShard.getStreamArn(),
                 subscribedShard.getShard().getShardId(),
                 nextStartingPosition.getShardIteratorType(),
                 nextStartingPosition.getStartingMarker());
@@ -131,7 +131,7 @@ public class FanOutRecordPublisher implements RecordPublisher {
 
         LOG.info(
                 "Subscription expired {}::{}, with status {}",
-                subscribedShard.getStreamName(),
+                subscribedShard.getStreamArn(),
                 subscribedShard.getShard().getShardId(),
                 result);
 
