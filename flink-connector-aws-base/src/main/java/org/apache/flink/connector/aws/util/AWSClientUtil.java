@@ -170,7 +170,7 @@ public class AWSClientUtil extends AWSGeneralUtil {
      *
      * @param configProps configuration properties
      * @param httpClient the underlying HTTP client used to talk to AWS
-     * @param clientBuilder httpClientBuilder to build the underlying HTTP client
+     * @param clientBuilder the builder for the AWS SDK client
      * @param awsUserAgentPrefixFormat user agent prefix for Flink
      * @param awsClientUserAgentPrefix user agent prefix for kinesis client
      * @return a new AWS Sync Client
