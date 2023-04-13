@@ -23,6 +23,8 @@ import org.apache.flink.connector.aws.config.AWSConfigConstants;
 import org.apache.flink.connector.aws.config.AWSConfigConstants.CredentialProvider;
 import org.apache.flink.util.ExceptionUtils;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
@@ -46,6 +48,7 @@ import software.amazon.awssdk.services.sts.model.AssumeRoleRequest;
 import software.amazon.awssdk.utils.AttributeMap;
 import software.amazon.awssdk.utils.SdkAutoCloseable;
 
+import java.lang.reflect.InvocationTargetException;
 import java.net.URI;
 import java.nio.file.Paths;
 import java.time.Duration;
@@ -57,6 +60,8 @@ import java.util.regex.Pattern;
 /** Some general utilities specific to Amazon Web Service. */
 @Internal
 public class AWSGeneralUtil {
+    private static final Logger LOG = LoggerFactory.getLogger(AWSGeneralUtil.class);
+
     private static final Duration CONNECTION_ACQUISITION_TIMEOUT = Duration.ofSeconds(60);
     private static final int INITIAL_WINDOW_SIZE_BYTES = 512 * 1024; // 512 KB
     private static final Duration HEALTH_CHECK_PING_PERIOD = Duration.ofSeconds(60);
@@ -140,6 +145,11 @@ public class AWSGeneralUtil {
             case SYS_PROP:
                 return SystemPropertyCredentialsProvider.create();
 
+            case CUSTOM:
+                return getCustomCredentialProvider(
+                        configProps,
+                        AWSConfigConstants.customCredentialsProviderClass(configPrefix));
+
             case PROFILE:
                 return getProfileCredentialProvider(configProps, configPrefix);
 
@@ -166,6 +176,45 @@ public class AWSGeneralUtil {
             default:
                 throw new IllegalArgumentException(
                         "Credential provider not supported: " + credentialProviderType);
+        }
+    }
+
+    /**
+     * Tries to instantiate the user's custom AWS credential provider class.
+     *
+     * @param conf Properties object that contains all the provided config and that we pass down to
+     *     the custom credential provider implementation's constructor
+     * @param confKey Config key we use to retrieve the credential provider class name specified by
+     *     the user
+     * @throws ClassCastException if the specified class does not implement AwsCredentialsProvider
+     * @throws RuntimeException if the specified class does not exist or does not have a constructor
+     *     with signature `MyCustomCredentialsClass(Properties props)`.
+     * @return an AwsCredentialsProvider object
+     */
+    public static AwsCredentialsProvider getCustomCredentialProvider(
+            final Properties conf, final String confKey) {
+        String configuredClass = conf.getProperty(confKey);
+        if (configuredClass == null) {
+            throw new RuntimeException(
+                    "No custom AWS credential provider class was provided with config key "
+                            + confKey);
+        }
+        try {
+            Class<?> customLoaderCls = Class.forName(configuredClass);
+            return (AwsCredentialsProvider)
+                    customLoaderCls.getDeclaredConstructor(Properties.class).newInstance(conf);
+        } catch (ClassNotFoundException | NoSuchMethodException e) {
+            LOG.error(
+                    "Failed to find the specified custom AWS credentials provider {} {}",
+                    e.getMessage(),
+                    e);
+            throw new RuntimeException(e);
+        } catch (InvocationTargetException | InstantiationException | IllegalAccessException e) {
+            LOG.error(
+                    "Failed to instantiate the specified custom AWS credentials provider {} {}",
+                    e.getMessage(),
+                    e);
+            throw new RuntimeException(e);
         }
     }
 

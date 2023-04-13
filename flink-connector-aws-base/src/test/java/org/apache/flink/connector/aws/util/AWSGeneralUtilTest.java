@@ -48,6 +48,7 @@ import java.util.Properties;
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.AWS_CREDENTIALS_PROVIDER;
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.AWS_REGION;
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.AWS_ROLE_STS_ENDPOINT;
+import static org.apache.flink.connector.aws.config.AWSConfigConstants.CUSTOM_CREDENTIALS_PROVIDER_CLASS;
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.CredentialProvider.ASSUME_ROLE;
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.CredentialProvider.AUTO;
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.CredentialProvider.BASIC;
@@ -57,6 +58,7 @@ import static org.apache.flink.connector.aws.config.AWSConfigConstants.roleSessi
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.webIdentityTokenFile;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -220,6 +222,95 @@ class AWSGeneralUtilTest {
         verify(properties).getProperty(AWSConfigConstants.externalId(AWS_CREDENTIALS_PROVIDER));
         verify(properties).getProperty(AWS_REGION);
         verify(properties).getProperty(AWS_ROLE_STS_ENDPOINT);
+    }
+
+    public static class MyCustomCredentialProvider implements AwsCredentialsProvider {
+        public Properties myConfig;
+
+        public MyCustomCredentialProvider(Properties config) {
+            myConfig = config;
+        }
+
+        @Override
+        public AwsCredentials resolveCredentials() {
+            return null;
+        }
+    }
+
+    public static class MyCustomCredentialProviderThatDoesNotImplementAwsCredentialsProvider {
+        public Properties myConfig;
+
+        public MyCustomCredentialProviderThatDoesNotImplementAwsCredentialsProvider(
+                Properties config) {
+            myConfig = config;
+        }
+    }
+
+    public static class MyCustomCredentialProviderMissingConstructor
+            implements AwsCredentialsProvider {
+        public Properties myConfig;
+
+        // missing required constructor that takes the provided config
+        // # MyCustomCredentialProvider(Properties config) {
+        // #     myConfig = config;
+        // # }
+
+        @Override
+        public AwsCredentials resolveCredentials() {
+            return null;
+        }
+    }
+
+    @Test
+    void testCustomCredentialProvider() {
+        Properties properties = TestUtil.properties(AWS_CREDENTIALS_PROVIDER, "CUSTOM");
+        properties.setProperty(AWS_REGION, "eu-west-2");
+        properties.setProperty(
+                CUSTOM_CREDENTIALS_PROVIDER_CLASS,
+                "org.apache.flink.connector.aws.util.AWSGeneralUtilTest$MyCustomCredentialProvider");
+
+        MyCustomCredentialProvider credentialsProvider =
+                (MyCustomCredentialProvider) AWSGeneralUtil.getCredentialsProvider(properties);
+
+        assertThat(credentialsProvider.myConfig.getProperty(AWS_REGION)).isEqualTo("eu-west-2");
+    }
+
+    @Test
+    void testCustomCredentialProviderWithBadCustomCredentialProviders() {
+        Properties properties = TestUtil.properties(AWS_CREDENTIALS_PROVIDER, "CUSTOM");
+        try {
+            // case where user is missing required constructor
+            properties.setProperty(
+                    CUSTOM_CREDENTIALS_PROVIDER_CLASS,
+                    "org.apache.flink.connector.aws.util.AWSGeneralUtilTest$"
+                            + "MyCustomCredentialProviderMissingConstructor");
+            MyCustomCredentialProviderMissingConstructor credentialsProvider =
+                    (MyCustomCredentialProviderMissingConstructor)
+                            AWSGeneralUtil.getCredentialsProvider(properties);
+            fail("Expected IllegalArgumentException to be thrown but did not catch any");
+        } catch (RuntimeException ignored) {
+        }
+        try {
+            // case where user implementation does not implement required interface
+            properties.setProperty(
+                    CUSTOM_CREDENTIALS_PROVIDER_CLASS,
+                    "org.apache.flink.connector.aws.util.AWSGeneralUtilTest$"
+                            + "MyCustomCredentialProviderThatDoesNotImplementAwsCredentialsProvider");
+            MyCustomCredentialProviderThatDoesNotImplementAwsCredentialsProvider
+                    credentialsProvider =
+                            (MyCustomCredentialProviderThatDoesNotImplementAwsCredentialsProvider)
+                                    AWSGeneralUtil.getCredentialsProvider(properties);
+            fail("Expected ClassCastException to be thrown but did not catch any");
+        } catch (ClassCastException ignored) {
+        }
+        try {
+            // case where despite CUSTOM credential provider being configured, the user does not
+            // specify a class
+            AWSGeneralUtil.getCredentialsProvider(
+                    TestUtil.properties(AWS_CREDENTIALS_PROVIDER, "CUSTOM"));
+            fail("Expected IllegalArgumentException to be thrown but did not catch any");
+        } catch (RuntimeException ignored) {
+        }
     }
 
     @Test

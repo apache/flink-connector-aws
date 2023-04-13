@@ -72,6 +72,7 @@ Supported Credential Providers are:
 * `BASIC` - Using access key ID and secret key supplied as configuration. 
 * `ENV_VAR` - Using `AWS_ACCESS_KEY_ID` & `AWS_SECRET_ACCESS_KEY` environment variables.
 * `SYS_PROP` - Using Java system properties aws.accessKeyId and aws.secretKey.
+* `CUSTOM` - Use a custom user class as credential provider.
 * `PROFILE` - Use AWS credentials profile file to create the AWS credentials.
 * `ASSUME_ROLE` - Create AWS credentials by assuming a role. The credentials for assuming the role must be supplied.
 * `WEB_IDENTITY_TOKEN` - Create AWS credentials by assuming a role using Web Identity Token. 
