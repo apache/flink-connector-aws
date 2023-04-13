@@ -65,6 +65,9 @@ public class AWSConfigConstants {
          */
         WEB_IDENTITY_TOKEN,
 
+        /** Use a custom class specified by the user in connector config. */
+        CUSTOM,
+
         /**
          * A credentials provider chain will be used that searches for credentials in this order:
          * ENV_VARS, SYS_PROPS, WEB_IDENTITY_TOKEN, PROFILE in the AWS instance metadata. *
@@ -98,6 +101,13 @@ public class AWSConfigConstants {
      * credential provider type is set to be ASSUME_ROLE.
      */
     public static final String AWS_ROLE_STS_ENDPOINT = roleStsEndpoint(AWS_CREDENTIALS_PROVIDER);
+
+    /**
+     * The full path (e.g. org.user_company.auth.CustomAwsCredentialsProvider) to the user provided
+     * class to use if credential provider type is set to be CUSTOM.
+     */
+    public static final String CUSTOM_CREDENTIALS_PROVIDER_CLASS =
+            customCredentialsProviderClass(AWS_CREDENTIALS_PROVIDER);
 
     /**
      * The role ARN to use when credential provider type is set to ASSUME_ROLE or
@@ -178,6 +188,10 @@ public class AWSConfigConstants {
 
     public static String roleStsEndpoint(String prefix) {
         return prefix + ".role.stsEndpoint";
+    }
+
+    public static String customCredentialsProviderClass(String prefix) {
+        return prefix + ".custom.class";
     }
 
     public static String webIdentityTokenFile(String prefix) {
