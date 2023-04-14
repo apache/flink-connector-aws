@@ -26,6 +26,9 @@ import org.apache.flink.connector.base.sink.writer.AsyncSinkWriter;
 import org.apache.flink.connector.base.sink.writer.BufferedRequestState;
 import org.apache.flink.connector.base.sink.writer.ElementConverter;
 import org.apache.flink.connector.base.sink.writer.config.AsyncSinkWriterConfiguration;
+import org.apache.flink.connector.base.sink.writer.strategy.AIMDScalingStrategy;
+import org.apache.flink.connector.base.sink.writer.strategy.CongestionControlRateLimitingStrategy;
+import org.apache.flink.connector.base.sink.writer.strategy.RateLimitingStrategy;
 import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.groups.SinkWriterMetricGroup;
 
@@ -78,6 +81,9 @@ class KinesisStreamsSinkWriter<InputT> extends AsyncSinkWriter<InputT, PutRecord
                     getInvalidCredentialsExceptionClassifier(),
                     RESOURCE_NOT_FOUND_EXCEPTION_CLASSIFIER,
                     getSdkClientMisconfiguredExceptionClassifier());
+
+    private static final int AIMD_RATE_LIMITING_STRATEGY_INCREASE_RATE = 10;
+    private static final double AIMD_RATE_LIMITING_STRATEGY_DECREASE_FACTOR = 0.99D;
 
     private final Counter numRecordsOutErrorsCounter;
 
@@ -152,6 +158,8 @@ class KinesisStreamsSinkWriter<InputT> extends AsyncSinkWriter<InputT, PutRecord
                         .setMaxBufferedRequests(maxBufferedRequests)
                         .setMaxTimeInBufferMS(maxTimeInBufferMS)
                         .setMaxRecordSizeInBytes(maxRecordSizeInBytes)
+                        .setRateLimitingStrategy(
+                                buildRateLimitingStrategy(maxInFlightRequests, maxBatchSize))
                         .build(),
                 states);
         this.failOnError = failOnError;
@@ -173,6 +181,19 @@ class KinesisStreamsSinkWriter<InputT> extends AsyncSinkWriter<InputT, PutRecord
                 KinesisAsyncClient.builder(),
                 KinesisStreamsConfigConstants.BASE_KINESIS_USER_AGENT_PREFIX_FORMAT,
                 KinesisStreamsConfigConstants.KINESIS_CLIENT_USER_AGENT_PREFIX);
+    }
+
+    private static RateLimitingStrategy buildRateLimitingStrategy(
+            int maxInFlightRequests, int maxBatchSize) {
+        return CongestionControlRateLimitingStrategy.builder()
+                .setMaxInFlightRequests(maxInFlightRequests)
+                .setInitialMaxInFlightMessages(maxBatchSize)
+                .setScalingStrategy(
+                        AIMDScalingStrategy.builder(maxBatchSize * maxInFlightRequests)
+                                .setIncreaseRate(AIMD_RATE_LIMITING_STRATEGY_INCREASE_RATE)
+                                .setDecreaseFactor(AIMD_RATE_LIMITING_STRATEGY_DECREASE_FACTOR)
+                                .build())
+                .build();
     }
 
     @Override
