@@ -183,7 +183,6 @@ Connector Options
     <tr>
 	  <td><h5>aws.credentials.role.stsEndpoint</h5></td>
 	  <td>optional</td>
-      <td>no</td>
 	  <td style="word-wrap: break-word;">(none)</td>
 	  <td>String</td>
 	  <td>The AWS endpoint for STS (derived from the AWS region setting if not set) to use when credential provider type is set to ASSUME_ROLE.</td>
@@ -201,6 +200,14 @@ Connector Options
    <td style="word-wrap: break-word;">(none)</td>
    <td>String</td>
    <td>The absolute path to the web identity token file that should be used if provider type is set to WEB_IDENTITY_TOKEN.</td>
+    </tr>
+    <tr>
+	  <td><h5>aws.credentials.custom.class</h5></td>
+	  <td>required only if credential provider is set to CUSTOM</td>
+      <td>(none)</td>
+	  <td style="word-wrap: break-word;">String</td>
+	  <td>The full path (in Java package notation) to the user provided
+      class to use if credential provider type is set to be CUSTOM e.g. org.user_company.auth.CustomAwsCredentialsProvider.</td>
     </tr>
     </tbody>
     <thead>
@@ -299,6 +306,8 @@ Supported values are:
 - `PROFILE` - Use an AWS credentials profile to create the AWS credentials.
 - `ASSUME_ROLE` - Create AWS credentials by assuming a role. The credentials for assuming the role must be supplied.
 - `WEB_IDENTITY_TOKEN` - Create AWS credentials by assuming a role using Web Identity Token.
+- `CUSTOM` - Provide a custom class that implements the interface `AWSCredentialsProvider` and has a constructor `MyCustomClass(java.util.Properties config)`. All connector properties will be passed down to this custom
+  credential provider class via the constructor. 
 
 ## Data Type Mapping
 
