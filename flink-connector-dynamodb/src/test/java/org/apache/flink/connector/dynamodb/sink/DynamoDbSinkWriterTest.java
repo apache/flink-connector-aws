@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
+import software.amazon.awssdk.services.dynamodb.DynamoDbServiceClientConfiguration;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse;
@@ -480,6 +481,11 @@ public class DynamoDbSinkWriterTest {
             return CompletableFuture.completedFuture(BatchWriteItemResponse.builder().build());
         }
 
+        @Override
+        public DynamoDbServiceClientConfiguration serviceClientConfiguration() {
+            return DynamoDbServiceClientConfiguration.builder().build();
+        }
+
         public List<List<WriteRequest>> getRequestHistory() {
             return requestHistory;
         }
@@ -535,6 +541,11 @@ public class DynamoDbSinkWriterTest {
             }
             return CompletableFuture.completedFuture(responseBuilder.build());
         }
+
+        @Override
+        public DynamoDbServiceClientConfiguration serviceClientConfiguration() {
+            return DynamoDbServiceClientConfiguration.builder().build();
+        }
     }
 
     private static class FailingRecordsDynamoDbAsyncClient implements DynamoDbAsyncClient {
@@ -587,6 +598,11 @@ public class DynamoDbSinkWriterTest {
                                 ImmutableMap.of(TABLE_NAME, failedRequests));
             }
             return CompletableFuture.completedFuture(responseBuilder.build());
+        }
+
+        @Override
+        public DynamoDbServiceClientConfiguration serviceClientConfiguration() {
+            return DynamoDbServiceClientConfiguration.builder().build();
         }
     }
 }
