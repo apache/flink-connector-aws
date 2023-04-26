@@ -31,12 +31,16 @@ import com.amazonaws.SdkClientException;
 import com.amazonaws.services.kinesis.AmazonKinesis;
 import com.amazonaws.services.kinesis.AmazonKinesisClient;
 import com.amazonaws.services.kinesis.model.AmazonKinesisException;
+import com.amazonaws.services.kinesis.model.DescribeStreamRequest;
+import com.amazonaws.services.kinesis.model.DescribeStreamResult;
 import com.amazonaws.services.kinesis.model.ExpiredIteratorException;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.amazonaws.services.kinesis.model.ListShardsRequest;
 import com.amazonaws.services.kinesis.model.ListShardsResult;
 import com.amazonaws.services.kinesis.model.ProvisionedThroughputExceededException;
 import com.amazonaws.services.kinesis.model.Shard;
+import com.amazonaws.services.kinesis.model.StreamDescription;
+import com.amazonaws.services.kinesis.model.StreamStatus;
 import org.apache.commons.lang3.mutable.MutableInt;
 import org.apache.http.HttpHost;
 import org.apache.http.conn.ConnectTimeoutException;
@@ -210,6 +214,7 @@ public class KinesisProxyTest {
                         "shardId-000000000003");
         String nextToken = "NextToken";
         String fakeStreamName = "fake-stream";
+        String fakeStreamArn = "arn:aws:kinesis:us-east-1:123456789012:stream/fake-stream";
         List<Shard> shards =
                 shardIds.stream()
                         .map(shardId -> new Shard().withShardId(shardId))
@@ -217,6 +222,8 @@ public class KinesisProxyTest {
         AmazonKinesis mockClient = mock(AmazonKinesis.class);
         KinesisProxy kinesisProxy = getProxy(mockClient);
 
+        when(mockClient.describeStream(getDescribeStreamRequest(fakeStreamName)))
+                .thenReturn(getDescribeStreamResult(fakeStreamArn));
         ListShardsResult responseWithMoreData =
                 new ListShardsResult().withShards(shards.subList(0, 2)).withNextToken(nextToken);
         ListShardsResult responseFinal =
@@ -266,6 +273,7 @@ public class KinesisProxyTest {
                         KinesisShardIdGenerator.generateFromShardOrder(0),
                         KinesisShardIdGenerator.generateFromShardOrder(1));
         String fakeStreamName = "fake-stream";
+        String fakeStreamArn = "arn:aws:kinesis:us-east-1:123456789012:stream/fake-stream";
         List<Shard> shards =
                 shardIds.stream()
                         .map(shardId -> new Shard().withShardId(shardId))
@@ -274,6 +282,8 @@ public class KinesisProxyTest {
         AmazonKinesis mockClient = mock(AmazonKinesis.class);
         KinesisProxy kinesisProxy = getProxy(mockClient);
 
+        when(mockClient.describeStream(getDescribeStreamRequest(fakeStreamName)))
+                .thenReturn(getDescribeStreamResult(fakeStreamArn));
         ListShardsResult responseFirst =
                 new ListShardsResult().withShards(shards).withNextToken(null);
         doReturn(responseFirst)
@@ -356,13 +366,17 @@ public class KinesisProxyTest {
     public void testGetShardWithNoNewShards() throws Exception {
         // given
         String fakeStreamName = "fake-stream";
+        String fakeStreamArn = "arn:aws:kinesis:us-east-1:123456789012:stream/fake-stream";
 
         AmazonKinesis mockClient = mock(AmazonKinesis.class);
         KinesisProxy kinesisProxy = getProxy(mockClient);
 
+        when(mockClient.describeStream(getDescribeStreamRequest(fakeStreamName)))
+                .thenReturn(getDescribeStreamResult(fakeStreamArn));
         when(mockClient.listShards(
                         new ListShardsRequest()
                                 .withStreamName(fakeStreamName)
+                                .withStreamARN(fakeStreamArn)
                                 .withExclusiveStartShardId(
                                         KinesisShardIdGenerator.generateFromShardOrder(1))))
                 .thenReturn(new ListShardsResult().withShards(Collections.emptyList()));
@@ -379,6 +393,9 @@ public class KinesisProxyTest {
 
     @Test
     public void testGetShardListRetry() throws Exception {
+        final String streamName = "fake-stream";
+        final String streamArn = "arn:aws:kinesis:us-east-1:123456789012:stream/fake-stream";
+
         Properties kinesisConsumerConfig = new Properties();
         kinesisConsumerConfig.setProperty(ConsumerConfigConstants.AWS_REGION, "us-east-1");
 
@@ -394,6 +411,8 @@ public class KinesisProxyTest {
                 };
 
         AmazonKinesisClient mockClient = mock(AmazonKinesisClient.class);
+        when(mockClient.describeStream(getDescribeStreamRequest(streamName)))
+                .thenReturn(getDescribeStreamResult(streamArn));
         when(mockClient.listShards(any()))
                 .thenAnswer(
                         new Answer<ListShardsResult>() {
@@ -413,11 +432,11 @@ public class KinesisProxyTest {
         Whitebox.getField(KinesisProxy.class, "kinesisClient").set(kinesisProxy, mockClient);
 
         HashMap<String, String> streamNames = new HashMap();
-        streamNames.put("fake-stream", null);
+        streamNames.put(streamName, null);
         GetShardListResult result = kinesisProxy.getShardList(streamNames);
         assertThat(exceptionCount.intValue()).isEqualTo(retriableExceptions.length);
         assertThat(result.hasRetrievedShards()).isTrue();
-        assertThat(result.getLastSeenShardOfStream("fake-stream").getShard().getShardId())
+        assertThat(result.getLastSeenShardOfStream(streamName).getShard().getShardId())
                 .isEqualTo(shard.getShardId());
 
         // test max attempt count exceeded
@@ -544,5 +563,21 @@ public class KinesisProxyTest {
         Whitebox.setInternalState(kinesisProxy, "kinesisClient", awsKinesis);
 
         return kinesisProxy;
+    }
+
+    private DescribeStreamRequest getDescribeStreamRequest(final String streamName) {
+        DescribeStreamRequest describeStreamRequest = new DescribeStreamRequest();
+        describeStreamRequest.setStreamName(streamName);
+        return describeStreamRequest;
+    }
+
+    private DescribeStreamResult getDescribeStreamResult(final String streamArn) {
+        StreamDescription streamDescription = new StreamDescription();
+        streamDescription.setStreamARN(streamArn);
+        streamDescription.setStreamStatus(StreamStatus.ACTIVE);
+
+        DescribeStreamResult describeStreamResult = new DescribeStreamResult();
+        describeStreamResult.setStreamDescription(streamDescription);
+        return describeStreamResult;
     }
 }

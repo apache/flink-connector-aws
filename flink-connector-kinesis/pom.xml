@@ -76,6 +76,10 @@ under the License.
         </dependency>
         <dependency>
             <groupId>com.amazonaws</groupId>
+            <artifactId>aws-java-sdk-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.amazonaws</groupId>
             <artifactId>amazon-kinesis-producer</artifactId>
             <version>${aws.kinesis-kpl.version}</version>
         </dependency>

@@ -173,7 +173,8 @@ class KinesisStreamsSinkITCase {
                                         .runScenario())
                 .havingCause()
                 .havingCause()
-                .withMessageContaining("Encountered non-recoverable exception");
+                .havingCause()
+                .withMessageContaining("Stream non-existent-stream under account");
     }
 
     @Test
@@ -343,18 +344,21 @@ class KinesisStreamsSinkITCase {
                 false, "WRONG", "Invalid AWS Credential Provider Type");
     }
 
-    private void credentialsProvidedThroughProfilePathShouldResultInFailure(
-            boolean failOnError,
-            String credentialsProvider,
-            String credentialsProfileLocation,
-            String expectedMessage) {
-        Properties properties =
-                getDefaultPropertiesWithoutCredentialsSetAndCredentialProvider(credentialsProvider);
-        properties.put(
-                AWSConfigConstants.profilePath(AWS_CREDENTIALS_PROVIDER),
-                credentialsProfileLocation);
-        assertRunWithPropertiesAndStreamShouldFailWithExceptionOfType(
-                failOnError, properties, expectedMessage);
+    @Test
+    void streamArnShouldTakePrecedenceOverStreamName() {
+        Assertions.assertThatExceptionOfType(JobExecutionException.class)
+                .isThrownBy(
+                        () ->
+                                new Scenario()
+                                        .withKinesaliteStreamName("stream-exists")
+                                        .withSinkConnectionStreamArn(
+                                                "arn:aws:kinesis:us-east-1:000000000000:stream/stream-not-exists")
+                                        .withSinkConnectionStreamName("stream-exists")
+                                        .withFailOnError(true)
+                                        .withProperties(getDefaultProperties())
+                                        .runScenario())
+                .withStackTraceContaining(
+                        "Stream stream-not-exists under account 000000000000 not found");
     }
 
     private void noCredentialsProvidedAndCredentialsProviderSpecifiedShouldResultInFailure(
@@ -375,9 +379,7 @@ class KinesisStreamsSinkITCase {
                                         .withFailOnError(failOnError)
                                         .withProperties(properties)
                                         .runScenario())
-                .havingCause()
-                .havingCause()
-                .withMessageContaining(expectedMessage);
+                .withStackTraceContaining(expectedMessage);
     }
 
     private Properties getDefaultPropertiesWithoutCredentialsSetAndCredentialProvider(
@@ -408,6 +410,7 @@ class KinesisStreamsSinkITCase {
         private boolean failOnError = false;
         private String kinesaliteStreamName = null;
         private String sinkConnectionStreamName;
+        private String sinkConnectionStreamArn;
         private SerializationSchema<String> serializationSchema =
                 KinesisStreamsSinkITCase.this.serializationSchema;
         private PartitionKeyGenerator<String> partitionKeyGenerator =
@@ -440,6 +443,7 @@ class KinesisStreamsSinkITCase {
                             .setFailOnError(failOnError)
                             .setMaxBufferedRequests(1000)
                             .setStreamName(sinkConnectionStreamName)
+                            .setStreamArn(sinkConnectionStreamArn)
                             .setKinesisClientProperties(properties)
                             .setFailOnError(true)
                             .build();
@@ -506,6 +510,11 @@ class KinesisStreamsSinkITCase {
 
         public Scenario withSinkConnectionStreamName(String sinkConnectionStreamName) {
             this.sinkConnectionStreamName = sinkConnectionStreamName;
+            return this;
+        }
+
+        public Scenario withSinkConnectionStreamArn(String sinkConnectionStreamArn) {
+            this.sinkConnectionStreamArn = sinkConnectionStreamArn;
             return this;
         }
 

@@ -58,6 +58,11 @@ under the License.
             <artifactId>kinesis</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>arns</artifactId>
+        </dependency>
+
         <!--Table API dependencies-->
         <dependency>
             <groupId>org.apache.flink</groupId>

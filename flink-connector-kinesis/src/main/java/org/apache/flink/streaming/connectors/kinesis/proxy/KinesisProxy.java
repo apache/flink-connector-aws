@@ -58,6 +58,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -139,6 +140,9 @@ public class KinesisProxy implements KinesisProxyInterface {
 
     /** Exponential backoff power constant for the describe stream operation. */
     private final double describeStreamExpConstant;
+
+    /** Caches retrieved stream ARNs for give stream names. */
+    private final Map<String, String> streamNameToArnLookup = new ConcurrentHashMap<>();
 
     /**
      * Create a new KinesisProxy based on the supplied configuration properties.
@@ -350,6 +354,7 @@ public class KinesisProxy implements KinesisProxyInterface {
         GetShardIteratorRequest getShardIteratorRequest =
                 new GetShardIteratorRequest()
                         .withStreamName(shard.getStreamName())
+                        .withStreamARN(lookupStreamArn(shard.getStreamName()))
                         .withShardId(shard.getShard().getShardId())
                         .withShardIteratorType(shardIteratorType);
 
@@ -464,13 +469,15 @@ public class KinesisProxy implements KinesisProxyInterface {
             String streamName, @Nullable String lastSeenShardId) throws InterruptedException {
         List<StreamShardHandle> shardsOfStream = new ArrayList<>();
 
+        String streamArn = lookupStreamArn(streamName);
+
         // List Shards returns just the first 1000 shard entries. In order to read the entire
         // stream,
         // we need to use the returned nextToken to get additional shards.
         ListShardsResult listShardsResult;
         String startShardToken = null;
         do {
-            listShardsResult = listShards(streamName, lastSeenShardId, startShardToken);
+            listShardsResult = listShards(streamName, streamArn, lastSeenShardId, startShardToken);
             if (listShardsResult == null) {
                 // In case we have exceptions while retrieving all shards, ensure that incomplete
                 // shard list is not returned.
@@ -488,6 +495,15 @@ public class KinesisProxy implements KinesisProxyInterface {
         return shardsOfStream;
     }
 
+    private synchronized String lookupStreamArn(String streamName) throws InterruptedException {
+        if (streamNameToArnLookup.containsKey(streamName)) {
+            return streamNameToArnLookup.get(streamName);
+        }
+        String streamArn = describeStream(streamName, null).getStreamDescription().getStreamARN();
+        streamNameToArnLookup.put(streamName, streamArn);
+        return streamArn;
+    }
+
     /**
      * Get metainfo for a Kinesis stream, which contains information about which shards this Kinesis
      * stream possess.
@@ -498,18 +514,23 @@ public class KinesisProxy implements KinesisProxyInterface {
      * subtask's fetcher. This jitter backoff approach will help distribute calls across the
      * fetchers over time.
      *
-     * @param streamName the stream to describe
+     * @param streamName the stream name
+     * @param streamArn the stream ARN
      * @param startShardId which shard to start with for this describe operation (earlier shard's
      *     infos will not appear in result)
      * @return the result of the describe stream operation
      */
     private ListShardsResult listShards(
-            String streamName, @Nullable String startShardId, @Nullable String startNextToken)
+            String streamName,
+            String streamArn,
+            @Nullable String startShardId,
+            @Nullable String startNextToken)
             throws InterruptedException {
         final ListShardsRequest listShardsRequest = new ListShardsRequest();
         if (startNextToken == null) {
             listShardsRequest.setExclusiveStartShardId(startShardId);
             listShardsRequest.setStreamName(streamName);
+            listShardsRequest.setStreamARN(streamArn);
         } else {
             // Note the nextToken returned by AWS expires within 300 sec.
             listShardsRequest.setNextToken(startNextToken);
@@ -535,7 +556,7 @@ public class KinesisProxy implements KinesisProxyInterface {
                                 retryCount++);
                 LOG.warn(
                         "Got LimitExceededException when listing shards from stream "
-                                + streamName
+                                + streamArn
                                 + ". Backing off for "
                                 + backoffMillis
                                 + " millis.");
@@ -567,7 +588,7 @@ public class KinesisProxy implements KinesisProxyInterface {
                                     retryCount++);
                     LOG.warn(
                             "Got SdkClientException when listing shards from stream {}. Backing off for {} millis.",
-                            streamName,
+                            streamArn,
                             backoffMillis);
                     BACKOFF.sleep(backoffMillis);
                 } else {

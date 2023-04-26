@@ -39,7 +39,7 @@ class KinesisStreamsSinkBuilderTest {
     }
 
     @Test
-    void streamNameOfSinkMustBeSetWhenBuilt() {
+    void streamNameOrStreamArnMustBeSetWhenBuilt() {
         Assertions.assertThatExceptionOfType(NullPointerException.class)
                 .isThrownBy(
                         () ->
@@ -63,6 +63,33 @@ class KinesisStreamsSinkBuilderTest {
                                         .build())
                 .withMessageContaining(
                         "The stream name must be set when initializing the KDS Sink.");
+    }
+
+    @Test
+    void streamArnMustNotBeEmptyWhenBuilt() {
+        Assertions.assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(
+                        () ->
+                                KinesisStreamsSink.<String>builder()
+                                        .setPartitionKeyGenerator(PARTITION_KEY_GENERATOR)
+                                        .setSerializationSchema(SERIALIZATION_SCHEMA)
+                                        .setStreamArn("")
+                                        .build())
+                .withMessageContaining("Malformed ARN - doesn't start with 'arn:'");
+    }
+
+    @Test
+    void streamArnResouceMustNotBeEmptyWhenBuilt() {
+        Assertions.assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(
+                        () ->
+                                KinesisStreamsSink.<String>builder()
+                                        .setPartitionKeyGenerator(PARTITION_KEY_GENERATOR)
+                                        .setSerializationSchema(SERIALIZATION_SCHEMA)
+                                        .setStreamArn(
+                                                "arn:aws:kinesis:us-east-1:000000000000:stream/")
+                                        .build())
+                .withMessageContaining("resource must not be blank or empty.");
     }
 
     @Test
