@@ -30,13 +30,13 @@ import java.util.Properties;
  * Builder to construct {@link KinesisStreamsSink}.
  *
  * <p>The following example shows the minimum setup to create a {@link KinesisStreamsSink} that
- * writes String values to a Kinesis Data Streams stream named your_stream_here.
+ * writes String values to a Kinesis Data Streams stream.
  *
  * <pre>{@code
  * KinesisStreamsSink<String> kdsSink =
  *                 KinesisStreamsSink.<String>builder()
  *                         .setElementConverter(elementConverter)
- *                         .setStreamName("your_stream_name")
+ *                         .setStreamArn("your_stream_arn")
  *                         .setSerializationSchema(new SimpleStringSchema())
  *                         .setPartitionKeyGenerator(element -> String.valueOf(element.hashCode()))
  *                         .build();
@@ -71,6 +71,7 @@ public class KinesisStreamsSinkBuilder<InputT>
 
     private Boolean failOnError;
     private String streamName;
+    private String streamArn;
     private Properties kinesisClientProperties;
     private SerializationSchema<InputT> serializationSchema;
     private PartitionKeyGenerator<InputT> partitionKeyGenerator;
@@ -78,15 +79,20 @@ public class KinesisStreamsSinkBuilder<InputT>
     KinesisStreamsSinkBuilder() {}
 
     /**
-     * Sets the name of the KDS stream that the sink will connect to. There is no default for this
-     * parameter, therefore, this must be provided at sink creation time otherwise the build will
-     * fail.
+     * Providing the stream name is deprecated. Please provide stream ARN using {@link
+     * KinesisStreamsSinkBuilder#setStreamArn} instead.
      *
      * @param streamName the name of the stream
      * @return {@link KinesisStreamsSinkBuilder} itself
      */
+    @Deprecated
     public KinesisStreamsSinkBuilder<InputT> setStreamName(String streamName) {
         this.streamName = streamName;
+        return this;
+    }
+
+    public KinesisStreamsSinkBuilder<InputT> setStreamArn(String streamArn) {
+        this.streamArn = streamArn;
         return this;
     }
 
@@ -129,6 +135,7 @@ public class KinesisStreamsSinkBuilder<InputT>
                 Optional.ofNullable(getMaxRecordSizeInBytes()).orElse(DEFAULT_MAX_RECORD_SIZE_IN_B),
                 Optional.ofNullable(failOnError).orElse(DEFAULT_FAIL_ON_ERROR),
                 streamName,
+                streamArn,
                 Optional.ofNullable(kinesisClientProperties).orElse(new Properties()));
     }
 }

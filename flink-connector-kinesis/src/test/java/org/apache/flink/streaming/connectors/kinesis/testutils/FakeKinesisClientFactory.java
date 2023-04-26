@@ -77,6 +77,8 @@ import com.amazonaws.services.kinesis.model.StartStreamEncryptionRequest;
 import com.amazonaws.services.kinesis.model.StartStreamEncryptionResult;
 import com.amazonaws.services.kinesis.model.StopStreamEncryptionRequest;
 import com.amazonaws.services.kinesis.model.StopStreamEncryptionResult;
+import com.amazonaws.services.kinesis.model.StreamDescription;
+import com.amazonaws.services.kinesis.model.StreamStatus;
 import com.amazonaws.services.kinesis.model.UpdateShardCountRequest;
 import com.amazonaws.services.kinesis.model.UpdateShardCountResult;
 import com.amazonaws.services.kinesis.model.UpdateStreamModeRequest;
@@ -93,13 +95,33 @@ import java.util.List;
 public class FakeKinesisClientFactory {
 
     public static AmazonKinesis resourceNotFoundWhenGettingShardIterator(
-            String streamName, List<String> shardIds) {
+            String streamName, String streamArn, List<String> shardIds) {
         return new AmazonKinesis() {
+
+            @Override
+            public DescribeStreamResult describeStream(
+                    DescribeStreamRequest describeStreamRequest) {
+                if (streamName.equals(describeStreamRequest.getStreamName())) {
+                    return new DescribeStreamResult()
+                            .withStreamDescription(
+                                    new StreamDescription()
+                                            .withStreamARN(streamArn)
+                                            .withStreamStatus(StreamStatus.ACTIVE));
+                }
+
+                final ResourceNotFoundException ex =
+                        new ResourceNotFoundException(
+                                "Requested resource not found: Stream does not exist: "
+                                        + describeStreamRequest.getStreamName());
+                ex.setErrorType(AmazonServiceException.ErrorType.Client);
+
+                throw ex;
+            }
 
             @Override
             public GetShardIteratorResult getShardIterator(
                     GetShardIteratorRequest getShardIteratorRequest) {
-                if (getShardIteratorRequest.getStreamName().equals(streamName)
+                if (streamArn.equals(getShardIteratorRequest.getStreamARN())
                         && shardIds.contains(getShardIteratorRequest.getShardId())) {
                     return new GetShardIteratorResult().withShardIterator("fakeShardIterator");
                 }
@@ -159,12 +181,6 @@ public class FakeKinesisClientFactory {
             @Override
             public DescribeLimitsResult describeLimits(
                     DescribeLimitsRequest describeLimitsRequest) {
-                return null;
-            }
-
-            @Override
-            public DescribeStreamResult describeStream(
-                    DescribeStreamRequest describeStreamRequest) {
                 return null;
             }
 

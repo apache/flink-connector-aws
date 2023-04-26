@@ -25,6 +25,7 @@ import org.apache.flink.connector.base.sink.writer.ElementConverter;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
 import org.apache.flink.util.Preconditions;
 
+import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.services.kinesis.model.PutRecordsRequestEntry;
 
 import java.io.IOException;
@@ -68,6 +69,7 @@ public class KinesisStreamsSink<InputT> extends AsyncSinkBase<InputT, PutRecords
 
     private final boolean failOnError;
     private final String streamName;
+    private final String streamArn;
     private final Properties kinesisClientProperties;
 
     KinesisStreamsSink(
@@ -80,6 +82,7 @@ public class KinesisStreamsSink<InputT> extends AsyncSinkBase<InputT, PutRecords
             Long maxRecordSizeInBytes,
             boolean failOnError,
             String streamName,
+            String streamArn,
             Properties kinesisClientProperties) {
         super(
                 elementConverter,
@@ -89,13 +92,23 @@ public class KinesisStreamsSink<InputT> extends AsyncSinkBase<InputT, PutRecords
                 maxBatchSizeInBytes,
                 maxTimeInBufferMS,
                 maxRecordSizeInBytes);
-        this.streamName =
-                Preconditions.checkNotNull(
-                        streamName,
-                        "The stream name must not be null when initializing the KDS Sink.");
-        Preconditions.checkArgument(
-                !this.streamName.isEmpty(),
-                "The stream name must be set when initializing the KDS Sink.");
+
+        // Ensure that either streamName or streamArn is set. If both are set, streamArn takes
+        // precedence.
+        if (streamArn != null) {
+            final Arn arn = Arn.fromString(streamArn);
+            this.streamArn = arn.toString();
+            this.streamName = arn.resource().resource();
+        } else {
+            this.streamArn = null;
+            this.streamName =
+                    Preconditions.checkNotNull(
+                            streamName,
+                            "The stream name must not be null when initializing the KDS Sink.");
+            Preconditions.checkArgument(
+                    !this.streamName.isEmpty(),
+                    "The stream name must be set when initializing the KDS Sink.");
+        }
         this.failOnError = failOnError;
         this.kinesisClientProperties = kinesisClientProperties;
     }
@@ -126,6 +139,7 @@ public class KinesisStreamsSink<InputT> extends AsyncSinkBase<InputT, PutRecords
                 getMaxRecordSizeInBytes(),
                 failOnError,
                 streamName,
+                streamArn,
                 kinesisClientProperties,
                 Collections.emptyList());
     }
@@ -154,6 +168,7 @@ public class KinesisStreamsSink<InputT> extends AsyncSinkBase<InputT, PutRecords
                 getMaxRecordSizeInBytes(),
                 failOnError,
                 streamName,
+                streamArn,
                 kinesisClientProperties,
                 recoveredState);
     }

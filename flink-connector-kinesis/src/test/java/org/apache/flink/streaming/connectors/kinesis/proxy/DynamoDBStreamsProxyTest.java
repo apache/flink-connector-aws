@@ -35,6 +35,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DynamoDBStreamsProxyTest {
 
     private static final String FAKE_STREAM_NAME = "fake-stream";
+    private static final String FAKE_STREAM_ARN =
+            "arn:aws:kinesis:us-east-1:123456789012:stream/fake-stream";
 
     private static final List<String> SHARD_IDS =
             Arrays.asList(
@@ -76,7 +78,7 @@ class DynamoDBStreamsProxyTest {
 
         protected AmazonKinesis createKinesisClient(Properties configProps) {
             return FakeKinesisClientFactory.resourceNotFoundWhenGettingShardIterator(
-                    FAKE_STREAM_NAME, SHARD_IDS);
+                    FAKE_STREAM_NAME, FAKE_STREAM_ARN, SHARD_IDS);
         }
     }
 }
