@@ -40,7 +40,20 @@ class PackagingITCase {
                         "META-INF/",
                         "amazon-kinesis-producer-native-binaries/",
                         "cacerts/",
-                        "google/"));
+                        "google/",
+                        "LICENSE",
+                        "io/",
+                        "javax/",
+                        ".gitkeep",
+                        "software/amazon/",
+                        "com/esotericsoftware/",
+                        "com/fasterxml/",
+                        "com/ibm/",
+                        "com/amazonaws/",
+                        "com/ibm/",
+                        "org/objenesis/",
+                        "org/reactivestreams/",
+                        "org/slf4j/"));
         PackagingTestUtils.assertJarContainsServiceEntry(jar, Factory.class);
     }
 }

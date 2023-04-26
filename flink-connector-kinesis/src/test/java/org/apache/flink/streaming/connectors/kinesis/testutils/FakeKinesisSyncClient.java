@@ -20,6 +20,7 @@ package org.apache.flink.streaming.connectors.kinesis.testutils;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
+import software.amazon.awssdk.services.kinesis.KinesisServiceClientConfiguration;
 import software.amazon.awssdk.services.kinesis.model.AddTagsToStreamRequest;
 import software.amazon.awssdk.services.kinesis.model.AddTagsToStreamResponse;
 import software.amazon.awssdk.services.kinesis.model.CreateStreamRequest;
@@ -666,5 +667,10 @@ public class FakeKinesisSyncClient implements KinesisClient {
     @Override
     public KinesisWaiter waiter() {
         return null;
+    }
+
+    @Override
+    public KinesisServiceClientConfiguration serviceClientConfiguration() {
+        return KinesisServiceClientConfiguration.builder().build();
     }
 }
