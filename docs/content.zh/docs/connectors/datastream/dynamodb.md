@@ -31,7 +31,7 @@ to setup a table.
 
 To use the connector, add the following Maven dependency to your project:
 
-{{< connector_artifact flink-connector-dynamodb 4.0.0 >}}
+{{< connector_artifact flink-connector-dynamodb 4.1.0 >}}
 
 {{< tabs "ec24a4ae-6a47-11ed-a1eb-0242ac120002" >}}
 {{< tab "Java" >}}
