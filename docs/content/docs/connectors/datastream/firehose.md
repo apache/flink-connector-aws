@@ -33,7 +33,7 @@ to setup a Kinesis Data Firehose delivery stream.
 
 To use the connector, add the following Maven dependency to your project:
 
-{{< connector_artifact flink-connector-aws-kinesis-firehose 4.0.0 >}}
+{{< connector_artifact flink-connector-aws-kinesis-firehose 4.1.0 >}}
 
 {{< py_download_link "aws-kinesis-firehose" >}}
 

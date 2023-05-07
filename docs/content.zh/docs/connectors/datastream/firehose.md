@@ -35,7 +35,7 @@ To use the connector, add the following Maven dependency to your project:
 
 {{< artifact flink-connector-aws-kinesis-firehose >}}
 
-{{< connector_artifact flink-connector-aws-kinesis-firehose 4.0.0 >}}
+{{< connector_artifact flink-connector-aws-kinesis-firehose 4.1.0 >}}
 
 {{< py_download_link "aws-kinesis-firehose" >}}
 

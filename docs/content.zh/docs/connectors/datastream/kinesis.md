@@ -41,11 +41,11 @@ Kinesis 连接器提供访问 [Amazon Kinesis Data Streams](http://aws.amazon.co
   <tbody>
     <tr>
         <td>Source</td>
-        <td>{{< connector_artifact flink-connector-kinesis 4.0.0 >}}</td>
+        <td>{{< connector_artifact flink-connector-kinesis 4.1.0 >}}</td>
     </tr>
     <tr>
         <td>Sink</td>
-        <td>{{< connector_artifact flink-connector-aws-kinesis-streams 4.0.0 >}}</td>
+        <td>{{< connector_artifact flink-connector-aws-kinesis-streams 4.1.0 >}}</td>
     </tr>
   </tbody>
 </table>
