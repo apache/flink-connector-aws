@@ -37,7 +37,7 @@ To use the connector, add the following Maven dependency to your project:
 
 {{< connector_artifact flink-connector-aws-kinesis-firehose 4.1.0 >}}
 
-{{< py_download_link "aws-kinesis-firehose" >}}
+{{< py_connector_download_link "firehose" 4.1.0 >}}
 
 The `KinesisFirehoseSink` uses [AWS v2 SDK for Java](https://docs.aws.amazon.com/sdk-for-java/latest/developer-guide/home.html) to write data from a Flink stream into a Firehose delivery stream.
 
