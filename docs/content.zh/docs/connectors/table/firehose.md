@@ -35,7 +35,7 @@ The Kinesis Data Firehose connector allows for writing data into [Amazon Kinesis
 Dependencies
 ------------
 
-{{< sql_connector_download_table "firehose" 4.1.0 >}}
+{{< sql_connector_download_table "firehose" >}}
 
 How to create a Kinesis Data Firehose table
 -----------------------------------------
