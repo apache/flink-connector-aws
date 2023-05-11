@@ -41,18 +41,18 @@ To use this connector, add one or more of the following dependencies to your pro
   <tbody>
     <tr>
         <td>Source</td>
-        <td>{{< connector_artifact flink-connector-kinesis 4.1.0 >}}</td>
+        <td>{{< connector_artifact flink-connector-kinesis kinesis >}}</td>
     </tr>
     <tr>
         <td>Sink</td>
-        <td>{{< connector_artifact flink-connector-aws-kinesis-streams 4.1.0 >}}</td>
+        <td>{{< connector_artifact flink-connector-aws-kinesis-streams kinesis >}}</td>
     </tr>
   </tbody>
 </table>
 
 Due to the licensing issue, the `flink-connector-kinesis` artifact is not deployed to Maven central for the prior versions. Please see the version specific documentation for further information.
 
-{{< py_connector_download_link "kinesis" 4.1.0 >}}
+{{< py_connector_download_link "kinesis" >}}
 
 ## Using the Amazon Kinesis Streams Service
 Follow the instructions from the [Amazon Kinesis Streams Developer Guide](https://docs.aws.amazon.com/streams/latest/dev/learning-kinesis-module-one-create-stream.html)

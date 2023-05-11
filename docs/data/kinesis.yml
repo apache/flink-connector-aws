@@ -16,6 +16,7 @@
 # limitations under the License.
 ################################################################################
 
+version: 4.1.0
 variants:
   - maven: flink-connector-kinesis
     sql_url: https://repo.maven.apache.org/maven2/org/apache/flink/flink-sql-connector-kinesis/$full_version/flink-sql-connector-kinesis-$full_version.jar

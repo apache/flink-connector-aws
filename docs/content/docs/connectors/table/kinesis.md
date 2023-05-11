@@ -35,7 +35,7 @@ The Kinesis connector allows for reading data from and writing data into [Amazon
 Dependencies
 ------------
 
-{{< sql_connector_download_table "kinesis" 4.1.0 >}}
+{{< sql_connector_download_table "kinesis" >}}
 
 The Kinesis connector is not part of the binary distribution.
 See how to link with it for cluster execution [here]({{< ref "docs/dev/configuration/overview" >}}).

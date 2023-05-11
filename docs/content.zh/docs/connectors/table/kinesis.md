@@ -35,7 +35,7 @@ The Kinesis connector allows for reading data from and writing data into [Amazon
 Dependencies
 ------------
 
-{{< sql_connector_download_table "kinesis" 4.1.0 >}}
+{{< sql_connector_download_table "kinesis" >}}
 
 Kinesis 连接器目前并不包含在 Flink 的二进制发行版中，请查阅[这里]({{< ref "docs/dev/configuration/overview" >}})了解如何在集群运行中引用 Kinesis 连接器。
 

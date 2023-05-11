@@ -35,7 +35,7 @@ The DynamoDB connector allows for writing data into [Amazon DynamoDB](https://aw
 Dependencies
 ------------
 
-{{< sql_connector_download_table "dynamodb" 4.1.0 >}}
+{{< sql_connector_download_table "dynamodb" >}}
 
 How to create a DynamoDB table
 -----------------------------------------
