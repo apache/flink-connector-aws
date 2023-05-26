@@ -27,13 +27,14 @@ import org.apache.flink.connectors.kinesis.testutils.KinesaliteContainer;
 import org.apache.flink.test.resources.ResourceTestUtils;
 import org.apache.flink.test.util.SQLJobSubmission;
 import org.apache.flink.util.DockerImageVersions;
-import org.apache.flink.util.jackson.JacksonMapperFactory;
 
-import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableList;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.core.JsonProcessingException;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
-
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.google.common.collect.ImmutableList;
 import org.assertj.core.api.Assertions;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -79,7 +80,7 @@ public class KinesisStreamsTableApiIT {
     private static final String ORDERS_STREAM = "orders";
     private static final String INTER_CONTAINER_KINESALITE_ALIAS = "kinesalite";
     private static final String DEFAULT_FIRST_SHARD_NAME = "shardId-000000000000";
-    private static final ObjectMapper OBJECT_MAPPER = JacksonMapperFactory.createObjectMapper();
+    private static final ObjectMapper OBJECT_MAPPER = createObjectMapper();
 
     private SdkHttpClient httpClient;
     private KinesisClient kinesisClient;
@@ -267,5 +268,18 @@ public class KinesisStreamsTableApiIT {
         public String toString() {
             return String.format("Order{code: %s, quantity: %d}", code, quantity);
         }
+    }
+
+    private static ObjectMapper createObjectMapper() {
+        ObjectMapper objectMapper = new ObjectMapper();
+        registerModules(objectMapper);
+        return objectMapper;
+    }
+
+    private static void registerModules(ObjectMapper mapper) {
+        mapper.registerModule(new JavaTimeModule())
+                .registerModule((new Jdk8Module()).configureAbsentsAsNulls(true))
+                .disable(SerializationFeature.WRITE_DURATIONS_AS_TIMESTAMPS)
+                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     }
 }
