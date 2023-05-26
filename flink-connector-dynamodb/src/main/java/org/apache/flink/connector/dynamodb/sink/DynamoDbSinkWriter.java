@@ -31,8 +31,7 @@ import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.groups.SinkWriterMetricGroup;
 import org.apache.flink.util.CollectionUtil;
 
-import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableMap;
-
+import com.google.common.collect.ImmutableMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;

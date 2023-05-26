@@ -28,12 +28,13 @@ import org.apache.flink.test.resources.ResourceTestUtils;
 import org.apache.flink.test.util.SQLJobSubmission;
 import org.apache.flink.util.DockerImageVersions;
 import org.apache.flink.util.TestLogger;
-import org.apache.flink.util.jackson.JacksonMapperFactory;
 
-import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableList;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.core.JsonProcessingException;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
-
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.google.common.collect.ImmutableList;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -67,7 +68,7 @@ public class KinesisTableApiITCase extends TestLogger {
     private static final String LARGE_ORDERS_STREAM = "large_orders";
     private static final String INTER_CONTAINER_KINESALITE_ALIAS = "kinesalite";
 
-    private static final ObjectMapper OBJECT_MAPPER = JacksonMapperFactory.createObjectMapper();
+    private static final ObjectMapper OBJECT_MAPPER = createObjectMapper();
 
     private final Path sqlConnectorKinesisJar = ResourceTestUtils.getResource(".*kinesis.jar");
     private static final Network network = Network.newNetwork();
@@ -180,5 +181,19 @@ public class KinesisTableApiITCase extends TestLogger {
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Test Failure.", e);
         }
+    }
+
+    private static com.fasterxml.jackson.databind.ObjectMapper createObjectMapper() {
+        com.fasterxml.jackson.databind.ObjectMapper objectMapper =
+                new com.fasterxml.jackson.databind.ObjectMapper();
+        registerModules(objectMapper);
+        return objectMapper;
+    }
+
+    private static void registerModules(com.fasterxml.jackson.databind.ObjectMapper mapper) {
+        mapper.registerModule(new JavaTimeModule())
+                .registerModule((new Jdk8Module()).configureAbsentsAsNulls(true))
+                .disable(SerializationFeature.WRITE_DURATIONS_AS_TIMESTAMPS)
+                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     }
 }

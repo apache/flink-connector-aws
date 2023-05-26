@@ -17,7 +17,7 @@
 
 package org.apache.flink.streaming.kinesis.test.model;
 
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.Objects;
 
