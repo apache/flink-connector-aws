@@ -31,8 +31,7 @@ import org.apache.flink.table.factories.TableOptionsBuilder;
 import org.apache.flink.table.factories.TestFormatFactory;
 import org.apache.flink.table.runtime.connector.sink.SinkRuntimeProviderContext;
 
-import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableMap;
-
+import com.google.common.collect.ImmutableMap;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;

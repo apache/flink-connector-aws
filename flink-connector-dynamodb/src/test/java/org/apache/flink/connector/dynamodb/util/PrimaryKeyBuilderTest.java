@@ -21,9 +21,8 @@ package org.apache.flink.connector.dynamodb.util;
 import org.apache.flink.connector.dynamodb.sink.InvalidConfigurationException;
 import org.apache.flink.connector.dynamodb.sink.InvalidRequestException;
 
-import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableList;
-import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableMap;
-
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;

@@ -32,8 +32,7 @@ import org.apache.flink.streaming.api.functions.source.datagen.RandomGenerator;
 import org.apache.flink.test.junit5.MiniClusterExtension;
 import org.apache.flink.util.StringUtils;
 
-import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableList;
-
+import com.google.common.collect.ImmutableList;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

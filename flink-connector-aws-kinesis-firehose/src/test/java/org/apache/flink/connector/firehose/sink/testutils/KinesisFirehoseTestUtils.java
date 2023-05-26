@@ -20,11 +20,12 @@ package org.apache.flink.connector.firehose.sink.testutils;
 import org.apache.flink.connector.aws.testutils.AWSServicesTestUtils;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.util.jackson.JacksonMapperFactory;
 
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.core.JsonProcessingException;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
-
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import software.amazon.awssdk.http.SdkHttpClient;
 import software.amazon.awssdk.services.firehose.FirehoseClient;
 import software.amazon.awssdk.services.firehose.model.CreateDeliveryStreamRequest;
@@ -40,7 +41,7 @@ import java.util.List;
  */
 public class KinesisFirehoseTestUtils {
 
-    private static final ObjectMapper MAPPER = JacksonMapperFactory.createObjectMapper();
+    private static final ObjectMapper MAPPER = createObjectMapper();
 
     public static FirehoseClient createFirehoseClient(String endpoint, SdkHttpClient httpClient) {
         return AWSServicesTestUtils.createAwsSyncClient(
@@ -82,5 +83,18 @@ public class KinesisFirehoseTestUtils {
                     MAPPER.writeValueAsString(ImmutableMap.of("data", String.valueOf(i))));
         }
         return expectedElements;
+    }
+
+    private static ObjectMapper createObjectMapper() {
+        ObjectMapper objectMapper = new ObjectMapper();
+        registerModules(objectMapper);
+        return objectMapper;
+    }
+
+    private static void registerModules(ObjectMapper mapper) {
+        mapper.registerModule(new JavaTimeModule())
+                .registerModule((new Jdk8Module()).configureAbsentsAsNulls(true))
+                .disable(SerializationFeature.WRITE_DURATIONS_AS_TIMESTAMPS)
+                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     }
 }
