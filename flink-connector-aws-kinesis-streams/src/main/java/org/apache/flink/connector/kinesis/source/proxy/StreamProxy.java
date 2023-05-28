@@ -21,13 +21,19 @@ package org.apache.flink.connector.kinesis.source.proxy;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.connector.kinesis.source.split.StartingPosition;
 
+import software.amazon.awssdk.services.kinesis.model.DeregisterStreamConsumerResponse;
+import software.amazon.awssdk.services.kinesis.model.DescribeStreamConsumerResponse;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
+import software.amazon.awssdk.services.kinesis.model.RegisterStreamConsumerResponse;
 import software.amazon.awssdk.services.kinesis.model.Shard;
+import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponse;
+import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
 
 import javax.annotation.Nullable;
 
 import java.io.Closeable;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 /** Interface for a StreamProxy to interact with Streams service in a given region. */
 @Internal
@@ -54,4 +60,11 @@ public interface StreamProxy extends Closeable {
      */
     GetRecordsResponse getRecords(
             String streamArn, String shardId, StartingPosition startingPosition);
+
+
+    CompletableFuture<Void> subscribeToShard(String consumerArn, String shardId, StartingPosition startingPosition, SubscribeToShardResponseHandler responseHandler);
+
+    DescribeStreamConsumerResponse describeStreamConsumer(String streamArn, String consumerName);
+    RegisterStreamConsumerResponse registerStreamConsumer(String streamArn, String consumerName);
+    DeregisterStreamConsumerResponse deregisterStreamConsumer(String streamArn, String consumerName);
 }

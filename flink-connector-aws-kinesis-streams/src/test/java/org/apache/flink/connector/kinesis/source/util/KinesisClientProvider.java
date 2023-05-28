@@ -20,6 +20,7 @@ package org.apache.flink.connector.kinesis.source.util;
 
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
 import software.amazon.awssdk.services.kinesis.KinesisServiceClientConfiguration;
 import software.amazon.awssdk.services.kinesis.model.AccessDeniedException;
@@ -52,6 +53,24 @@ import java.util.function.Consumer;
 
 /** Provides {@link KinesisClient} with mocked Kinesis Stream behavior. */
 public class KinesisClientProvider {
+
+    public static class TestingAsyncKinesisClient implements KinesisAsyncClient {
+
+        @Override
+        public String serviceName() {
+            return null;
+        }
+
+        @Override
+        public KinesisServiceClientConfiguration serviceClientConfiguration() {
+            return null;
+        }
+
+        @Override
+        public void close() {
+
+        }
+    }
 
     /**
      * An implementation of the {@link KinesisClient} that allows control over Kinesis Service

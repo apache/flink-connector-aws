@@ -22,6 +22,8 @@ import org.apache.flink.annotation.Internal;
 import org.apache.flink.connector.kinesis.source.split.StartingPosition;
 
 import software.amazon.awssdk.http.SdkHttpClient;
+import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
+import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
 import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsRequest;
@@ -30,6 +32,9 @@ import software.amazon.awssdk.services.kinesis.model.GetShardIteratorRequest;
 import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
 import software.amazon.awssdk.services.kinesis.model.ListShardsResponse;
 import software.amazon.awssdk.services.kinesis.model.Shard;
+import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
+import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponse;
+import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
 
 import javax.annotation.Nullable;
 
@@ -38,6 +43,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 /** Implementation of the {@link StreamProxy} for Kinesis data streams. */
@@ -46,11 +52,15 @@ public class KinesisStreamProxy implements StreamProxy {
 
     private final KinesisClient kinesisClient;
     private final SdkHttpClient httpClient;
+    private final KinesisAsyncClient kinesisAsyncClient;
+    private final SdkAsyncHttpClient asyncHttpClient;
     private final Map<String, String> shardIdToIteratorStore;
 
-    public KinesisStreamProxy(KinesisClient kinesisClient, SdkHttpClient httpClient) {
+    public KinesisStreamProxy(KinesisClient kinesisClient, SdkHttpClient httpClient, KinesisAsyncClient kinesisAsyncClient, SdkAsyncHttpClient asyncHttpClient) {
         this.kinesisClient = kinesisClient;
         this.httpClient = httpClient;
+        this.kinesisAsyncClient = kinesisAsyncClient;
+        this.asyncHttpClient = asyncHttpClient;
         this.shardIdToIteratorStore = new ConcurrentHashMap<>();
     }
 
@@ -99,6 +109,16 @@ public class KinesisStreamProxy implements StreamProxy {
             }
             return getRecordsResponse;
         }
+    }
+
+    @Override
+    public CompletableFuture<Void> subscribeToShard(String consumerArn, String shardId, StartingPosition startingPosition, SubscribeToShardResponseHandler responseHandler) {
+        SubscribeToShardRequest request = SubscribeToShardRequest.builder()
+            .consumerARN(consumerArn)
+            .shardId(shardId)
+            .startingPosition(startingPosition.toSdkStartingPosition())
+            .build();
+        return kinesisAsyncClient.subscribeToShard(request, responseHandler);
     }
 
     private String getShardIterator(
@@ -150,5 +170,7 @@ public class KinesisStreamProxy implements StreamProxy {
     public void close() throws IOException {
         kinesisClient.close();
         httpClient.close();
+        kinesisAsyncClient.close();
+        asyncHttpClient.close();
     }
 }
