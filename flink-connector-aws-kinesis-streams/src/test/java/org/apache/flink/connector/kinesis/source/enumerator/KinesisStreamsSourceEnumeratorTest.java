@@ -21,7 +21,7 @@ package org.apache.flink.connector.kinesis.source.enumerator;
 import org.apache.flink.api.connector.source.SourceEvent;
 import org.apache.flink.api.connector.source.SplitsAssignment;
 import org.apache.flink.api.connector.source.mocks.MockSplitEnumeratorContext;
-import org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.InitialPosition;
 import org.apache.flink.connector.kinesis.source.enumerator.assigner.ShardAssignerFactory;
 import org.apache.flink.connector.kinesis.source.proxy.StreamProxy;
@@ -42,10 +42,11 @@ import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.STREAM_INITIAL_POSITION;
+import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.STREAM_INITIAL_TIMESTAMP;
 import static org.apache.flink.connector.kinesis.source.util.KinesisStreamProxyProvider.TestKinesisStreamProxy;
 import static org.apache.flink.connector.kinesis.source.util.KinesisStreamProxyProvider.getTestStreamProxy;
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.generateShardId;
@@ -70,19 +71,16 @@ class KinesisStreamsSourceEnumeratorTest {
         try (MockSplitEnumeratorContext<KinesisShardSplit> context =
                 new MockSplitEnumeratorContext<>(NUM_SUBTASKS)) {
             TestKinesisStreamProxy streamProxy = getTestStreamProxy();
-            final Properties consumerConfig = new Properties();
-            consumerConfig.setProperty(
-                    KinesisStreamsSourceConfigConstants.STREAM_INITIAL_POSITION,
-                    initialPosition.name());
-            consumerConfig.setProperty(
-                    KinesisStreamsSourceConfigConstants.STREAM_INITIAL_TIMESTAMP, initialTimestamp);
+            final Configuration sourceConfig = new Configuration();
+            sourceConfig.set(STREAM_INITIAL_POSITION, initialPosition);
+            sourceConfig.set(STREAM_INITIAL_TIMESTAMP, initialTimestamp);
 
             // Given enumerator is initialized with no state
             KinesisStreamsSourceEnumerator enumerator =
                     new KinesisStreamsSourceEnumerator(
                             context,
                             STREAM_ARN,
-                            consumerConfig,
+                            sourceConfig,
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             null);
@@ -170,19 +168,16 @@ class KinesisStreamsSourceEnumeratorTest {
             KinesisStreamsSourceEnumeratorState state =
                     new KinesisStreamsSourceEnumeratorState(Collections.emptySet(), lastSeenShard);
 
-            final Properties consumerConfig = new Properties();
-            consumerConfig.setProperty(
-                    KinesisStreamsSourceConfigConstants.STREAM_INITIAL_POSITION,
-                    initialPosition.name());
-            consumerConfig.setProperty(
-                    KinesisStreamsSourceConfigConstants.STREAM_INITIAL_TIMESTAMP, initialTimestamp);
+            final Configuration sourceConfig = new Configuration();
+            sourceConfig.set(STREAM_INITIAL_POSITION, initialPosition);
+            sourceConfig.set(STREAM_INITIAL_TIMESTAMP, initialTimestamp);
 
             // Given enumerator is initialised with state
             KinesisStreamsSourceEnumerator enumerator =
                     new KinesisStreamsSourceEnumerator(
                             context,
                             STREAM_ARN,
-                            consumerConfig,
+                            sourceConfig,
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             state);
@@ -354,12 +349,12 @@ class KinesisStreamsSourceEnumeratorTest {
         try (MockSplitEnumeratorContext<KinesisShardSplit> context =
                 new MockSplitEnumeratorContext<>(NUM_SUBTASKS)) {
             TestKinesisStreamProxy streamProxy = getTestStreamProxy();
-            final Properties consumerConfig = new Properties();
+            final Configuration sourceConfig = new Configuration();
             KinesisStreamsSourceEnumerator enumerator =
                     new KinesisStreamsSourceEnumerator(
                             context,
                             STREAM_ARN,
-                            consumerConfig,
+                            sourceConfig,
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             null);
@@ -383,12 +378,12 @@ class KinesisStreamsSourceEnumeratorTest {
         try (MockSplitEnumeratorContext<KinesisShardSplit> context =
                 new MockSplitEnumeratorContext<>(NUM_SUBTASKS)) {
             TestKinesisStreamProxy streamProxy = getTestStreamProxy();
-            final Properties consumerConfig = new Properties();
+            final Configuration sourceConfig = new Configuration();
             KinesisStreamsSourceEnumerator enumerator =
                     new KinesisStreamsSourceEnumerator(
                             context,
                             STREAM_ARN,
-                            consumerConfig,
+                            sourceConfig,
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             null);
@@ -436,12 +431,12 @@ class KinesisStreamsSourceEnumeratorTest {
         try (MockSplitEnumeratorContext<KinesisShardSplit> context =
                 new MockSplitEnumeratorContext<>(NUM_SUBTASKS)) {
             TestKinesisStreamProxy streamProxy = getTestStreamProxy();
-            final Properties consumerConfig = new Properties();
+            final Configuration sourceConfig = new Configuration();
             KinesisStreamsSourceEnumerator enumerator =
                     new KinesisStreamsSourceEnumerator(
                             context,
                             STREAM_ARN,
-                            consumerConfig,
+                            sourceConfig,
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             null);
@@ -494,12 +489,12 @@ class KinesisStreamsSourceEnumeratorTest {
         try (MockSplitEnumeratorContext<KinesisShardSplit> context =
                 new MockSplitEnumeratorContext<>(2)) {
             TestKinesisStreamProxy streamProxy = getTestStreamProxy();
-            final Properties consumerConfig = new Properties();
+            final Configuration sourceConfig = new Configuration();
             KinesisStreamsSourceEnumerator enumerator =
                     new KinesisStreamsSourceEnumerator(
                             context,
                             STREAM_ARN,
-                            consumerConfig,
+                            sourceConfig,
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             null);
@@ -560,12 +555,12 @@ class KinesisStreamsSourceEnumeratorTest {
                 MockSplitEnumeratorContext<KinesisShardSplit> restoredContext =
                         new MockSplitEnumeratorContext<>(NUM_SUBTASKS)) {
             TestKinesisStreamProxy streamProxy = getTestStreamProxy();
-            final Properties consumerConfig = new Properties();
+            final Configuration sourceConfig = new Configuration();
             KinesisStreamsSourceEnumerator enumerator =
                     new KinesisStreamsSourceEnumerator(
                             context,
                             STREAM_ARN,
-                            consumerConfig,
+                            sourceConfig,
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             null);
@@ -592,7 +587,7 @@ class KinesisStreamsSourceEnumeratorTest {
                     new KinesisStreamsSourceEnumerator(
                             restoredContext,
                             STREAM_ARN,
-                            consumerConfig,
+                            sourceConfig,
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             snapshottedState);
@@ -613,12 +608,12 @@ class KinesisStreamsSourceEnumeratorTest {
         try (MockSplitEnumeratorContext<KinesisShardSplit> context =
                 new MockSplitEnumeratorContext<>(NUM_SUBTASKS)) {
             TestKinesisStreamProxy streamProxy = getTestStreamProxy();
-            final Properties consumerConfig = new Properties();
+            final Configuration sourceConfig = new Configuration();
             KinesisStreamsSourceEnumerator enumerator =
                     new KinesisStreamsSourceEnumerator(
                             context,
                             STREAM_ARN,
-                            consumerConfig,
+                            sourceConfig,
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             null);
@@ -633,12 +628,12 @@ class KinesisStreamsSourceEnumeratorTest {
         try (MockSplitEnumeratorContext<KinesisShardSplit> context =
                 new MockSplitEnumeratorContext<>(NUM_SUBTASKS)) {
             TestKinesisStreamProxy streamProxy = getTestStreamProxy();
-            final Properties consumerConfig = new Properties();
+            final Configuration sourceConfig = new Configuration();
             KinesisStreamsSourceEnumerator enumerator =
                     new KinesisStreamsSourceEnumerator(
                             context,
                             STREAM_ARN,
-                            consumerConfig,
+                            sourceConfig,
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             null);
@@ -651,12 +646,12 @@ class KinesisStreamsSourceEnumeratorTest {
 
     private KinesisStreamsSourceEnumerator getSimpleEnumeratorWithNoState(
             MockSplitEnumeratorContext<KinesisShardSplit> context, StreamProxy streamProxy) {
-        final Properties consumerConfig = new Properties();
+        final Configuration sourceConfig = new Configuration();
         KinesisStreamsSourceEnumerator enumerator =
                 new KinesisStreamsSourceEnumerator(
                         context,
                         STREAM_ARN,
-                        consumerConfig,
+                        sourceConfig,
                         streamProxy,
                         ShardAssignerFactory.uniformShardAssigner(),
                         null);

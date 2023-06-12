@@ -26,7 +26,7 @@ import org.apache.flink.api.connector.source.SourceReader;
 import org.apache.flink.api.connector.source.SourceReaderContext;
 import org.apache.flink.api.connector.source.SplitEnumerator;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
-import org.apache.flink.configuration.ConfigurationUtils;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.aws.util.AWSClientUtil;
 import org.apache.flink.connector.aws.util.AWSGeneralUtil;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
@@ -81,22 +81,22 @@ public class KinesisStreamsSource<T>
         implements Source<T, KinesisShardSplit, KinesisStreamsSourceEnumeratorState> {
 
     private final String streamArn;
-    private final Properties consumerConfig;
+    private final Configuration sourceConfig;
     private final KinesisDeserializationSchema<T> deserializationSchema;
     private final KinesisShardAssigner kinesisShardAssigner;
 
     KinesisStreamsSource(
             String streamArn,
-            Properties consumerConfig,
+            Configuration sourceConfig,
             KinesisDeserializationSchema<T> deserializationSchema,
             KinesisShardAssigner kinesisShardAssigner) {
         Preconditions.checkNotNull(streamArn);
         Preconditions.checkArgument(!streamArn.isEmpty(), "stream ARN cannot be empty string");
-        Preconditions.checkNotNull(consumerConfig);
+        Preconditions.checkNotNull(sourceConfig);
         Preconditions.checkNotNull(deserializationSchema);
         Preconditions.checkNotNull(kinesisShardAssigner);
         this.streamArn = streamArn;
-        this.consumerConfig = consumerConfig;
+        this.sourceConfig = sourceConfig;
         this.deserializationSchema = deserializationSchema;
         this.kinesisShardAssigner = kinesisShardAssigner;
     }
@@ -127,7 +127,7 @@ public class KinesisStreamsSource<T>
         // We create a new stream proxy for each split reader since they have their own independent
         // lifecycle.
         Supplier<PollingKinesisShardSplitReader> splitReaderSupplier =
-                () -> new PollingKinesisShardSplitReader(createKinesisStreamProxy(consumerConfig));
+                () -> new PollingKinesisShardSplitReader(createKinesisStreamProxy(sourceConfig));
         KinesisStreamsRecordEmitter<T> recordEmitter =
                 new KinesisStreamsRecordEmitter<>(deserializationSchema);
 
@@ -135,7 +135,7 @@ public class KinesisStreamsSource<T>
                 elementsQueue,
                 new SingleThreadFetcherManager<>(elementsQueue, splitReaderSupplier::get),
                 recordEmitter,
-                ConfigurationUtils.createConfiguration(consumerConfig),
+                sourceConfig,
                 readerContext);
     }
 
@@ -154,8 +154,8 @@ public class KinesisStreamsSource<T>
         return new KinesisStreamsSourceEnumerator(
                 enumContext,
                 streamArn,
-                consumerConfig,
-                createKinesisStreamProxy(consumerConfig),
+                sourceConfig,
+                createKinesisStreamProxy(sourceConfig),
                 kinesisShardAssigner,
                 checkpoint);
     }
@@ -171,15 +171,18 @@ public class KinesisStreamsSource<T>
         return new KinesisStreamsSourceEnumeratorStateSerializer(new KinesisShardSplitSerializer());
     }
 
-    private KinesisStreamProxy createKinesisStreamProxy(Properties consumerConfig) {
+    private KinesisStreamProxy createKinesisStreamProxy(Configuration consumerConfig) {
         SdkHttpClient httpClient =
                 AWSGeneralUtil.createSyncHttpClient(
                         AttributeMap.builder().build(), ApacheHttpClient.builder());
 
-        AWSGeneralUtil.validateAwsCredentials(consumerConfig);
+        Properties kinesisClientProperties = new Properties();
+        consumerConfig.addAllToProperties(kinesisClientProperties);
+
+        AWSGeneralUtil.validateAwsCredentials(kinesisClientProperties);
         KinesisClient kinesisClient =
                 AWSClientUtil.createAwsSyncClient(
-                        consumerConfig,
+                        kinesisClientProperties,
                         httpClient,
                         KinesisClient.builder(),
                         KinesisStreamsConfigConstants.BASE_KINESIS_USER_AGENT_PREFIX_FORMAT,

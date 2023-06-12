@@ -19,14 +19,13 @@
 package org.apache.flink.connector.kinesis.source.config;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.util.Preconditions;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.Properties;
 
-import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.DEFAULT_STREAM_TIMESTAMP_DATE_FORMAT;
 import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.STREAM_INITIAL_TIMESTAMP;
 import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.STREAM_TIMESTAMP_DATE_FORMAT;
 
@@ -39,19 +38,18 @@ public class KinesisStreamsSourceConfigUtil {
     }
 
     /**
-     * Parses the timestamp in which to start consuming from the stream, from the given properties.
+     * Parses the timestamp in which to start consuming from the stream, from the given
+     * configuration.
      *
-     * @param consumerConfig the properties to parse timestamp from
+     * @param sourceConfig the configuration to parse timestamp from
      * @return the timestamp
      */
-    public static Date parseStreamTimestampStartingPosition(final Properties consumerConfig) {
-        Preconditions.checkNotNull(consumerConfig);
-        String timestamp = consumerConfig.getProperty(STREAM_INITIAL_TIMESTAMP);
+    public static Date parseStreamTimestampStartingPosition(final Configuration sourceConfig) {
+        Preconditions.checkNotNull(sourceConfig);
+        String timestamp = sourceConfig.get(STREAM_INITIAL_TIMESTAMP);
 
         try {
-            String format =
-                    consumerConfig.getProperty(
-                            STREAM_TIMESTAMP_DATE_FORMAT, DEFAULT_STREAM_TIMESTAMP_DATE_FORMAT);
+            String format = sourceConfig.get(STREAM_TIMESTAMP_DATE_FORMAT);
             SimpleDateFormat customDateFormat = new SimpleDateFormat(format);
             return customDateFormat.parse(timestamp);
         } catch (IllegalArgumentException | NullPointerException exception) {

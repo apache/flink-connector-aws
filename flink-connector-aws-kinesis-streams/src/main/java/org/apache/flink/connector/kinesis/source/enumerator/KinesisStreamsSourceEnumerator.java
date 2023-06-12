@@ -23,6 +23,7 @@ import org.apache.flink.api.connector.source.ReaderInfo;
 import org.apache.flink.api.connector.source.SplitEnumerator;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.api.connector.source.SplitsAssignment;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.InitialPosition;
 import org.apache.flink.connector.kinesis.source.exception.KinesisStreamsSourceException;
 import org.apache.flink.connector.kinesis.source.proxy.StreamProxy;
@@ -48,11 +49,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Properties;
 import java.util.Set;
 
-import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.DEFAULT_SHARD_DISCOVERY_INTERVAL_MILLIS;
-import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.DEFAULT_STREAM_INITIAL_POSITION;
 import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.SHARD_DISCOVERY_INTERVAL_MILLIS;
 import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.STREAM_INITIAL_POSITION;
 import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigUtil.parseStreamTimestampStartingPosition;
@@ -69,7 +67,7 @@ public class KinesisStreamsSourceEnumerator
 
     private final SplitEnumeratorContext<KinesisShardSplit> context;
     private final String streamArn;
-    private final Properties consumerConfig;
+    private final Configuration sourceConfig;
     private final StreamProxy streamProxy;
     private final KinesisShardAssigner shardAssigner;
     private final ShardAssignerContext shardAssignerContext;
@@ -83,13 +81,13 @@ public class KinesisStreamsSourceEnumerator
     public KinesisStreamsSourceEnumerator(
             SplitEnumeratorContext<KinesisShardSplit> context,
             String streamArn,
-            Properties consumerConfig,
+            Configuration sourceConfig,
             StreamProxy streamProxy,
             KinesisShardAssigner shardAssigner,
             KinesisStreamsSourceEnumeratorState state) {
         this.context = context;
         this.streamArn = streamArn;
-        this.consumerConfig = consumerConfig;
+        this.sourceConfig = sourceConfig;
         this.streamProxy = streamProxy;
         this.shardAssigner = shardAssigner;
         this.shardAssignerContext = new ShardAssignerContext(splitAssignment, context);
@@ -108,11 +106,7 @@ public class KinesisStreamsSourceEnumerator
             context.callAsync(this::initialDiscoverSplits, this::assignSplits);
         }
 
-        final long shardDiscoveryInterval =
-                Long.parseLong(
-                        consumerConfig.getProperty(
-                                SHARD_DISCOVERY_INTERVAL_MILLIS,
-                                String.valueOf(DEFAULT_SHARD_DISCOVERY_INTERVAL_MILLIS)));
+        final long shardDiscoveryInterval = sourceConfig.get(SHARD_DISCOVERY_INTERVAL_MILLIS);
         context.callAsync(
                 this::periodicallyDiscoverSplits,
                 this::assignSplits,
@@ -163,13 +157,7 @@ public class KinesisStreamsSourceEnumerator
 
     private List<KinesisShardSplit> initialDiscoverSplits() {
         List<Shard> shards = streamProxy.listShards(streamArn, lastSeenShardId);
-        return mapToSplits(
-                shards,
-                InitialPosition.valueOf(
-                        consumerConfig
-                                .getOrDefault(
-                                        STREAM_INITIAL_POSITION, DEFAULT_STREAM_INITIAL_POSITION)
-                                .toString()));
+        return mapToSplits(shards, sourceConfig.get(STREAM_INITIAL_POSITION));
     }
 
     /**
@@ -199,7 +187,7 @@ public class KinesisStreamsSourceEnumerator
             case AT_TIMESTAMP:
                 startingPosition =
                         StartingPosition.fromTimestamp(
-                                parseStreamTimestampStartingPosition(consumerConfig).toInstant());
+                                parseStreamTimestampStartingPosition(sourceConfig).toInstant());
                 break;
             case TRIM_HORIZON:
             default:

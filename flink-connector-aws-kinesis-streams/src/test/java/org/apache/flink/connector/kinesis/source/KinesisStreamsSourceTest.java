@@ -20,11 +20,10 @@ package org.apache.flink.connector.kinesis.source;
 
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.connector.source.Boundedness;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.kinesis.source.enumerator.assigner.ShardAssignerFactory;
 
 import org.junit.jupiter.api.Test;
-
-import java.util.Properties;
 
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.STREAM_ARN;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
@@ -33,11 +32,11 @@ class KinesisStreamsSourceTest {
 
     @Test
     void testSupportsContinuousUnboundedOnly() throws Exception {
-        final Properties sourceConfig = new Properties();
+        final Configuration sourceConfig = new Configuration();
         final KinesisStreamsSource<String> source =
                 KinesisStreamsSource.<String>builder()
                         .setStreamArn(STREAM_ARN)
-                        .setConsumerConfig(sourceConfig)
+                        .setSourceConfig(sourceConfig)
                         .setDeserializationSchema(new SimpleStringSchema())
                         .setKinesisShardAssigner(ShardAssignerFactory.uniformShardAssigner())
                         .build();

@@ -21,12 +21,11 @@ package org.apache.flink.connector.kinesis.source.examples;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.aws.config.AWSConfigConstants;
 import org.apache.flink.connector.kinesis.source.KinesisStreamsSource;
 import org.apache.flink.connector.kinesis.source.enumerator.assigner.ShardAssignerFactory;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-
-import java.util.Properties;
 
 /**
  * An example application demonstrating how to use the {@link KinesisStreamsSource} to read from
@@ -39,13 +38,13 @@ public class SourceFromKinesis {
         env.enableCheckpointing(10_000);
         env.setParallelism(2);
 
-        Properties consumerConfig = new Properties();
-        consumerConfig.setProperty(AWSConfigConstants.AWS_REGION, "us-east-1");
+        Configuration sourceConfig = new Configuration();
+        sourceConfig.setString(AWSConfigConstants.AWS_REGION, "us-east-1");
         KinesisStreamsSource<String> kdsSource =
                 KinesisStreamsSource.<String>builder()
                         .setStreamArn(
                                 "arn:aws:kinesis:us-east-1:290038087681:stream/LoadTestBeta_Input_35")
-                        .setConsumerConfig(consumerConfig)
+                        .setSourceConfig(sourceConfig)
                         .setDeserializationSchema(new SimpleStringSchema())
                         .setKinesisShardAssigner(ShardAssignerFactory.uniformShardAssigner())
                         .build();

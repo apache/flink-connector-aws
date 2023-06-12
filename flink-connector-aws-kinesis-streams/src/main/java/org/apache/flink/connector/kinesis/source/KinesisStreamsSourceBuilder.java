@@ -20,12 +20,11 @@ package org.apache.flink.connector.kinesis.source;
 
 import org.apache.flink.annotation.Experimental;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.kinesis.source.enumerator.KinesisShardAssigner;
 import org.apache.flink.connector.kinesis.source.enumerator.assigner.ShardAssignerFactory;
 import org.apache.flink.connector.kinesis.source.enumerator.assigner.UniformShardAssigner;
 import org.apache.flink.connector.kinesis.source.serialization.KinesisDeserializationSchema;
-
-import java.util.Properties;
 
 /**
  * Builder to construct the {@link KinesisStreamsSource}.
@@ -53,7 +52,7 @@ import java.util.Properties;
 @Experimental
 public class KinesisStreamsSourceBuilder<T> {
     private String streamArn;
-    private Properties consumerConfig;
+    private Configuration sourceConfig;
     private KinesisDeserializationSchema<T> deserializationSchema;
     private KinesisShardAssigner kinesisShardAssigner = ShardAssignerFactory.uniformShardAssigner();
 
@@ -62,8 +61,8 @@ public class KinesisStreamsSourceBuilder<T> {
         return this;
     }
 
-    public KinesisStreamsSourceBuilder<T> setConsumerConfig(Properties consumerConfig) {
-        this.consumerConfig = consumerConfig;
+    public KinesisStreamsSourceBuilder<T> setSourceConfig(Configuration sourceConfig) {
+        this.sourceConfig = sourceConfig;
         return this;
     }
 
@@ -87,6 +86,6 @@ public class KinesisStreamsSourceBuilder<T> {
 
     public KinesisStreamsSource<T> build() {
         return new KinesisStreamsSource<>(
-                streamArn, consumerConfig, deserializationSchema, kinesisShardAssigner);
+                streamArn, sourceConfig, deserializationSchema, kinesisShardAssigner);
     }
 }

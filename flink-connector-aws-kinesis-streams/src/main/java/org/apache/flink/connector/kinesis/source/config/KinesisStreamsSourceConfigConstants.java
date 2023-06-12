@@ -19,6 +19,8 @@
 package org.apache.flink.connector.kinesis.source.config;
 
 import org.apache.flink.annotation.Experimental;
+import org.apache.flink.configuration.ConfigOption;
+import org.apache.flink.configuration.ConfigOptions;
 
 /** Constants to be used with the KinesisStreamsSource. */
 @Experimental
@@ -30,30 +32,29 @@ public class KinesisStreamsSourceConfigConstants {
         AT_TIMESTAMP
     }
 
-    /** The initial position to start reading Kinesis streams from. */
-    public static final String STREAM_INITIAL_POSITION = "flink.stream.initpos";
+    public static final ConfigOption<InitialPosition> STREAM_INITIAL_POSITION =
+            ConfigOptions.key("flink.stream.initpos")
+                    .enumType(InitialPosition.class)
+                    .defaultValue(InitialPosition.LATEST)
+                    .withDescription("The initial position to start reading Kinesis streams.");
 
-    public static final String DEFAULT_STREAM_INITIAL_POSITION = InitialPosition.LATEST.toString();
+    public static final ConfigOption<String> STREAM_INITIAL_TIMESTAMP =
+            ConfigOptions.key("flink.stream.initpos.timestamp")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "The initial timestamp at which to start reading from the Kinesis stream. This is used when AT_TIMESTAMP is configured for the STREAM_INITIAL_POSITION.");
 
-    /**
-     * The initial timestamp to start reading Kinesis stream from (when AT_TIMESTAMP is set for
-     * STREAM_INITIAL_POSITION).
-     */
-    public static final String STREAM_INITIAL_TIMESTAMP = "flink.stream.initpos.timestamp";
+    public static final ConfigOption<String> STREAM_TIMESTAMP_DATE_FORMAT =
+            ConfigOptions.key("flink.stream.initpos.timestamp.format")
+                    .stringType()
+                    .defaultValue("yyyy-MM-dd'T'HH:mm:ss.SSSXXX")
+                    .withDescription(
+                            "The date format used to parse the initial timestamp at which to start reading from the Kinesis stream. This is used when AT_TIMESTAMP is configured for the STREAM_INITIAL_POSITION.");
 
-    /**
-     * The date format of initial timestamp to start reading Kinesis stream from (when AT_TIMESTAMP
-     * is set for STREAM_INITIAL_POSITION).
-     */
-    public static final String STREAM_TIMESTAMP_DATE_FORMAT =
-            "flink.stream.initpos.timestamp.format";
-
-    public static final String DEFAULT_STREAM_TIMESTAMP_DATE_FORMAT =
-            "yyyy-MM-dd'T'HH:mm:ss.SSSXXX";
-
-    /** The interval between each attempt to discover new shards. */
-    public static final String SHARD_DISCOVERY_INTERVAL_MILLIS =
-            "flink.shard.discovery.intervalmillis";
-
-    public static final long DEFAULT_SHARD_DISCOVERY_INTERVAL_MILLIS = 10000L;
+    public static final ConfigOption<Long> SHARD_DISCOVERY_INTERVAL_MILLIS =
+            ConfigOptions.key("flink.shard.discovery.intervalmillis")
+                    .longType()
+                    .defaultValue(10000L)
+                    .withDescription("The interval between each attempt to discover new shards.");
 }
