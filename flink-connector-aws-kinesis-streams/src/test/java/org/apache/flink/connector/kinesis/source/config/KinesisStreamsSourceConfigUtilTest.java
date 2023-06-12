@@ -18,13 +18,13 @@
 
 package org.apache.flink.connector.kinesis.source.config;
 
+import org.apache.flink.configuration.Configuration;
+
 import org.junit.jupiter.api.Test;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.Properties;
 
-import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.DEFAULT_STREAM_TIMESTAMP_DATE_FORMAT;
 import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.STREAM_INITIAL_TIMESTAMP;
 import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.STREAM_TIMESTAMP_DATE_FORMAT;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
@@ -36,14 +36,14 @@ class KinesisStreamsSourceConfigUtilTest {
     void testParseStreamTimestampUsingDefaultFormat() throws Exception {
         String timestamp = "2023-04-13T09:18:00.0+01:00";
         Date expectedTimestamp =
-                new SimpleDateFormat(DEFAULT_STREAM_TIMESTAMP_DATE_FORMAT).parse(timestamp);
+                new SimpleDateFormat(STREAM_TIMESTAMP_DATE_FORMAT.defaultValue()).parse(timestamp);
 
-        Properties consumerProperties = new Properties();
-        consumerProperties.setProperty(STREAM_INITIAL_TIMESTAMP, timestamp);
+        Configuration sourceConfig = new Configuration();
+        sourceConfig.set(STREAM_INITIAL_TIMESTAMP, timestamp);
 
         assertThat(
                         KinesisStreamsSourceConfigUtil.parseStreamTimestampStartingPosition(
-                                consumerProperties))
+                                sourceConfig))
                 .isEqualTo(expectedTimestamp);
     }
 
@@ -53,13 +53,13 @@ class KinesisStreamsSourceConfigUtilTest {
         String timestamp = "2023-04-13T09:23";
         Date expectedTimestamp = new SimpleDateFormat(format).parse(timestamp);
 
-        Properties consumerProperties = new Properties();
-        consumerProperties.setProperty(STREAM_INITIAL_TIMESTAMP, timestamp);
-        consumerProperties.setProperty(STREAM_TIMESTAMP_DATE_FORMAT, format);
+        Configuration sourceConfig = new Configuration();
+        sourceConfig.set(STREAM_INITIAL_TIMESTAMP, timestamp);
+        sourceConfig.set(STREAM_TIMESTAMP_DATE_FORMAT, format);
 
         assertThat(
                         KinesisStreamsSourceConfigUtil.parseStreamTimestampStartingPosition(
-                                consumerProperties))
+                                sourceConfig))
                 .isEqualTo(expectedTimestamp);
     }
 
@@ -68,12 +68,12 @@ class KinesisStreamsSourceConfigUtilTest {
         long epoch = 1681910583L;
         Date expectedTimestamp = new Date(epoch * 1000);
 
-        Properties consumerProperties = new Properties();
-        consumerProperties.setProperty(STREAM_INITIAL_TIMESTAMP, String.valueOf(epoch));
+        Configuration sourceConfig = new Configuration();
+        sourceConfig.set(STREAM_INITIAL_TIMESTAMP, String.valueOf(epoch));
 
         assertThat(
                         KinesisStreamsSourceConfigUtil.parseStreamTimestampStartingPosition(
-                                consumerProperties))
+                                sourceConfig))
                 .isEqualTo(expectedTimestamp);
     }
 
@@ -81,24 +81,24 @@ class KinesisStreamsSourceConfigUtilTest {
     void testParseStreamTimestampParseError() {
         String badTimestamp = "badTimestamp";
 
-        Properties consumerProperties = new Properties();
-        consumerProperties.setProperty(STREAM_INITIAL_TIMESTAMP, badTimestamp);
+        Configuration sourceConfig = new Configuration();
+        sourceConfig.set(STREAM_INITIAL_TIMESTAMP, badTimestamp);
 
         assertThatExceptionOfType(NumberFormatException.class)
                 .isThrownBy(
                         () ->
                                 KinesisStreamsSourceConfigUtil.parseStreamTimestampStartingPosition(
-                                        consumerProperties));
+                                        sourceConfig));
     }
 
     @Test
     void testParseStreamTimestampTimestampNotSpecified() {
-        Properties consumerProperties = new Properties();
+        Configuration sourceConfig = new Configuration();
 
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(
                         () ->
                                 KinesisStreamsSourceConfigUtil.parseStreamTimestampStartingPosition(
-                                        consumerProperties));
+                                        sourceConfig));
     }
 }
