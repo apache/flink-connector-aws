@@ -19,7 +19,9 @@
 package org.apache.flink.connector.kinesis.source.proxy;
 
 import org.apache.flink.connector.kinesis.source.split.StartingPosition;
+import org.apache.flink.connector.kinesis.source.util.KinesisClientProvider;
 import org.apache.flink.connector.kinesis.source.util.KinesisClientProvider.ListShardItem;
+import org.apache.flink.connector.kinesis.source.util.KinesisClientProvider.TestingAsyncKinesisClient;
 import org.apache.flink.connector.kinesis.source.util.KinesisClientProvider.TestingKinesisClient;
 
 import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableList;
@@ -30,6 +32,8 @@ import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 import software.amazon.awssdk.http.SdkHttpClient;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
+import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
+import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
 import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsRequest;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
@@ -52,6 +56,7 @@ import static org.assertj.core.api.AssertionsForClassTypes.assertThatNoException
 
 class KinesisStreamProxyTest {
     private static final SdkHttpClient HTTP_CLIENT = ApacheHttpClient.builder().build();
+    private static final SdkAsyncHttpClient ASYNC_HTTP_CLIENT = NettyNioAsyncHttpClient.builder().build();
 
     @ParameterizedTest
     @NullAndEmptySource
@@ -73,8 +78,9 @@ class KinesisStreamProxyTest {
         TestingKinesisClient testKinesisClient = new TestingKinesisClient();
         testKinesisClient.setListShardsResponses(listShardItems);
 
+        TestingAsyncKinesisClient testAsyncKinesisClient = new TestingAsyncKinesisClient();
         KinesisStreamProxy kinesisStreamProxy =
-                new KinesisStreamProxy(testKinesisClient, HTTP_CLIENT);
+                new KinesisStreamProxy(testKinesisClient, HTTP_CLIENT, testAsyncKinesisClient, ASYNC_HTTP_CLIENT);
 
         assertThat(kinesisStreamProxy.listShards(streamArn, lastSeenShardId))
                 .isEqualTo(expectedShards);
@@ -113,8 +119,9 @@ class KinesisStreamProxyTest {
         TestingKinesisClient testKinesisClient = new TestingKinesisClient();
         testKinesisClient.setListShardsResponses(listShardItems);
 
+        TestingAsyncKinesisClient testAsyncKinesisClient = new TestingAsyncKinesisClient();
         KinesisStreamProxy kinesisStreamProxy =
-                new KinesisStreamProxy(testKinesisClient, HTTP_CLIENT);
+                new KinesisStreamProxy(testKinesisClient, HTTP_CLIENT, testAsyncKinesisClient, ASYNC_HTTP_CLIENT);
 
         assertThat(kinesisStreamProxy.listShards(streamArn, lastSeenShardId))
                 .isEqualTo(expectedShards);
@@ -151,8 +158,9 @@ class KinesisStreamProxyTest {
                                 .shardIterator(expectedShardIterator)
                                 .build()));
 
+        TestingAsyncKinesisClient testAsyncKinesisClient = new TestingAsyncKinesisClient();
         KinesisStreamProxy kinesisStreamProxy =
-                new KinesisStreamProxy(testKinesisClient, HTTP_CLIENT);
+                new KinesisStreamProxy(testKinesisClient, HTTP_CLIENT, testAsyncKinesisClient, ASYNC_HTTP_CLIENT);
 
         assertThat(kinesisStreamProxy.getRecords(streamArn, shardId, startingPosition))
                 .isEqualTo(expectedGetRecordsResponse);
@@ -191,8 +199,9 @@ class KinesisStreamProxyTest {
                                 .shardIterator(expectedShardIterator)
                                 .build()));
 
+        TestingAsyncKinesisClient testAsyncKinesisClient = new TestingAsyncKinesisClient();
         KinesisStreamProxy kinesisStreamProxy =
-                new KinesisStreamProxy(testKinesisClient, HTTP_CLIENT);
+                new KinesisStreamProxy(testKinesisClient, HTTP_CLIENT, testAsyncKinesisClient, ASYNC_HTTP_CLIENT);
 
         assertThat(kinesisStreamProxy.getRecords(streamArn, shardId, startingPosition))
                 .isEqualTo(expectedGetRecordsResponse);
@@ -232,8 +241,9 @@ class KinesisStreamProxyTest {
                                 .shardIterator(expectedShardIterator)
                                 .build()));
 
+        TestingAsyncKinesisClient testAsyncKinesisClient = new TestingAsyncKinesisClient();
         KinesisStreamProxy kinesisStreamProxy =
-                new KinesisStreamProxy(testKinesisClient, HTTP_CLIENT);
+                new KinesisStreamProxy(testKinesisClient, HTTP_CLIENT, testAsyncKinesisClient, ASYNC_HTTP_CLIENT);
 
         assertThat(kinesisStreamProxy.getRecords(streamArn, shardId, startingPosition))
                 .isEqualTo(expectedGetRecordsResponse);
@@ -260,8 +270,9 @@ class KinesisStreamProxyTest {
                         .build();
 
         TestingKinesisClient testKinesisClient = new TestingKinesisClient();
+        TestingAsyncKinesisClient testAsyncKinesisClient = new TestingAsyncKinesisClient();
         KinesisStreamProxy kinesisStreamProxy =
-                new KinesisStreamProxy(testKinesisClient, HTTP_CLIENT);
+                new KinesisStreamProxy(testKinesisClient, HTTP_CLIENT, testAsyncKinesisClient, ASYNC_HTTP_CLIENT);
 
         // When read for the first time
         testKinesisClient.setNextShardIterator(firstShardIterator);
@@ -319,8 +330,9 @@ class KinesisStreamProxyTest {
                         .build();
 
         TestingKinesisClient testKinesisClient = new TestingKinesisClient();
+        TestingAsyncKinesisClient testAsyncKinesisClient = new TestingAsyncKinesisClient();
         KinesisStreamProxy kinesisStreamProxy =
-                new KinesisStreamProxy(testKinesisClient, HTTP_CLIENT);
+                new KinesisStreamProxy(testKinesisClient, HTTP_CLIENT, testAsyncKinesisClient, ASYNC_HTTP_CLIENT);
 
         // When expired shard iterator is thrown on the first GetRecords() call
         AtomicBoolean firstGetRecordsCall = new AtomicBoolean(true);
@@ -380,8 +392,9 @@ class KinesisStreamProxyTest {
                                 .shardIterator(expectedShardIterator)
                                 .build()));
 
+        TestingAsyncKinesisClient testAsyncKinesisClient = new TestingAsyncKinesisClient();
         KinesisStreamProxy kinesisStreamProxy =
-                new KinesisStreamProxy(testKinesisClient, HTTP_CLIENT);
+                new KinesisStreamProxy(testKinesisClient, HTTP_CLIENT, testAsyncKinesisClient, ASYNC_HTTP_CLIENT);
 
         assertThatNoException()
                 .isThrownBy(
@@ -391,9 +404,9 @@ class KinesisStreamProxyTest {
     @Test
     void testCloseClosesKinesisClient() {
         TestingKinesisClient testKinesisClient = new TestingKinesisClient();
-
+        TestingAsyncKinesisClient testAsyncKinesisClient = new TestingAsyncKinesisClient();
         KinesisStreamProxy kinesisStreamProxy =
-                new KinesisStreamProxy(testKinesisClient, HTTP_CLIENT);
+                new KinesisStreamProxy(testKinesisClient, HTTP_CLIENT, testAsyncKinesisClient, ASYNC_HTTP_CLIENT);
 
         assertThatNoException().isThrownBy(kinesisStreamProxy::close);
         assertThat(testKinesisClient.isClosed()).isTrue();

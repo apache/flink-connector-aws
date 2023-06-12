@@ -31,6 +31,7 @@ import org.apache.flink.connector.aws.util.AWSClientUtil;
 import org.apache.flink.connector.aws.util.AWSGeneralUtil;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.fetcher.SingleThreadFetcherManager;
+import org.apache.flink.connector.base.source.reader.splitreader.SplitReader;
 import org.apache.flink.connector.base.source.reader.synchronization.FutureCompletingBlockingQueue;
 import org.apache.flink.connector.kinesis.sink.KinesisStreamsConfigConstants;
 import org.apache.flink.connector.kinesis.source.enumerator.KinesisShardAssigner;
@@ -41,6 +42,7 @@ import org.apache.flink.connector.kinesis.source.proxy.KinesisStreamProxy;
 import org.apache.flink.connector.kinesis.source.reader.KinesisStreamsRecordEmitter;
 import org.apache.flink.connector.kinesis.source.reader.KinesisStreamsSourceReader;
 import org.apache.flink.connector.kinesis.source.reader.PollingKinesisShardSplitReader;
+import org.apache.flink.connector.kinesis.source.reader.fanout.FanOutKinesisShardSplitReader;
 import org.apache.flink.connector.kinesis.source.serialization.KinesisDeserializationSchema;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplitSerializer;
@@ -51,6 +53,9 @@ import org.apache.flink.util.UserCodeClassLoader;
 
 import software.amazon.awssdk.http.SdkHttpClient;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
+import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
+import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
+import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.utils.AttributeMap;
@@ -126,8 +131,10 @@ public class KinesisStreamsSource<T>
                 new FutureCompletingBlockingQueue<>();
         // We create a new stream proxy for each split reader since they have their own independent
         // lifecycle.
-        Supplier<PollingKinesisShardSplitReader> splitReaderSupplier =
-                () -> new PollingKinesisShardSplitReader(createKinesisStreamProxy(consumerConfig));
+//        Supplier<PollingKinesisShardSplitReader> splitReaderSupplier =
+//                () -> new PollingKinesisShardSplitReader(createKinesisStreamProxy(consumerConfig));
+        Supplier<SplitReader<Record, KinesisShardSplit>> splitReaderSupplier =
+            () -> new FanOutKinesisShardSplitReader(createKinesisStreamProxy(consumerConfig));
         KinesisStreamsRecordEmitter<T> recordEmitter =
                 new KinesisStreamsRecordEmitter<>(deserializationSchema);
 
@@ -184,7 +191,15 @@ public class KinesisStreamsSource<T>
                         KinesisClient.builder(),
                         KinesisStreamsConfigConstants.BASE_KINESIS_USER_AGENT_PREFIX_FORMAT,
                         KinesisStreamsConfigConstants.KINESIS_CLIENT_USER_AGENT_PREFIX);
-        return new KinesisStreamProxy(kinesisClient, httpClient);
+
+        SdkAsyncHttpClient asyncHttpClient = AWSGeneralUtil.createAsyncHttpClient(AttributeMap.builder().build(), NettyNioAsyncHttpClient.builder());
+        KinesisAsyncClient kinesisAsyncClient =
+            AWSClientUtil.createAwsAsyncClient(consumerConfig,
+                asyncHttpClient,
+                KinesisAsyncClient.builder(),
+                KinesisStreamsConfigConstants.BASE_KINESIS_USER_AGENT_PREFIX_FORMAT,
+                KinesisStreamsConfigConstants.KINESIS_CLIENT_USER_AGENT_PREFIX);
+        return new KinesisStreamProxy(kinesisClient, httpClient, kinesisAsyncClient, asyncHttpClient);
     }
 
     private void setUpDeserializationSchema(SourceReaderContext sourceReaderContext)

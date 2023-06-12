@@ -27,6 +27,7 @@ import org.jetbrains.annotations.Nullable;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.services.kinesis.model.Shard;
+import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
 
 import java.io.IOException;
 import java.util.ArrayDeque;
@@ -36,6 +37,7 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -101,6 +103,11 @@ public class KinesisStreamProxyProvider {
                     .records(records)
                     .nextShardIterator(shouldCompleteNextShard ? null : "some-shard-iterator")
                     .build();
+        }
+
+        @Override
+        public CompletableFuture<Void> subscribeToShard(String consumerArn, String shardId, StartingPosition startingPosition, SubscribeToShardResponseHandler responseHandler) {
+            return null;
         }
 
         public String getLastProvidedLastSeenShardId() {

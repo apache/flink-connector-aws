@@ -51,6 +51,29 @@ public final class StartingPosition {
     public Object getStartingMarker() {
         return startingMarker;
     }
+    public software.amazon.awssdk.services.kinesis.model.StartingPosition toSdkStartingPosition() {
+        switch (shardIteratorType) {
+            case TRIM_HORIZON:
+            case LATEST:
+                return software.amazon.awssdk.services.kinesis.model.StartingPosition.builder()
+                    .type(shardIteratorType.toString())
+                    .build();
+            case AFTER_SEQUENCE_NUMBER:
+            case AT_SEQUENCE_NUMBER:
+                return software.amazon.awssdk.services.kinesis.model.StartingPosition.builder()
+                    .type(shardIteratorType.toString())
+                    .sequenceNumber((String) startingMarker)
+                    .build();
+            case AT_TIMESTAMP:
+                return software.amazon.awssdk.services.kinesis.model.StartingPosition.builder()
+                    .type(shardIteratorType.toString())
+                    .timestamp((Instant) startingMarker)
+                    .build();
+            case UNKNOWN_TO_SDK_VERSION:
+            default:
+                throw new IllegalStateException("Unable to create SDK Starting Position. Shard iterator not recognised " + shardIteratorType);
+        }
+    }
 
     public static StartingPosition fromTimestamp(final Instant timestamp) {
         return new StartingPosition(AT_TIMESTAMP, timestamp);
