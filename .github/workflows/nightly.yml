@@ -17,9 +17,7 @@
 ################################################################################
 
 name: "flink-connector-aws: nightly build"
-on:
-  schedule:
-    - cron: "0 0 * * *"
+on: [push, pull_request]
 jobs:
   compile_and_test:
     if: github.repository_owner == 'apache'
