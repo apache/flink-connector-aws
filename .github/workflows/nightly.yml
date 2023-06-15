@@ -26,30 +26,8 @@ jobs:
     if: github.repository_owner == 'apache'
     strategy:
       matrix:
-        flink_branches: [{
-          flink: 1.16-SNAPSHOT,
-          branch: main
-        }, {
-          flink: 1.17-SNAPSHOT,
-          branch: main
-        }, {
-          flink: 1.18-SNAPSHOT,
-          branch: main
-        }, {
-          flink: 1.15.4,
-          branch: v3.0
-        }, {
-          flink: 1.16.2,
-          branch: v3.0
-        }, {
-          flink: 1.16.2,
-          branch: v4.1
-        }, {
-          flink: 1.17.1,
-          branch: v4.1
-        }]
+        flink: [1.16-SNAPSHOT, 1.17-SNAPSHOT, 1.18-SNAPSHOT]
     uses: apache/flink-connector-shared-utils/.github/workflows/ci.yml@ci_utils
     with:
-      flink_version: ${{ matrix.flink_branches.flink }}
-      connector_branch: ${{ matrix.flink_branches.branch }}
+      flink_version: ${{ matrix.flink }}
       run_dependency_convergence: false
