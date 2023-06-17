@@ -26,7 +26,7 @@ jobs:
     uses: ./.github/workflows/common.yml
     strategy:
       matrix:
-        flink: [1.16.1, 1.17.0]
+        flink: [1.16.2, 1.17.1]
     with:
       flink_version: ${{ matrix.flink }}
       flink_url: https://archive.apache.org/dist/flink/flink-${{ matrix.flink }}/flink-${{ matrix.flink }}-bin-scala_2.12.tgz
