@@ -19,7 +19,7 @@
 package org.apache.flink.connector.kinesis.table.util;
 
 import org.apache.flink.connector.aws.config.AWSConfigConstants;
-import org.apache.flink.connector.kinesis.table.util.KinesisStreamsConnectorOptionsUtils.KinesisProducerOptionsMapper;
+import org.apache.flink.connector.kinesis.table.util.KinesisStreamsConnectorSinkOptionsUtils.KinesisProducerOptionsMapper;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -38,7 +38,7 @@ class KinesisProducerOptionsMapperTest {
         expectedOptions.put(AWSConfigConstants.TRUST_ALL_CERTIFICATES, "true");
 
         KinesisProducerOptionsMapper producerOptionsMapper =
-                new KinesisStreamsConnectorOptionsUtils.KinesisProducerOptionsMapper(
+                new KinesisStreamsConnectorSinkOptionsUtils.KinesisProducerOptionsMapper(
                         deprecatedOptions);
         Map<String, String> actualMappedProperties =
                 producerOptionsMapper.mapDeprecatedClientOptions();

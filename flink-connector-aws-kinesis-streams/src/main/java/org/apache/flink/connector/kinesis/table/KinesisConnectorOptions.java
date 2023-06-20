@@ -42,6 +42,12 @@ public class KinesisConnectorOptions extends AsyncSinkConnectorOptions {
                     .noDefaultValue()
                     .withDescription("Name of the Kinesis stream backing this table.");
 
+    public static final ConfigOption<String> STREAM_ARN =
+            ConfigOptions.key("stream.arn")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("ARN of the Kinesis stream backing this table.");
+
     public static final ConfigOption<String> AWS_REGION =
             ConfigOptions.key("aws.region")
                     .stringType()

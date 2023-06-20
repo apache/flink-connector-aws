@@ -58,7 +58,7 @@ import static org.apache.flink.connector.kinesis.table.KinesisConnectorOptions.S
  * for handling each specified set of options.
  */
 @Internal
-public class KinesisStreamsConnectorOptionsUtils {
+public class KinesisStreamsConnectorSinkOptionsUtils {
     /** Key for accessing kinesisAsyncClient properties. */
     public static final String KINESIS_CLIENT_PROPERTIES_KEY = "sink.client.properties";
 
@@ -79,7 +79,7 @@ public class KinesisStreamsConnectorOptionsUtils {
                 KinesisProducerOptionsMapper.KINESIS_PRODUCER_PREFIX
             };
 
-    public KinesisStreamsConnectorOptionsUtils(
+    public KinesisStreamsConnectorSinkOptionsUtils(
             Map<String, String> options,
             ReadableConfig tableOptions,
             RowType physicalType,

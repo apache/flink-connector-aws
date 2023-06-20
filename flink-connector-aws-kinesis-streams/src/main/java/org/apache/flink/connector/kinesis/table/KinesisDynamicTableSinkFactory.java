@@ -23,10 +23,11 @@ import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.connector.base.table.AsyncDynamicTableSinkFactory;
 import org.apache.flink.connector.kinesis.sink.PartitionKeyGenerator;
-import org.apache.flink.connector.kinesis.table.util.KinesisStreamsConnectorOptionsUtils;
+import org.apache.flink.connector.kinesis.table.util.KinesisStreamsConnectorSinkOptionsUtils;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.connector.sink.DynamicTableSink;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.factories.DynamicTableFactory;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.util.HashSet;
@@ -39,12 +40,13 @@ import static org.apache.flink.connector.kinesis.table.KinesisConnectorOptions.S
 import static org.apache.flink.connector.kinesis.table.KinesisConnectorOptions.SINK_PARTITIONER;
 import static org.apache.flink.connector.kinesis.table.KinesisConnectorOptions.SINK_PARTITIONER_FIELD_DELIMITER;
 import static org.apache.flink.connector.kinesis.table.KinesisConnectorOptions.STREAM;
-import static org.apache.flink.connector.kinesis.table.util.KinesisStreamsConnectorOptionsUtils.KINESIS_CLIENT_PROPERTIES_KEY;
+import static org.apache.flink.connector.kinesis.table.util.KinesisStreamsConnectorSinkOptionsUtils.KINESIS_CLIENT_PROPERTIES_KEY;
 import static org.apache.flink.table.factories.FactoryUtil.FORMAT;
 
 /** Factory for creating {@link KinesisDynamicSink}. */
 @Internal
-public class KinesisDynamicTableSinkFactory extends AsyncDynamicTableSinkFactory {
+public class KinesisDynamicTableSinkFactory extends AsyncDynamicTableSinkFactory
+        implements DynamicTableFactory {
     public static final String IDENTIFIER = "kinesis";
 
     @Override
@@ -52,8 +54,8 @@ public class KinesisDynamicTableSinkFactory extends AsyncDynamicTableSinkFactory
 
         AsyncDynamicSinkContext factoryContext = new AsyncDynamicSinkContext(this, context);
 
-        KinesisStreamsConnectorOptionsUtils optionsUtils =
-                new KinesisStreamsConnectorOptionsUtils(
+        KinesisStreamsConnectorSinkOptionsUtils optionsUtils =
+                new KinesisStreamsConnectorSinkOptionsUtils(
                         factoryContext.getResolvedOptions(),
                         factoryContext.getTableOptions(),
                         (RowType) factoryContext.getPhysicalDataType().getLogicalType(),
@@ -105,8 +107,8 @@ public class KinesisDynamicTableSinkFactory extends AsyncDynamicTableSinkFactory
         options.add(SINK_PARTITIONER);
         options.add(SINK_PARTITIONER_FIELD_DELIMITER);
         options.add(SINK_FAIL_ON_ERROR);
-        return KinesisStreamsConnectorOptionsUtils.KinesisProducerOptionsMapper.addDeprecatedKeys(
-                options);
+        return KinesisStreamsConnectorSinkOptionsUtils.KinesisProducerOptionsMapper
+                .addDeprecatedKeys(options);
     }
 
     private static void validateKinesisPartitioner(
