@@ -21,7 +21,7 @@ import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.common.time.Deadline;
-import org.apache.flink.connectors.kinesis.testutils.KinesaliteContainer;
+import org.apache.flink.connector.kinesis.testutils.KinesaliteContainer;
 import org.apache.flink.core.execution.SavepointFormatType;
 import org.apache.flink.runtime.client.JobStatusMessage;
 import org.apache.flink.runtime.state.FunctionInitializationContext;

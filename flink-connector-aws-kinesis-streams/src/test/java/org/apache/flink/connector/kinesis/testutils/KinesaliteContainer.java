@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.flink.connectors.kinesis.testutils;
+package org.apache.flink.connector.kinesis.testutils;
 
 import org.apache.flink.connector.aws.config.AWSConfigConstants;
 import org.apache.flink.connector.aws.testutils.AWSServicesTestUtils;

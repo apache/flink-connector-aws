@@ -18,7 +18,7 @@
 package org.apache.flink.glue.schema.registry.test.json;
 
 import org.apache.flink.api.common.time.Deadline;
-import org.apache.flink.connectors.kinesis.testutils.KinesaliteContainer;
+import org.apache.flink.connector.kinesis.testutils.KinesaliteContainer;
 import org.apache.flink.formats.json.glue.schema.registry.GlueSchemaRegistryJsonDeserializationSchema;
 import org.apache.flink.formats.json.glue.schema.registry.GlueSchemaRegistryJsonSerializationSchema;
 import org.apache.flink.streaming.api.datastream.DataStream;

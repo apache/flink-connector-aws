@@ -18,7 +18,7 @@
 package org.apache.flink.glue.schema.registry.test;
 
 import org.apache.flink.api.common.time.Deadline;
-import org.apache.flink.connectors.kinesis.testutils.KinesaliteContainer;
+import org.apache.flink.connector.kinesis.testutils.KinesaliteContainer;
 import org.apache.flink.formats.avro.glue.schema.registry.GlueSchemaRegistryAvroDeserializationSchema;
 import org.apache.flink.formats.avro.glue.schema.registry.GlueSchemaRegistryAvroSerializationSchema;
 import org.apache.flink.streaming.api.datastream.DataStream;
