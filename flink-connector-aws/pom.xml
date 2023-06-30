@@ -29,13 +29,20 @@ under the License.
         <version>4.2-SNAPSHOT</version>
     </parent>
 
-    <artifactId>flink-formats-aws-parent</artifactId>
-    <name>Flink : Formats : AWS : Parent</name>
+    <artifactId>flink-connector-aws-parent</artifactId>
+    <name>Flink : Connector : AWS : Parent</name>
     <packaging>pom</packaging>
 
     <modules>
-        <module>flink-avro-glue-schema-registry</module>
-        <module>flink-json-glue-schema-registry</module>
+        <module>flink-connector-dynamodb</module>
+        <module>flink-connector-aws-kinesis-firehose</module>
+        <module>flink-connector-aws-kinesis-streams</module>
+        <module>flink-connector-kinesis</module>
+
+        <module>flink-sql-connector-dynamodb</module>
+        <module>flink-sql-connector-aws-kinesis-firehose</module>
+        <module>flink-sql-connector-aws-kinesis-streams</module>
+        <module>flink-sql-connector-kinesis</module>
     </modules>
 
 </project>
