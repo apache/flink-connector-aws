@@ -31,7 +31,6 @@ import org.apache.flink.table.factories.TableOptionsBuilder;
 import org.apache.flink.table.factories.TestFormatFactory;
 import org.apache.flink.table.runtime.connector.sink.SinkRuntimeProviderContext;
 
-import com.google.common.collect.ImmutableMap;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -40,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+import static java.util.Collections.singletonMap;
 import static org.apache.flink.connector.base.table.AsyncSinkConnectorOptions.FLUSH_BUFFER_SIZE;
 import static org.apache.flink.connector.base.table.AsyncSinkConnectorOptions.FLUSH_BUFFER_TIMEOUT;
 import static org.apache.flink.connector.base.table.AsyncSinkConnectorOptions.MAX_BATCH_SIZE;
@@ -269,7 +269,7 @@ public class DynamoDbDynamicSinkFactoryTest {
 
         DynamoDbDynamicSink sinkWithStaticPartition =
                 (DynamoDbDynamicSink) createTableSink(sinkSchema, partitionKeys, sinkOptions);
-        sinkWithStaticPartition.applyStaticPartition(ImmutableMap.of("no_op_key", "no_op_value"));
+        sinkWithStaticPartition.applyStaticPartition(singletonMap("no_op_key", "no_op_value"));
 
         // Verify no-op for applyStaticPartition
         assertThat(sinkWithStaticPartition).usingRecursiveComparison().isEqualTo(originalSink);

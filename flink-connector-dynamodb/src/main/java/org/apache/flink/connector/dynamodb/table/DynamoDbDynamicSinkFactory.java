@@ -25,8 +25,6 @@ import org.apache.flink.table.catalog.ResolvedCatalogTable;
 import org.apache.flink.table.connector.sink.DynamicTableSink;
 import org.apache.flink.table.factories.FactoryUtil;
 
-import com.google.common.collect.ImmutableSet;
-
 import java.util.HashSet;
 import java.util.Set;
 
@@ -72,6 +70,10 @@ public class DynamoDbDynamicSinkFactory extends AsyncDynamicTableSinkFactory {
 
     @Override
     public Set<ConfigOption<?>> requiredOptions() {
-        return ImmutableSet.of(TABLE_NAME, AWS_REGION);
+        final Set<ConfigOption<?>> requiredOptions = new HashSet<>();
+        requiredOptions.add(TABLE_NAME);
+        requiredOptions.add(AWS_REGION);
+
+        return requiredOptions;
     }
 }

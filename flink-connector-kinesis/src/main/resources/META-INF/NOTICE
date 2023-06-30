@@ -8,7 +8,6 @@ This project bundles the following dependencies under the Apache Software Licens
 
 - software.amazon.ion:ion-java:1.0.2
 - software.amazon.eventstream:eventstream:1.0.1
-- software.amazon.awssdk:arns:2.20.32
 - software.amazon.awssdk:utils:2.20.32
 - software.amazon.awssdk:third-party-jackson-dataformat-cbor:2.20.32
 - software.amazon.awssdk:third-party-jackson-core:2.20.32
@@ -28,6 +27,7 @@ This project bundles the following dependencies under the Apache Software Licens
 - software.amazon.awssdk:aws-core:2.20.32
 - software.amazon.awssdk:aws-cbor-protocol:2.20.32
 - software.amazon.awssdk:auth:2.20.32
+- software.amazon.awssdk:arns:2.20.32
 - software.amazon.awssdk:apache-client:2.20.32
 - software.amazon.awssdk:annotations:2.20.32
 - org.apache.httpcomponents:httpcore:4.4.14
@@ -42,10 +42,10 @@ This project bundles the following dependencies under the Apache Software Licens
 - io.netty:netty-codec-http:4.1.86.Final
 - io.netty:netty-codec-http2:4.1.86.Final
 - io.netty:netty-buffer:4.1.86.Final
-- com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.13.4
-- com.fasterxml.jackson.core:jackson-databind:2.13.4.2
-- com.fasterxml.jackson.core:jackson-core:2.13.4
-- com.fasterxml.jackson.core:jackson-annotations:2.13.4
+- com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.14.3
+- com.fasterxml.jackson.core:jackson-databind:2.14.3
+- com.fasterxml.jackson.core:jackson-core:2.14.3
+- com.fasterxml.jackson.core:jackson-annotations:2.14.3
 - com.amazonaws:jmespath-java:1.12.439
 - com.amazonaws:dynamodb-streams-kinesis-adapter:1.5.3
 - com.amazonaws:aws-java-sdk-sts:1.12.439

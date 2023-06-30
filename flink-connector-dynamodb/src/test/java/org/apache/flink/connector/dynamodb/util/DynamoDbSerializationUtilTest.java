@@ -21,7 +21,6 @@ package org.apache.flink.connector.dynamodb.util;
 import org.apache.flink.connector.dynamodb.sink.DynamoDbWriteRequest;
 import org.apache.flink.connector.dynamodb.sink.DynamoDbWriteRequestType;
 
-import com.google.common.collect.ImmutableMap;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
@@ -67,21 +66,16 @@ public class DynamoDbSerializationUtilTest {
                                 AttributeValue.builder().s("s1").build(),
                                 AttributeValue.builder().s("s2").build())
                         .build());
-        item.put(
-                "map",
-                AttributeValue.builder()
-                        .m(
-                                ImmutableMap.of(
-                                        "key1", AttributeValue.builder().s("string").build(),
-                                        "key2", AttributeValue.builder().n("12345").build(),
-                                        "binary",
-                                                AttributeValue.builder()
-                                                        .b(
-                                                                SdkBytes.fromByteArray(
-                                                                        new byte[] {1, 2, 3}))
-                                                        .build(),
-                                        "null", AttributeValue.builder().nul(true).build()))
-                        .build());
+
+        Map<String, AttributeValue> nestedMap = new HashMap<>();
+        nestedMap.put("key1", AttributeValue.builder().s("string").build());
+        nestedMap.put("key2", AttributeValue.builder().n("12345").build());
+        nestedMap.put(
+                "binary",
+                AttributeValue.builder().b(SdkBytes.fromByteArray(new byte[] {1, 2, 3})).build());
+        nestedMap.put("null", AttributeValue.builder().nul(true).build());
+
+        item.put("map", AttributeValue.builder().m(nestedMap).build());
         DynamoDbWriteRequest dynamoDbWriteRequest =
                 DynamoDbWriteRequest.builder()
                         .setItem(item)
