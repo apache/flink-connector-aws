@@ -27,7 +27,6 @@ import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.types.DataType;
 
-import com.google.common.collect.ImmutableMap;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
@@ -39,6 +38,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Test for {@link RowDataToAttributeValueConverter}. */
@@ -56,7 +56,7 @@ public class RowDataToAttributeValueConverterTest {
                 rowDataToAttributeValueConverter.convertRowData(
                         createElement(StringData.fromString(value)));
         Map<String, AttributeValue> expectedResult =
-                ImmutableMap.of(key, AttributeValue.builder().s(value).build());
+                singletonMap(key, AttributeValue.builder().s(value).build());
 
         assertThat(actualResult).containsAllEntriesOf(expectedResult);
     }
@@ -73,7 +73,7 @@ public class RowDataToAttributeValueConverterTest {
                 rowDataToAttributeValueConverter.convertRowData(
                         createElement(StringData.fromString(value)));
         Map<String, AttributeValue> expectedResult =
-                ImmutableMap.of(key, AttributeValue.builder().s(value).build());
+                singletonMap(key, AttributeValue.builder().s(value).build());
 
         assertThat(actualResult).containsAllEntriesOf(expectedResult);
     }
@@ -90,7 +90,7 @@ public class RowDataToAttributeValueConverterTest {
                 rowDataToAttributeValueConverter.convertRowData(
                         createElement(StringData.fromString(value)));
         Map<String, AttributeValue> expectedResult =
-                ImmutableMap.of(key, AttributeValue.builder().s(value).build());
+                singletonMap(key, AttributeValue.builder().s(value).build());
 
         assertThat(actualResult).containsAllEntriesOf(expectedResult);
     }
@@ -106,7 +106,7 @@ public class RowDataToAttributeValueConverterTest {
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createElement(value));
         Map<String, AttributeValue> expectedResult =
-                ImmutableMap.of(key, AttributeValue.builder().bool(value).build());
+                singletonMap(key, AttributeValue.builder().bool(value).build());
 
         assertThat(actualResult).containsAllEntriesOf(expectedResult);
     }
@@ -123,7 +123,7 @@ public class RowDataToAttributeValueConverterTest {
                 rowDataToAttributeValueConverter.convertRowData(
                         createElement(DecimalData.fromBigDecimal(value, 5, 4)));
         Map<String, AttributeValue> expectedResult =
-                ImmutableMap.of(key, AttributeValue.builder().n("1.0010").build());
+                singletonMap(key, AttributeValue.builder().n("1.0010").build());
 
         assertThat(actualResult).containsAllEntriesOf(expectedResult);
     }
@@ -139,7 +139,7 @@ public class RowDataToAttributeValueConverterTest {
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createElement(value));
         Map<String, AttributeValue> expectedResult =
-                ImmutableMap.of(key, AttributeValue.builder().n("5").build());
+                singletonMap(key, AttributeValue.builder().n("5").build());
 
         assertThat(actualResult).containsAllEntriesOf(expectedResult);
     }
@@ -155,7 +155,7 @@ public class RowDataToAttributeValueConverterTest {
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createElement(value));
         Map<String, AttributeValue> expectedResult =
-                ImmutableMap.of(key, AttributeValue.builder().n("256").build());
+                singletonMap(key, AttributeValue.builder().n("256").build());
 
         assertThat(actualResult).containsAllEntriesOf(expectedResult);
     }
@@ -171,7 +171,7 @@ public class RowDataToAttributeValueConverterTest {
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createElement(value));
         Map<String, AttributeValue> expectedResult =
-                ImmutableMap.of(key, AttributeValue.builder().n("65536").build());
+                singletonMap(key, AttributeValue.builder().n("65536").build());
 
         assertThat(actualResult).containsAllEntriesOf(expectedResult);
     }
@@ -187,7 +187,7 @@ public class RowDataToAttributeValueConverterTest {
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createElement(value));
         Map<String, AttributeValue> expectedResult =
-                ImmutableMap.of(key, AttributeValue.builder().n("4294967295").build());
+                singletonMap(key, AttributeValue.builder().n("4294967295").build());
 
         assertThat(actualResult).containsAllEntriesOf(expectedResult);
     }
@@ -203,7 +203,7 @@ public class RowDataToAttributeValueConverterTest {
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createElement(value));
         Map<String, AttributeValue> expectedResult =
-                ImmutableMap.of(key, AttributeValue.builder().n("1.23456791E17").build());
+                singletonMap(key, AttributeValue.builder().n("1.23456791E17").build());
 
         assertThat(actualResult).containsAllEntriesOf(expectedResult);
     }
@@ -219,7 +219,7 @@ public class RowDataToAttributeValueConverterTest {
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createElement(value));
         Map<String, AttributeValue> expectedResult =
-                ImmutableMap.of(key, AttributeValue.builder().n("1.234567891234568E19").build());
+                singletonMap(key, AttributeValue.builder().n("1.234567891234568E19").build());
 
         assertThat(actualResult).containsAllEntriesOf(expectedResult);
     }
@@ -236,7 +236,7 @@ public class RowDataToAttributeValueConverterTest {
                 rowDataToAttributeValueConverter.convertRowData(
                         createElement(TimestampData.fromLocalDateTime(value)));
         Map<String, AttributeValue> expectedResult =
-                ImmutableMap.of(key, AttributeValue.builder().s("2022-11-10T00:00").build());
+                singletonMap(key, AttributeValue.builder().s("2022-11-10T00:00").build());
 
         assertThat(actualResult).containsAllEntriesOf(expectedResult);
     }
@@ -254,7 +254,7 @@ public class RowDataToAttributeValueConverterTest {
                 rowDataToAttributeValueConverter.convertRowData(
                         createArray(value, StringData::fromString));
         Map<String, AttributeValue> expectedResult =
-                ImmutableMap.of(
+                singletonMap(
                         key,
                         AttributeValue.builder()
                                 .l(
@@ -278,7 +278,7 @@ public class RowDataToAttributeValueConverterTest {
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createArray(value, t -> t));
         Map<String, AttributeValue> expectedResult =
-                ImmutableMap.of(
+                singletonMap(
                         key,
                         AttributeValue.builder()
                                 .l(
@@ -307,7 +307,7 @@ public class RowDataToAttributeValueConverterTest {
                 rowDataToAttributeValueConverter.convertRowData(
                         createArray(value, d -> DecimalData.fromBigDecimal(d, 1, 0)));
         Map<String, AttributeValue> expectedResult =
-                ImmutableMap.of(
+                singletonMap(
                         key,
                         AttributeValue.builder()
                                 .l(
@@ -335,7 +335,7 @@ public class RowDataToAttributeValueConverterTest {
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createArray(value, t -> t));
         Map<String, AttributeValue> expectedResult =
-                ImmutableMap.of(
+                singletonMap(
                         key,
                         AttributeValue.builder()
                                 .l(
@@ -363,7 +363,7 @@ public class RowDataToAttributeValueConverterTest {
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createArray(value, t -> t));
         Map<String, AttributeValue> expectedResult =
-                ImmutableMap.of(
+                singletonMap(
                         key,
                         AttributeValue.builder()
                                 .l(
@@ -390,7 +390,7 @@ public class RowDataToAttributeValueConverterTest {
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createArray(value, t -> t));
         Map<String, AttributeValue> expectedResult =
-                ImmutableMap.of(
+                singletonMap(
                         key,
                         AttributeValue.builder()
                                 .l(
@@ -418,7 +418,7 @@ public class RowDataToAttributeValueConverterTest {
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createArray(value, t -> t));
         Map<String, AttributeValue> expectedResult =
-                ImmutableMap.of(
+                singletonMap(
                         key,
                         AttributeValue.builder()
                                 .l(
@@ -445,7 +445,7 @@ public class RowDataToAttributeValueConverterTest {
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createArray(value, t -> t));
         Map<String, AttributeValue> expectedResult =
-                ImmutableMap.of(
+                singletonMap(
                         key,
                         AttributeValue.builder()
                                 .l(
@@ -473,7 +473,7 @@ public class RowDataToAttributeValueConverterTest {
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createArray(value, t -> t));
         Map<String, AttributeValue> expectedResult =
-                ImmutableMap.of(
+                singletonMap(
                         key,
                         AttributeValue.builder()
                                 .l(
@@ -502,7 +502,7 @@ public class RowDataToAttributeValueConverterTest {
                 rowDataToAttributeValueConverter.convertRowData(
                         createArray(value, TimestampData::fromLocalDateTime));
         Map<String, AttributeValue> expectedResult =
-                ImmutableMap.of(
+                singletonMap(
                         key,
                         AttributeValue.builder()
                                 .l(
@@ -531,7 +531,7 @@ public class RowDataToAttributeValueConverterTest {
                 rowDataToAttributeValueConverter.convertRowData(
                         createArray(value, TimestampData::fromInstant));
         Map<String, AttributeValue> expectedResult =
-                ImmutableMap.of(
+                singletonMap(
                         key,
                         AttributeValue.builder()
                                 .l(

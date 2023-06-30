@@ -27,8 +27,6 @@ import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplitState;
 import org.apache.flink.connector.kinesis.source.split.StartingPosition;
 
-import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableSet;
-
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.awssdk.services.kinesis.model.Record;
 
@@ -40,6 +38,8 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.Set;
+
+import static java.util.Collections.singleton;
 
 /**
  * An implementation of the SplitReader that periodically polls the Kinesis stream to retrieve
@@ -148,7 +148,7 @@ public class PollingKinesisShardSplitReader implements SplitReader<Record, Kines
             if (recordsIterator.hasNext()) {
                 return Collections.emptySet();
             }
-            return isComplete ? ImmutableSet.of(splitId) : Collections.emptySet();
+            return isComplete ? singleton(splitId) : Collections.emptySet();
         }
     }
 }

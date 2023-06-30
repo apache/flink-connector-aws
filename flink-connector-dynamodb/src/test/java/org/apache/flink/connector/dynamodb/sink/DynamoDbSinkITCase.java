@@ -32,7 +32,6 @@ import org.apache.flink.streaming.api.functions.source.datagen.RandomGenerator;
 import org.apache.flink.test.junit5.MiniClusterExtension;
 import org.apache.flink.util.StringUtils;
 
-import com.google.common.collect.ImmutableList;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,11 +44,13 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 
+import static java.util.Collections.singletonList;
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.AWS_ACCESS_KEY_ID;
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.AWS_CREDENTIALS_PROVIDER;
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.AWS_ENDPOINT;
@@ -151,7 +152,7 @@ public class DynamoDbSinkITCase {
     public void deduplicatesOnPartitionKey() throws Exception {
         new Scenario(env.fromCollection(getItemsWithDuplicatedPartitionKey()))
                 .withTableName(testTableName)
-                .withOverwriteByPartitionKeys(ImmutableList.of(PARTITION_KEY))
+                .withOverwriteByPartitionKeys(singletonList(PARTITION_KEY))
                 .withBufferMaxTimeMS(60 * 1000)
                 .withExpectedElements(1)
                 .withMaxInflightReqs(1)
@@ -162,7 +163,7 @@ public class DynamoDbSinkITCase {
     public void deduplicatesOnCompositeKeyAndNewerItemTakesPrecedence() throws Exception {
         new Scenario(env.fromCollection(getItemsWithDuplicatedCompositeKey()))
                 .withTableName(testTableName)
-                .withOverwriteByPartitionKeys(ImmutableList.of(PARTITION_KEY, SORT_KEY))
+                .withOverwriteByPartitionKeys(Arrays.asList(PARTITION_KEY, SORT_KEY))
                 .withBufferMaxTimeMS(60 * 1000)
                 // more than one in-flight request may cause a race condition
                 // where the first request to complete will take precedence

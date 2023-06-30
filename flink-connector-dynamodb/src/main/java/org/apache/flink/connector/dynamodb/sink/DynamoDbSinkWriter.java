@@ -31,7 +31,6 @@ import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.groups.SinkWriterMetricGroup;
 import org.apache.flink.util.CollectionUtil;
 
-import com.google.common.collect.ImmutableMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
@@ -53,6 +52,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
+import static java.util.Collections.singletonMap;
 import static org.apache.flink.connector.aws.util.AWSCredentialFatalExceptionClassifiers.getInvalidCredentialsExceptionClassifier;
 import static org.apache.flink.connector.aws.util.AWSCredentialFatalExceptionClassifiers.getSdkClientMisconfiguredExceptionClassifier;
 import static org.apache.flink.connector.base.sink.writer.AsyncSinkFatalExceptionClassifiers.getInterruptedExceptionClassifier;
@@ -184,7 +184,7 @@ class DynamoDbSinkWriter<InputT> extends AsyncSinkWriter<InputT, DynamoDbWriteRe
                         .getClient()
                         .batchWriteItem(
                                 BatchWriteItemRequest.builder()
-                                        .requestItems(ImmutableMap.of(tableName, items))
+                                        .requestItems(singletonMap(tableName, items))
                                         .build());
 
         future.whenComplete(

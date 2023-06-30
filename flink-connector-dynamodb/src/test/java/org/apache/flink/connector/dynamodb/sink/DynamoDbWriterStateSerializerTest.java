@@ -21,13 +21,13 @@ package org.apache.flink.connector.dynamodb.sink;
 import org.apache.flink.connector.base.sink.writer.BufferedRequestState;
 import org.apache.flink.connector.base.sink.writer.ElementConverter;
 
-import com.google.common.collect.ImmutableMap;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
+import static java.util.Collections.singletonMap;
 import static org.apache.flink.connector.base.sink.writer.AsyncSinkWriterTestUtils.getTestState;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
@@ -42,7 +42,7 @@ public class DynamoDbWriterStateSerializerTest {
                     DynamoDbWriteRequest.builder()
                             .setType(DynamoDbWriteRequestType.PUT)
                             .setItem(
-                                    ImmutableMap.of(
+                                    singletonMap(
                                             "key", AttributeValue.builder().s(element).build()))
                             .build();
 

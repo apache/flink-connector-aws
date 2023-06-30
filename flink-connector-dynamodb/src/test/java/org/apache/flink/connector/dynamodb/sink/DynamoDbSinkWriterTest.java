@@ -22,8 +22,6 @@ import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.connector.base.sink.writer.TestSinkInitContext;
 import org.apache.flink.connector.dynamodb.sink.client.SdkClientProvider;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
 import software.amazon.awssdk.core.exception.SdkClientException;
@@ -42,7 +40,9 @@ import software.amazon.awssdk.services.dynamodb.model.WriteRequest;
 import software.amazon.awssdk.services.sts.model.StsException;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -51,8 +51,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
+import static java.util.Collections.singletonList;
+import static java.util.Collections.singletonMap;
+import static java.util.stream.Collectors.toList;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Tests for {@link DynamoDbSinkWriter}. */
@@ -67,13 +69,13 @@ public class DynamoDbSinkWriterTest {
     public void testSuccessfulRequestWithNoDeduplication() throws Exception {
         List<String> overwriteByPartitionKeys = Collections.emptyList();
         List<DynamoDbWriteRequest> inputRequests =
-                ImmutableList.of(
+                Arrays.asList(
                         sinkPutRequest(item("pk", "1")),
                         sinkPutRequest(item("pk", "2")),
                         sinkDeleteRequest(item("pk", "3")),
                         sinkDeleteRequest(item("pk", "4")));
         List<WriteRequest> expectedClientRequests =
-                ImmutableList.of(
+                Arrays.asList(
                         dynamoDbPutRequest(item("pk", "1")),
                         dynamoDbPutRequest(item("pk", "2")),
                         dynamoDbDeleteRequest(item("pk", "3")),
@@ -95,11 +97,11 @@ public class DynamoDbSinkWriterTest {
 
     @Test
     public void testPutRequestPartitionKeyDeduplication() throws Exception {
-        List<String> overwriteByPartitionKeys = ImmutableList.of(PARTITION_KEY);
+        List<String> overwriteByPartitionKeys = singletonList(PARTITION_KEY);
         List<DynamoDbWriteRequest> inputRequests =
-                ImmutableList.of(sinkPutRequest(item("pk", "1")), sinkPutRequest(item("pk", "2")));
+                Arrays.asList(sinkPutRequest(item("pk", "1")), sinkPutRequest(item("pk", "2")));
         List<WriteRequest> expectedClientRequests =
-                ImmutableList.of(dynamoDbPutRequest(item("pk", "2")));
+                Arrays.asList(dynamoDbPutRequest(item("pk", "2")));
 
         TrackingDynamoDbAsyncClient trackingDynamoDbAsyncClient = new TrackingDynamoDbAsyncClient();
         DynamoDbSinkWriter<Map<String, AttributeValue>> dynamoDbSinkWriter =
@@ -117,12 +119,12 @@ public class DynamoDbSinkWriterTest {
 
     @Test
     public void testDeleteRequestPartitionKeyDeduplication() throws Exception {
-        List<String> overwriteByPartitionKeys = ImmutableList.of(PARTITION_KEY);
+        List<String> overwriteByPartitionKeys = singletonList(PARTITION_KEY);
         List<DynamoDbWriteRequest> inputRequests =
-                ImmutableList.of(
+                Arrays.asList(
                         sinkDeleteRequest(item("pk", "1")), sinkDeleteRequest(item("pk", "2")));
         List<WriteRequest> expectedClientRequests =
-                ImmutableList.of(dynamoDbDeleteRequest(item("pk", "2")));
+                singletonList(dynamoDbDeleteRequest(item("pk", "2")));
 
         TrackingDynamoDbAsyncClient trackingDynamoDbAsyncClient = new TrackingDynamoDbAsyncClient();
         DynamoDbSinkWriter<Map<String, AttributeValue>> dynamoDbSinkWriter =
@@ -140,15 +142,15 @@ public class DynamoDbSinkWriterTest {
 
     @Test
     public void testMultipleKeyDeduplication() throws Exception {
-        List<String> overwriteByPartitionKeys = ImmutableList.of(PARTITION_KEY, SORT_KEY);
+        List<String> overwriteByPartitionKeys = Arrays.asList(PARTITION_KEY, SORT_KEY);
         List<DynamoDbWriteRequest> inputRequests =
-                ImmutableList.of(
+                Arrays.asList(
                         sinkPutRequest(item("pk", "1")),
                         sinkPutRequest(item("pk", "2")),
                         sinkPutRequest(itemWithPayload("pk", "2", "string_payload_1")),
                         sinkPutRequest(itemWithPayload("pk", "2", "string_payload_2")));
         List<WriteRequest> expectedClientRequests =
-                ImmutableList.of(
+                Arrays.asList(
                         dynamoDbPutRequest(item("pk", "1")),
                         dynamoDbPutRequest(itemWithPayload("pk", "2", "string_payload_2")));
 
@@ -203,13 +205,13 @@ public class DynamoDbSinkWriterTest {
     public void testPartiallyFailedRequestRetriesFailedRecords() throws Exception {
         boolean failOnError = false;
         List<DynamoDbWriteRequest> inputRequests =
-                ImmutableList.of(
+                Arrays.asList(
                         sinkPutRequest(item("put_will_fail_pk", "1")),
                         sinkPutRequest(item("put_will_not_fail_pk", "2")),
                         sinkDeleteRequest(item("delete_will_fail_pk", "3")),
                         sinkDeleteRequest(item("delete_will_not_fail_pk", "4")));
         List<DynamoDbWriteRequest> expectedRetriedRecords =
-                ImmutableList.of(
+                Arrays.asList(
                         sinkPutRequest(item("put_will_fail_pk", "1")),
                         sinkDeleteRequest(item("delete_will_fail_pk", "3")));
         Predicate<String> failWhenPartitionKeyMatcher = str -> str.contains("will_fail_pk");
@@ -370,7 +372,7 @@ public class DynamoDbSinkWriterTest {
     }
 
     private List<DynamoDbWriteRequest> getDefaultInputRequests() {
-        return ImmutableList.of(sinkPutRequest(item("pk", "1")), sinkPutRequest(item("pk", "2")));
+        return Arrays.asList(sinkPutRequest(item("pk", "1")), sinkPutRequest(item("pk", "2")));
     }
 
     private Optional<Exception> getGenericRetryableException() {
@@ -418,22 +420,22 @@ public class DynamoDbSinkWriterTest {
     }
 
     private Map<String, AttributeValue> item(String partitionKey, String sortKey) {
-        return ImmutableMap.<String, AttributeValue>builder()
-                .put(PARTITION_KEY, AttributeValue.builder().s(partitionKey).build())
-                .put(SORT_KEY, AttributeValue.builder().n(sortKey).build())
-                .put("string_payload", AttributeValue.builder().s("some_strings").build())
-                .put("number_payload", AttributeValue.builder().n("1234").build())
-                .build();
+        final Map<String, AttributeValue> item = new HashMap<>();
+        item.put(PARTITION_KEY, AttributeValue.builder().s(partitionKey).build());
+        item.put(SORT_KEY, AttributeValue.builder().n(sortKey).build());
+        item.put("string_payload", AttributeValue.builder().s("some_strings").build());
+        item.put("number_payload", AttributeValue.builder().n("1234").build());
+        return item;
     }
 
     private Map<String, AttributeValue> itemWithPayload(
             String partitionKey, String sortKey, String payload) {
-        return ImmutableMap.<String, AttributeValue>builder()
-                .put(PARTITION_KEY, AttributeValue.builder().s(partitionKey).build())
-                .put(SORT_KEY, AttributeValue.builder().n(sortKey).build())
-                .put("string_payload", AttributeValue.builder().s(payload).build())
-                .put("number_payload", AttributeValue.builder().n("1234").build())
-                .build();
+        final Map<String, AttributeValue> item = new HashMap<>();
+        item.put(PARTITION_KEY, AttributeValue.builder().s(partitionKey).build());
+        item.put(SORT_KEY, AttributeValue.builder().n(sortKey).build());
+        item.put("string_payload", AttributeValue.builder().s(payload).build());
+        item.put("number_payload", AttributeValue.builder().n("1234").build());
+        return item;
     }
 
     private static class TestAsyncDynamoDbClientProvider
@@ -530,13 +532,12 @@ public class DynamoDbSinkWriterTest {
                                                             .item()
                                                             .get(PARTITION_KEY)
                                                             .s()))
-                            .collect(Collectors.toList());
+                            .collect(toList());
 
             BatchWriteItemResponse.Builder responseBuilder = BatchWriteItemResponse.builder();
             if (!failedRequests.isEmpty()) {
                 responseBuilder =
-                        responseBuilder.unprocessedItems(
-                                ImmutableMap.of(TABLE_NAME, failedRequests));
+                        responseBuilder.unprocessedItems(singletonMap(TABLE_NAME, failedRequests));
             }
             return CompletableFuture.completedFuture(responseBuilder.build());
         }
@@ -588,13 +589,12 @@ public class DynamoDbSinkWriterTest {
                                                     "Write request cannot be empty");
                                         }
                                     })
-                            .collect(Collectors.toList());
+                            .collect(toList());
 
             BatchWriteItemResponse.Builder responseBuilder = BatchWriteItemResponse.builder();
             if (!failedRequests.isEmpty()) {
                 responseBuilder =
-                        responseBuilder.unprocessedItems(
-                                ImmutableMap.of(TABLE_NAME, failedRequests));
+                        responseBuilder.unprocessedItems(singletonMap(TABLE_NAME, failedRequests));
             }
             return CompletableFuture.completedFuture(responseBuilder.build());
         }

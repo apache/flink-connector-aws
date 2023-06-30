@@ -18,7 +18,6 @@
 
 package org.apache.flink.connector.dynamodb.sink;
 
-import com.google.common.collect.ImmutableMap;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
@@ -28,6 +27,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class DynamoDbWriteRequestTest {
@@ -51,7 +51,7 @@ class DynamoDbWriteRequestTest {
         DynamoDbWriteRequest dynamoDbWriteRequest =
                 DynamoDbWriteRequest.builder()
                         .setItem(
-                                ImmutableMap.of(
+                                singletonMap(
                                         "testKey", AttributeValue.builder().s("testValue").build()))
                         .setType(DynamoDbWriteRequestType.PUT)
                         .build();
