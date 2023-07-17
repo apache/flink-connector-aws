@@ -179,7 +179,7 @@ For convenience, Flink provides the following schemas out of the box:
        
 {{< tabs "8c6721c7-4a48-496e-b0fe-6522cf6a5e13" >}}
 {{< tab "GlueSchemaRegistryJsonDeserializationSchema" >}}
-{{< artifact flink-jsonschema-glue-schema-registry >}}
+{{< connector_artifact flink-json-glue-schema-registry kinesis >}}
 {{< /tab >}}
 {{< /tabs >}}
     
@@ -201,7 +201,7 @@ For convenience, Flink provides the following schemas out of the box:
 {{< artifact flink-avro >}}
 {{< /tab >}}
 {{< tab "GlueSchemaRegistryAvroDeserializationSchema" >}}
-{{< artifact flink-avro-glue-schema-registry >}}
+{{< connector_artifact flink-avro-glue-schema-registry kinesis >}}
 {{< /tab >}}
 {{< /tabs >}}
 
