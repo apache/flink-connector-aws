@@ -126,7 +126,7 @@ kinesis = env.add_source(FlinkKinesisConsumer("stream-1", SimpleStringSchema(), 
 {{< /tab >}}
 {{< /tabs >}}
 
-上面是一个使用消费者的简单例子。 消费者使用 `java.util.Properties` 实例配置，配置的健可以在 `AWSConfigConstants` (AWS 特定的参数)
+上面是一个使用消费者的简单例子。 消费者使用 `java.util.Properties` 实例配置，配置的键可以在 `AWSConfigConstants` (AWS 特定的参数)
 和 `ConsumerConfigConstants` (Kinesis 消费者参数)。这个例子演示了在 AWS区域 "us-east-1" 消费一个 Kinesis流。AWS 证书使用基本的方法提供：AWS访问密钥
 ID和秘密访问密钥直接在配置中提供。数据从 Kinesis流中最新的位置消费（另一个选项是把 `ConsumerConfigConstants.STREAM_INITIAL_POSITION`
 设置为 `TRIM_HORIZON` ，让消费者从 Kinesis 流中可能的最早记录开始读取）。
