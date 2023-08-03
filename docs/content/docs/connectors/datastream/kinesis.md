@@ -50,8 +50,6 @@ To use this connector, add one or more of the following dependencies to your pro
   </tbody>
 </table>
 
-Due to the licensing issue, the `flink-connector-kinesis` artifact is not deployed to Maven central for the prior versions. Please see the version specific documentation for further information.
-
 {{< py_connector_download_link "kinesis" >}}
 
 ## Using the Amazon Kinesis Streams Service
