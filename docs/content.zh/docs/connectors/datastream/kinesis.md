@@ -50,8 +50,6 @@ Kinesis 连接器提供访问 [Amazon Kinesis Data Streams](http://aws.amazon.co
   </tbody>
 </table>
 
-由于许可证问题，以前的版本中 `flink-connector-kinesis` 工件没有部署到Maven中心库。有关更多信息，请参阅特定版本的文档。
-
 {{< py_connector_download_link "kinesis" >}}
 
 ## 使用亚马逊 Kinesis 流服务
