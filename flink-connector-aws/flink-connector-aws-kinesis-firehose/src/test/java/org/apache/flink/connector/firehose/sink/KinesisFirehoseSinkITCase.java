@@ -22,11 +22,13 @@ import org.apache.flink.connector.aws.testutils.AWSServicesTestUtils;
 import org.apache.flink.connector.aws.testutils.LocalstackContainer;
 import org.apache.flink.connector.firehose.sink.testutils.KinesisFirehoseTestUtils;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.test.junit5.MiniClusterExtension;
 import org.apache.flink.util.DockerImageVersions;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.junit.jupiter.Container;
@@ -54,6 +56,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /** Integration test suite for the {@code KinesisFirehoseSink} using a localstack container. */
 @Testcontainers
+@ExtendWith(MiniClusterExtension.class)
 class KinesisFirehoseSinkITCase {
 
     private static final Logger LOG = LoggerFactory.getLogger(KinesisFirehoseSinkITCase.class);

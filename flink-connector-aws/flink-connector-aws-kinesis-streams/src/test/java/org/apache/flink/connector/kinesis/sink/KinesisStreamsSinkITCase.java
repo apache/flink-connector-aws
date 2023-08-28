@@ -29,12 +29,14 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.datagen.DataGeneratorSource;
 import org.apache.flink.streaming.api.functions.source.datagen.RandomGenerator;
+import org.apache.flink.test.junit5.MiniClusterExtension;
 import org.apache.flink.util.DockerImageVersions;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.rnorth.ducttape.ratelimits.RateLimiter;
 import org.rnorth.ducttape.ratelimits.RateLimiterBuilder;
 import org.testcontainers.containers.Network;
@@ -65,6 +67,7 @@ import static org.apache.flink.connector.aws.config.AWSConfigConstants.TRUST_ALL
 
 /** IT cases for using Kinesis Data Streams Sink based on Kinesalite. */
 @Testcontainers
+@ExtendWith(MiniClusterExtension.class)
 class KinesisStreamsSinkITCase {
 
     private static final String DEFAULT_FIRST_SHARD_NAME = "shardId-000000000000";
