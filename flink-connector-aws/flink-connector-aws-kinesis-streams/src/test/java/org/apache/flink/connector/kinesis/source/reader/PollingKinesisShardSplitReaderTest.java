@@ -25,14 +25,14 @@ import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.connector.kinesis.source.util.KinesisStreamProxyProvider.TestKinesisStreamProxy;
 import org.apache.flink.connector.kinesis.source.util.TestUtil;
 
-import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableList;
-
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.kinesis.model.Record;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.flink.connector.kinesis.source.util.KinesisStreamProxyProvider.getTestStreamProxy;
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.generateShardId;
@@ -65,7 +65,7 @@ class PollingKinesisShardSplitReaderTest {
         String shardId = generateShardId(1);
         testStreamProxy.addShards(shardId);
         splitReader.handleSplitsChanges(
-                new SplitsAddition<>(ImmutableList.of(getTestSplit(shardId))));
+                new SplitsAddition<>(Collections.singletonList(getTestSplit(shardId))));
 
         // When fetching records
         RecordsWithSplitIds<Record> retrievedRecords = splitReader.fetch();
@@ -86,16 +86,16 @@ class PollingKinesisShardSplitReaderTest {
         String shardId = generateShardId(1);
         testStreamProxy.addShards(shardId);
         List<Record> expectedRecords =
-                ImmutableList.of(
-                        getTestRecord("data-1"), getTestRecord("data-2"), getTestRecord("data-3"));
+                Stream.of(getTestRecord("data-1"), getTestRecord("data-2"), getTestRecord("data-3"))
+                        .collect(Collectors.toList());
         testStreamProxy.addRecords(
-                TestUtil.STREAM_ARN, shardId, ImmutableList.of(expectedRecords.get(0)));
+                TestUtil.STREAM_ARN, shardId, Collections.singletonList(expectedRecords.get(0)));
         testStreamProxy.addRecords(
-                TestUtil.STREAM_ARN, shardId, ImmutableList.of(expectedRecords.get(1)));
+                TestUtil.STREAM_ARN, shardId, Collections.singletonList(expectedRecords.get(1)));
         testStreamProxy.addRecords(
-                TestUtil.STREAM_ARN, shardId, ImmutableList.of(expectedRecords.get(2)));
+                TestUtil.STREAM_ARN, shardId, Collections.singletonList(expectedRecords.get(2)));
         splitReader.handleSplitsChanges(
-                new SplitsAddition<>(ImmutableList.of(getTestSplit(shardId))));
+                new SplitsAddition<>(Collections.singletonList(getTestSplit(shardId))));
 
         // When fetching records
         List<Record> records = new ArrayList<>();
@@ -117,16 +117,16 @@ class PollingKinesisShardSplitReaderTest {
         String shardId = generateShardId(1);
         testStreamProxy.addShards(shardId);
         List<Record> expectedRecords =
-                ImmutableList.of(
-                        getTestRecord("data-1"), getTestRecord("data-2"), getTestRecord("data-3"));
+                Stream.of(getTestRecord("data-1"), getTestRecord("data-2"), getTestRecord("data-3"))
+                        .collect(Collectors.toList());
         testStreamProxy.addRecords(
-                TestUtil.STREAM_ARN, shardId, ImmutableList.of(expectedRecords.get(0)));
+                TestUtil.STREAM_ARN, shardId, Collections.singletonList(expectedRecords.get(0)));
         testStreamProxy.addRecords(
-                TestUtil.STREAM_ARN, shardId, ImmutableList.of(expectedRecords.get(1)));
+                TestUtil.STREAM_ARN, shardId, Collections.singletonList(expectedRecords.get(1)));
         testStreamProxy.addRecords(
-                TestUtil.STREAM_ARN, shardId, ImmutableList.of(expectedRecords.get(2)));
+                TestUtil.STREAM_ARN, shardId, Collections.singletonList(expectedRecords.get(2)));
         splitReader.handleSplitsChanges(
-                new SplitsAddition<>(ImmutableList.of(getTestSplit(shardId))));
+                new SplitsAddition<>(Collections.singletonList(getTestSplit(shardId))));
 
         // When records are fetched
         List<Record> fetchedRecords = new ArrayList<>();
@@ -150,7 +150,7 @@ class PollingKinesisShardSplitReaderTest {
         testStreamProxy.addShards(shardId);
         testStreamProxy.addRecords(TestUtil.STREAM_ARN, shardId, Collections.emptyList());
         KinesisShardSplit split = getTestSplit(shardId);
-        splitReader.handleSplitsChanges(new SplitsAddition<>(ImmutableList.of(split)));
+        splitReader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
         testStreamProxy.setShouldCompleteNextShard(true);
 
         // When fetching records
@@ -172,11 +172,11 @@ class PollingKinesisShardSplitReaderTest {
         String shardId = generateShardId(1);
         testStreamProxy.addShards(shardId);
         List<Record> expectedRecords =
-                ImmutableList.of(
-                        getTestRecord("data-1"), getTestRecord("data-2"), getTestRecord("data-3"));
+                Stream.of(getTestRecord("data-1"), getTestRecord("data-2"), getTestRecord("data-3"))
+                        .collect(Collectors.toList());
         testStreamProxy.addRecords(TestUtil.STREAM_ARN, shardId, expectedRecords);
         KinesisShardSplit split = getTestSplit(shardId);
-        splitReader.handleSplitsChanges(new SplitsAddition<>(ImmutableList.of(split)));
+        splitReader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
 
         // When fetching records
         List<Record> fetchedRecords = new ArrayList<>();

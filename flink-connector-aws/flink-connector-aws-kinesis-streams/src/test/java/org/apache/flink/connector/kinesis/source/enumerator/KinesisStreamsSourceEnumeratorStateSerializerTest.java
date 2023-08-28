@@ -22,12 +22,12 @@ import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplitSerializer;
 import org.apache.flink.core.io.VersionMismatchException;
 
-import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableSet;
-
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.util.Arrays.copyOf;
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.generateShardId;
@@ -40,10 +40,11 @@ class KinesisStreamsSourceEnumeratorStateSerializerTest {
     @Test
     void testSerializeAndDeserializeEverythingSpecified() throws Exception {
         Set<String> completedShardIds =
-                ImmutableSet.of(
-                        "shardId-000000000001", "shardId-000000000002", "shardId-000000000003");
+                Stream.of("shardId-000000000001", "shardId-000000000002", "shardId-000000000003")
+                        .collect(Collectors.toSet());
         Set<KinesisShardSplit> unassignedSplits =
-                ImmutableSet.of(getTestSplit(generateShardId(1)), getTestSplit(generateShardId(2)));
+                Stream.of(getTestSplit(generateShardId(1)), getTestSplit(generateShardId(2)))
+                        .collect(Collectors.toSet());
         String lastSeenShardId = "shardId-000000000002";
         KinesisStreamsSourceEnumeratorState initialState =
                 new KinesisStreamsSourceEnumeratorState(unassignedSplits, lastSeenShardId);
@@ -62,10 +63,11 @@ class KinesisStreamsSourceEnumeratorStateSerializerTest {
     @Test
     void testDeserializeWithWrongVersionStateSerializer() throws Exception {
         Set<String> completedShardIds =
-                ImmutableSet.of(
-                        "shardId-000000000001", "shardId-000000000002", "shardId-000000000003");
+                Stream.of("shardId-000000000001", "shardId-000000000002", "shardId-000000000003")
+                        .collect(Collectors.toSet());
         Set<KinesisShardSplit> unassignedSplits =
-                ImmutableSet.of(getTestSplit(generateShardId(1)), getTestSplit(generateShardId(2)));
+                Stream.of(getTestSplit(generateShardId(1)), getTestSplit(generateShardId(2)))
+                        .collect(Collectors.toSet());
         String lastSeenShardId = "shardId-000000000002";
         KinesisStreamsSourceEnumeratorState initialState =
                 new KinesisStreamsSourceEnumeratorState(unassignedSplits, lastSeenShardId);
@@ -92,10 +94,11 @@ class KinesisStreamsSourceEnumeratorStateSerializerTest {
     @Test
     void testDeserializeWithWrongVersionSplitSerializer() throws Exception {
         Set<String> completedShardIds =
-                ImmutableSet.of(
-                        "shardId-000000000001", "shardId-000000000002", "shardId-000000000003");
+                Stream.of("shardId-000000000001", "shardId-000000000002", "shardId-000000000003")
+                        .collect(Collectors.toSet());
         Set<KinesisShardSplit> unassignedSplits =
-                ImmutableSet.of(getTestSplit(generateShardId(1)), getTestSplit(generateShardId(2)));
+                Stream.of(getTestSplit(generateShardId(1)), getTestSplit(generateShardId(2)))
+                        .collect(Collectors.toSet());
         String lastSeenShardId = "shardId-000000000002";
         KinesisStreamsSourceEnumeratorState initialState =
                 new KinesisStreamsSourceEnumeratorState(unassignedSplits, lastSeenShardId);
@@ -120,10 +123,11 @@ class KinesisStreamsSourceEnumeratorStateSerializerTest {
     @Test
     void testSerializeWithTrailingBytes() throws Exception {
         Set<String> completedShardIds =
-                ImmutableSet.of(
-                        "shardId-000000000001", "shardId-000000000002", "shardId-000000000003");
+                Stream.of("shardId-000000000001", "shardId-000000000002", "shardId-000000000003")
+                        .collect(Collectors.toSet());
         Set<KinesisShardSplit> unassignedSplits =
-                ImmutableSet.of(getTestSplit(generateShardId(1)), getTestSplit(generateShardId(2)));
+                Stream.of(getTestSplit(generateShardId(1)), getTestSplit(generateShardId(2)))
+                        .collect(Collectors.toSet());
         String lastSeenShardId = "shardId-000000000002";
         KinesisStreamsSourceEnumeratorState initialState =
                 new KinesisStreamsSourceEnumeratorState(unassignedSplits, lastSeenShardId);
