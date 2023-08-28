@@ -28,8 +28,6 @@ import org.apache.flink.connector.kinesis.source.split.KinesisShardSplitState;
 import org.apache.flink.connector.kinesis.source.split.StartingPosition;
 import org.apache.flink.util.Collector;
 
-import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableList;
-
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.kinesis.model.Record;
@@ -39,6 +37,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.getTestSplitState;
 import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
@@ -51,20 +51,27 @@ class KinesisStreamsRecordEmitterTest {
     void testEmitRecord() throws Exception {
         final Instant startTime = Instant.now();
         List<Record> inputRecords =
-                ImmutableList.of(
-                        Record.builder()
-                                .data(SdkBytes.fromByteArray(STRING_SCHEMA.serialize("data-1")))
-                                .approximateArrivalTimestamp(startTime)
-                                .build(),
-                        Record.builder()
-                                .data(SdkBytes.fromByteArray(STRING_SCHEMA.serialize("data-2")))
-                                .approximateArrivalTimestamp(startTime.plusSeconds(10))
-                                .build(),
-                        Record.builder()
-                                .data(SdkBytes.fromByteArray(STRING_SCHEMA.serialize("data-3")))
-                                .approximateArrivalTimestamp(startTime.plusSeconds(20))
-                                .sequenceNumber("some-sequence-number")
-                                .build());
+                Stream.of(
+                                Record.builder()
+                                        .data(
+                                                SdkBytes.fromByteArray(
+                                                        STRING_SCHEMA.serialize("data-1")))
+                                        .approximateArrivalTimestamp(startTime)
+                                        .build(),
+                                Record.builder()
+                                        .data(
+                                                SdkBytes.fromByteArray(
+                                                        STRING_SCHEMA.serialize("data-2")))
+                                        .approximateArrivalTimestamp(startTime.plusSeconds(10))
+                                        .build(),
+                                Record.builder()
+                                        .data(
+                                                SdkBytes.fromByteArray(
+                                                        STRING_SCHEMA.serialize("data-3")))
+                                        .approximateArrivalTimestamp(startTime.plusSeconds(20))
+                                        .sequenceNumber("some-sequence-number")
+                                        .build())
+                        .collect(Collectors.toList());
         final StartingPosition expectedStartingPosition =
                 StartingPosition.continueFromSequenceNumber("some-sequence-number");
         final CapturingSourceOutput<String> output = new CapturingSourceOutput<>();
@@ -91,22 +98,29 @@ class KinesisStreamsRecordEmitterTest {
     void testEmitRecordBasedOnSequenceNumber() throws Exception {
         final Instant startTime = Instant.now();
         List<Record> inputRecords =
-                ImmutableList.of(
-                        Record.builder()
-                                .data(SdkBytes.fromByteArray(STRING_SCHEMA.serialize("data-1")))
-                                .sequenceNumber("emit")
-                                .approximateArrivalTimestamp(startTime)
-                                .build(),
-                        Record.builder()
-                                .data(SdkBytes.fromByteArray(STRING_SCHEMA.serialize("data-2")))
-                                .sequenceNumber("emit")
-                                .approximateArrivalTimestamp(startTime.plusSeconds(10))
-                                .build(),
-                        Record.builder()
-                                .data(SdkBytes.fromByteArray(STRING_SCHEMA.serialize("data-3")))
-                                .approximateArrivalTimestamp(startTime.plusSeconds(20))
-                                .sequenceNumber("do-not-emit")
-                                .build());
+                Stream.of(
+                                Record.builder()
+                                        .data(
+                                                SdkBytes.fromByteArray(
+                                                        STRING_SCHEMA.serialize("data-1")))
+                                        .sequenceNumber("emit")
+                                        .approximateArrivalTimestamp(startTime)
+                                        .build(),
+                                Record.builder()
+                                        .data(
+                                                SdkBytes.fromByteArray(
+                                                        STRING_SCHEMA.serialize("data-2")))
+                                        .sequenceNumber("emit")
+                                        .approximateArrivalTimestamp(startTime.plusSeconds(10))
+                                        .build(),
+                                Record.builder()
+                                        .data(
+                                                SdkBytes.fromByteArray(
+                                                        STRING_SCHEMA.serialize("data-3")))
+                                        .approximateArrivalTimestamp(startTime.plusSeconds(20))
+                                        .sequenceNumber("do-not-emit")
+                                        .build())
+                        .collect(Collectors.toList());
         final CapturingSourceOutput<String> output = new CapturingSourceOutput<>();
         final KinesisShardSplitState splitState = getTestSplitState();
 
@@ -126,20 +140,27 @@ class KinesisStreamsRecordEmitterTest {
     void testEmitRecordWithMetadata() throws Exception {
         final Instant startTime = Instant.now();
         List<Record> inputRecords =
-                ImmutableList.of(
-                        Record.builder()
-                                .data(SdkBytes.fromByteArray(STRING_SCHEMA.serialize("data-1")))
-                                .approximateArrivalTimestamp(startTime)
-                                .build(),
-                        Record.builder()
-                                .data(SdkBytes.fromByteArray(STRING_SCHEMA.serialize("data-2")))
-                                .approximateArrivalTimestamp(startTime.plusSeconds(10))
-                                .build(),
-                        Record.builder()
-                                .data(SdkBytes.fromByteArray(STRING_SCHEMA.serialize("data-3")))
-                                .approximateArrivalTimestamp(startTime.plusSeconds(20))
-                                .sequenceNumber("some-sequence-number")
-                                .build());
+                Stream.of(
+                                Record.builder()
+                                        .data(
+                                                SdkBytes.fromByteArray(
+                                                        STRING_SCHEMA.serialize("data-1")))
+                                        .approximateArrivalTimestamp(startTime)
+                                        .build(),
+                                Record.builder()
+                                        .data(
+                                                SdkBytes.fromByteArray(
+                                                        STRING_SCHEMA.serialize("data-2")))
+                                        .approximateArrivalTimestamp(startTime.plusSeconds(10))
+                                        .build(),
+                                Record.builder()
+                                        .data(
+                                                SdkBytes.fromByteArray(
+                                                        STRING_SCHEMA.serialize("data-3")))
+                                        .approximateArrivalTimestamp(startTime.plusSeconds(20))
+                                        .sequenceNumber("some-sequence-number")
+                                        .build())
+                        .collect(Collectors.toList());
         final CapturingSourceOutput<String> output = new CapturingSourceOutput<>();
         final KinesisShardSplitState splitState = getTestSplitState();
 

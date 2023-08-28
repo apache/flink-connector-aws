@@ -30,10 +30,6 @@ import org.apache.flink.connector.kinesis.source.proxy.StreamProxy;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.connector.kinesis.source.split.StartingPosition;
 
-import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableList;
-import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableMap;
-import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableSet;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.model.Shard;
@@ -303,24 +299,26 @@ public class KinesisStreamsSourceEnumerator
 
         private ShardAssignerContext withPendingSplitAssignments(
                 Map<Integer, List<KinesisShardSplit>> pendingSplitAssignments) {
-            ImmutableMap.Builder<Integer, List<KinesisShardSplit>> mapBuilder =
-                    ImmutableMap.builder();
+            Map<Integer, List<KinesisShardSplit>> copyPendingSplitAssignments = new HashMap<>();
             for (Entry<Integer, List<KinesisShardSplit>> entry :
                     pendingSplitAssignments.entrySet()) {
-                mapBuilder.put(entry.getKey(), ImmutableList.copyOf(entry.getValue()));
+                copyPendingSplitAssignments.put(
+                        entry.getKey(),
+                        Collections.unmodifiableList(new ArrayList<>(entry.getValue())));
             }
-            this.pendingSplitAssignments = mapBuilder.build();
+            this.pendingSplitAssignments = Collections.unmodifiableMap(copyPendingSplitAssignments);
             return this;
         }
 
         @Override
         public Map<Integer, Set<KinesisShardSplit>> getCurrentSplitAssignment() {
-            ImmutableMap.Builder<Integer, Set<KinesisShardSplit>> mapBuilder =
-                    ImmutableMap.builder();
+            Map<Integer, Set<KinesisShardSplit>> copyCurrentSplitAssignment = new HashMap<>();
             for (Entry<Integer, Set<KinesisShardSplit>> entry : splitAssignment.entrySet()) {
-                mapBuilder.put(entry.getKey(), ImmutableSet.copyOf(entry.getValue()));
+                copyCurrentSplitAssignment.put(
+                        entry.getKey(),
+                        Collections.unmodifiableSet(new HashSet<>(entry.getValue())));
             }
-            return mapBuilder.build();
+            return Collections.unmodifiableMap(copyCurrentSplitAssignment);
         }
 
         @Override

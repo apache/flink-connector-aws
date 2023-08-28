@@ -22,8 +22,6 @@ import org.apache.flink.connector.kinesis.source.split.StartingPosition;
 import org.apache.flink.connector.kinesis.source.util.KinesisClientProvider.ListShardItem;
 import org.apache.flink.connector.kinesis.source.util.KinesisClientProvider.TestingKinesisClient;
 
-import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableList;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
@@ -42,9 +40,12 @@ import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.generateShardId;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
@@ -62,7 +63,7 @@ class KinesisStreamProxyTest {
         final List<Shard> expectedShards = getTestShards(0, 3);
 
         List<ListShardItem> listShardItems =
-                ImmutableList.of(
+                Collections.singletonList(
                         ListShardItem.builder()
                                 .validation(
                                         getListShardRequestValidation(
@@ -88,28 +89,30 @@ class KinesisStreamProxyTest {
         final List<Shard> expectedShards = getTestShards(0, 3);
 
         List<ListShardItem> listShardItems =
-                ImmutableList.of(
-                        ListShardItem.builder()
-                                .validation(
-                                        getListShardRequestValidation(
-                                                streamArn, lastSeenShardId, null))
-                                .shards(expectedShards.subList(0, 1))
-                                .nextToken("next-token-1")
-                                .build(),
-                        ListShardItem.builder()
-                                .validation(
-                                        getListShardRequestValidation(
-                                                streamArn, null, "next-token-1"))
-                                .shards(expectedShards.subList(1, 2))
-                                .nextToken("next-token-2")
-                                .build(),
-                        ListShardItem.builder()
-                                .validation(
-                                        getListShardRequestValidation(
-                                                streamArn, null, "next-token-2"))
-                                .shards(expectedShards.subList(2, 4))
-                                .nextToken(null)
-                                .build());
+                Stream.of(
+                                ListShardItem.builder()
+                                        .validation(
+                                                getListShardRequestValidation(
+                                                        streamArn, lastSeenShardId, null))
+                                        .shards(expectedShards.subList(0, 1))
+                                        .nextToken("next-token-1")
+                                        .build(),
+                                ListShardItem.builder()
+                                        .validation(
+                                                getListShardRequestValidation(
+                                                        streamArn, null, "next-token-1"))
+                                        .shards(expectedShards.subList(1, 2))
+                                        .nextToken("next-token-2")
+                                        .build(),
+                                ListShardItem.builder()
+                                        .validation(
+                                                getListShardRequestValidation(
+                                                        streamArn, null, "next-token-2"))
+                                        .shards(expectedShards.subList(2, 4))
+                                        .nextToken(null)
+                                        .build())
+                        .collect(Collectors.toList());
+
         TestingKinesisClient testKinesisClient = new TestingKinesisClient();
         testKinesisClient.setListShardsResponses(listShardItems);
 

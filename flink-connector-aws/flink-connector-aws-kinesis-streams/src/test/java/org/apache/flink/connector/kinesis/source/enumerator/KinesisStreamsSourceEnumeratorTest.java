@@ -29,9 +29,6 @@ import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.connector.kinesis.source.util.TestUtil;
 import org.apache.flink.util.FlinkRuntimeException;
 
-import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableList;
-import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableSet;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -163,7 +160,7 @@ class KinesisStreamsSourceEnumeratorTest {
             TestKinesisStreamProxy streamProxy = getTestStreamProxy();
             final String completedShard = generateShardId(0);
             final String lastSeenShard = generateShardId(1);
-            final Set<String> completedShardIds = ImmutableSet.of(completedShard);
+            final Set<String> completedShardIds = Collections.singleton(completedShard);
 
             KinesisStreamsSourceEnumeratorState state =
                     new KinesisStreamsSourceEnumeratorState(Collections.emptySet(), lastSeenShard);
@@ -253,7 +250,7 @@ class KinesisStreamsSourceEnumeratorTest {
             // Given one shard split is returned
             KinesisShardSplit returnedSplit =
                     initialSplitAssignment.assignment().get(subtaskId).get(0);
-            enumerator.addSplitsBack(ImmutableList.of(returnedSplit), subtaskId);
+            enumerator.addSplitsBack(Collections.singletonList(returnedSplit), subtaskId);
 
             // When first periodic discovery runs
             context.runPeriodicCallable(0);
@@ -273,7 +270,7 @@ class KinesisStreamsSourceEnumeratorTest {
             TestKinesisStreamProxy streamProxy = getTestStreamProxy();
             KinesisStreamsSourceEnumerator enumerator =
                     getSimpleEnumeratorWithNoState(context, streamProxy);
-            List<KinesisShardSplit> splits = ImmutableList.of(getTestSplit());
+            List<KinesisShardSplit> splits = Collections.singletonList(getTestSplit());
 
             // Given enumerator has no assigned splits
             // When we add splits back
@@ -316,7 +313,7 @@ class KinesisStreamsSourceEnumeratorTest {
             // When we add splits back
             KinesisShardSplit returnedSplit =
                     initialSplitAssignment.assignment().get(subtaskId).get(0);
-            enumerator.addSplitsBack(ImmutableList.of(returnedSplit), 1);
+            enumerator.addSplitsBack(Collections.singletonList(returnedSplit), 1);
 
             // Then splits are reassigned
             assertThat(context.getSplitsAssignmentSequence()).hasSizeGreaterThan(1);
