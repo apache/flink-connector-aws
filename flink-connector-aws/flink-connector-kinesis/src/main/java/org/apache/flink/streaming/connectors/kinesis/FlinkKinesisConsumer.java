@@ -28,7 +28,6 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.ClosureCleaner;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.typeutils.ResultTypeQueryable;
-import org.apache.flink.api.java.typeutils.TupleTypeInfo;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
@@ -47,6 +46,7 @@ import org.apache.flink.streaming.connectors.kinesis.serialization.KinesisDeseri
 import org.apache.flink.streaming.connectors.kinesis.serialization.KinesisDeserializationSchemaWrapper;
 import org.apache.flink.streaming.connectors.kinesis.table.DefaultShardAssignerFactory;
 import org.apache.flink.streaming.connectors.kinesis.util.KinesisConfigUtil;
+import org.apache.flink.streaming.connectors.kinesis.util.KinesisStateUtil;
 import org.apache.flink.streaming.connectors.kinesis.util.StreamConsumerRegistrarUtil;
 import org.apache.flink.streaming.connectors.kinesis.util.WatermarkTracker;
 import org.apache.flink.util.InstantiationUtil;
@@ -441,16 +441,14 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
 
     @Override
     public void initializeState(FunctionInitializationContext context) throws Exception {
-        TypeInformation<Tuple2<StreamShardMetadata, SequenceNumber>> shardsStateTypeInfo =
-                new TupleTypeInfo<>(
-                        TypeInformation.of(StreamShardMetadata.class),
-                        TypeInformation.of(SequenceNumber.class));
 
         sequenceNumsStateForCheckpoint =
                 context.getOperatorStateStore()
                         .getUnionListState(
                                 new ListStateDescriptor<>(
-                                        sequenceNumsStateStoreName, shardsStateTypeInfo));
+                                        sequenceNumsStateStoreName,
+                                        KinesisStateUtil.createShardsStateSerializer(
+                                                getRuntimeContext().getExecutionConfig())));
 
         if (context.isRestored()) {
             if (sequenceNumsToRestore == null) {
