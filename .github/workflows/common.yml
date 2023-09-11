@@ -41,6 +41,11 @@ on:
         required: false
         type: number
         default: 50
+      run_aws_end_to_end_test:
+        description: "Whether to run the AWS end to end tests, requiring AWS credentials."
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   compile_and_test:
@@ -55,6 +60,8 @@ jobs:
       FLINK_CACHE_DIR: "/tmp/cache/flink"
       MVN_BUILD_OUTPUT_FILE: "/tmp/mvn_build_output.out"
       MVN_VALIDATION_DIR: "/tmp/flink-validation-deployment"
+      FLINK_AWS_USER: ${{ vars.FLINK_AWS_USER }}
+      FLINK_AWS_PASSWORD: ${{ vars.FLINK_AWS_PASSWORD }}
     steps:
       - run: echo "Running CI pipeline for JDK version ${{ matrix.jdk }}"
 
@@ -110,6 +117,21 @@ jobs:
             -Prun-end-to-end-tests -DdistDir=${{ env.FLINK_CACHE_DIR }}/flink-${{ inputs.flink_version }} \
             | tee ${{ env.MVN_BUILD_OUTPUT_FILE }}
           
+          mvn clean
+
+      - name: Run AWS e2e tests
+        if: ${{ inputs.run_aws_end_to_end_test }}
+        run: |
+          set -o pipefail
+
+          cd flink-connector-aws-e2e-tests
+
+          mvn clean verify ${{ env.MVN_CONNECTION_OPTIONS }} \
+            -DaltDeploymentRepository=validation_repository::default::file:${{ env.MVN_VALIDATION_DIR }} \
+            -Dflink.version=${{ inputs.flink_version }}  \
+            -Prun-aws-end-to-end-tests -DdistDir=${{ env.FLINK_CACHE_DIR }}/flink-${{ inputs.flink_version }} \
+            | tee ${{ env.MVN_BUILD_OUTPUT_FILE }}
+
           mvn clean
 
       - name: Check licensing
