@@ -24,9 +24,9 @@ under the License.
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>io.github.zentol.flink</groupId>
+        <groupId>org.apache.flink</groupId>
         <artifactId>flink-connector-parent</artifactId>
-        <version>1.0</version>
+        <version>1.0.0</version>
     </parent>
 
     <groupId>org.apache.flink</groupId>
