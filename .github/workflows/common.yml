@@ -87,7 +87,7 @@ jobs:
       - name: Download Flink binary
         working-directory: ${{ env.FLINK_CACHE_DIR }}
         if: steps.cache-flink.outputs.cache-hit != 'true'
-        run: wget -q -c ${{ inputs.flink_url }} -O - | tar -xz
+        run: wget -c ${{ inputs.flink_url }} -O - | tar -xz
 
       - name: Compile and test flink-connector-aws
         timeout-minutes: ${{ inputs.timeout_test }}
