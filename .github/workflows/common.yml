@@ -55,8 +55,8 @@ jobs:
       FLINK_CACHE_DIR: "/tmp/cache/flink"
       MVN_BUILD_OUTPUT_FILE: "/tmp/mvn_build_output.out"
       MVN_VALIDATION_DIR: "/tmp/flink-validation-deployment"
-      FLINK_AWS_USER: ${{ vars.FLINK_AWS_USER }}
-      FLINK_AWS_PASSWORD: ${{ vars.FLINK_AWS_PASSWORD }}
+      FLINK_AWS_USER: ${{ secrets.FLINK_AWS_USER }}
+      FLINK_AWS_PASSWORD: ${{ secrets.FLINK_AWS_PASSWORD }}
     steps:
       - run: echo "Running CI pipeline for JDK version ${{ matrix.jdk }}"
 
