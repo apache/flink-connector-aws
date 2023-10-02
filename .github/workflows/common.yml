@@ -41,11 +41,6 @@ on:
         required: false
         type: number
         default: 50
-      run_aws_end_to_end_test:
-        description: "Whether to run the AWS end to end tests, requiring AWS credentials."
-        required: false
-        type: boolean
-        default: false
 
 jobs:
   compile_and_test:
@@ -120,7 +115,7 @@ jobs:
           mvn clean
 
       - name: Run AWS e2e tests
-        if: ${{ inputs.run_aws_end_to_end_test }}
+        if: ${{ github.event_name == 'push' }}
         run: |
           set -o pipefail
 

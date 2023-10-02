@@ -31,4 +31,3 @@ jobs:
       flink_version: ${{ matrix.flink }}
       flink_url: https://s3.amazonaws.com/flink-nightly/flink-${{ matrix.flink }}-bin-scala_2.12.tgz
       cache_flink_binary: false
-      run_aws_end_to_end_test: true
