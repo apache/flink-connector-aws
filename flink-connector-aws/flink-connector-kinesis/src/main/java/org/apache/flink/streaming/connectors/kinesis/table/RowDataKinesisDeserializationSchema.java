@@ -118,6 +118,11 @@ public final class RowDataKinesisDeserializationSchema
             throws IOException {
 
         RowData physicalRow = physicalDeserializer.deserialize(recordValue);
+        // If message can not be deserialized by physicalDeserializer - return null to skip record
+        if (physicalRow == null) {
+            return null;
+        }
+
         GenericRowData metadataRow = new GenericRowData(requestedMetadataFields.size());
 
         for (int i = 0; i < metadataRow.getArity(); i++) {
