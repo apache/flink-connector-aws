@@ -26,6 +26,7 @@ import org.apache.flink.streaming.connectors.kinesis.FlinkKinesisConsumer;
 import org.apache.flink.streaming.connectors.kinesis.KinesisShardAssigner;
 import org.apache.flink.streaming.connectors.kinesis.util.UniformShardAssigner;
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.catalog.Column;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.catalog.WatermarkSpec;
@@ -59,6 +60,7 @@ import static org.apache.flink.streaming.connectors.kinesis.table.RowDataKinesis
 import static org.apache.flink.table.factories.utils.FactoryMocks.createTableSink;
 import static org.apache.flink.table.factories.utils.FactoryMocks.createTableSource;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Test for {@link KinesisDynamicSource} and {@link KinesisDynamicSink} created by {@link
@@ -245,6 +247,49 @@ public class KinesisDynamicTableFactoryTest extends TestLogger {
         assertThat(kinesisConsumer.getShardAssigner().getClass().equals(defaultShardAssignerClass));
     }
 
+    @Test
+    public void testGoodTableSourceWithSinkOptions() {
+        ResolvedSchema sourceSchema = defaultSourceSchema();
+        Map<String, String> tableOptions = defaultTableOptionsWithSinkOptions().build();
+
+        // Construct actual DynamicTableSource using FactoryUtil
+        KinesisDynamicSource actualSource =
+                (KinesisDynamicSource) createTableSource(sourceSchema, tableOptions);
+
+        // Construct expected DynamicTableSink using factory under test
+        KinesisDynamicSource expectedSource =
+                new KinesisDynamicSource(
+                        sourceSchema.toPhysicalRowDataType(),
+                        STREAM_NAME,
+                        DEFAULT_SHARD_ASSIGNER_ID,
+                        defaultConsumerProperties(),
+                        new TestFormatFactory.DecodingFormatMock(",", true));
+
+        // verify that the constructed DynamicTableSink is as expected
+        assertThat(actualSource).isEqualTo(expectedSource);
+
+        // verify produced source
+        ScanTableSource.ScanRuntimeProvider functionProvider =
+                actualSource.getScanRuntimeProvider(ScanRuntimeProviderContext.INSTANCE);
+        SourceFunction<RowData> sourceFunction =
+                as(functionProvider, SourceFunctionProvider.class).createSourceFunction();
+        assertThat(sourceFunction).isInstanceOf(FlinkKinesisConsumer.class);
+    }
+
+    @Test
+    public void testBadTableSourceWithUnsupportedOptions() {
+        ResolvedSchema sourceSchema = defaultSourceSchema();
+        Map<String, String> tableOptions =
+                defaultTableOptionsWithSinkOptions()
+                        .withTableOption("invalid.option", "some_value")
+                        .build();
+
+        assertThatThrownBy(() -> createTableSource(sourceSchema, tableOptions))
+                .hasCauseInstanceOf(ValidationException.class)
+                .hasStackTraceContaining("Unsupported options:")
+                .hasStackTraceContaining("invalid.option");
+    }
+
     // --------------------------------------------------------------------------------------------
     // Utilities
     // --------------------------------------------------------------------------------------------
@@ -290,6 +335,16 @@ public class KinesisDynamicTableFactoryTest extends TestLogger {
                 // default format options
                 .withFormatOption(TestFormatFactory.DELIMITER, ",")
                 .withFormatOption(TestFormatFactory.FAIL_ON_MISSING, "true");
+    }
+
+    private TableOptionsBuilder defaultTableOptionsWithSinkOptions() {
+        return defaultTableOptions()
+                .withTableOption("sink.fail-on-error", "true")
+                .withTableOption("sink.batch.max-size", "100")
+                .withTableOption("sink.requests.max-inflight", "100")
+                .withTableOption("sink.requests.max-buffered", "100")
+                .withTableOption("sink.flush-buffer.size", "1000")
+                .withTableOption("sink.flush-buffer.timeout", "1000");
     }
 
     private TableOptionsBuilder defaultSinkTableOptions() {

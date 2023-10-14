@@ -48,6 +48,7 @@ import static org.apache.flink.connector.base.table.AsyncSinkConnectorOptions.MA
 import static org.apache.flink.connector.base.table.AsyncSinkConnectorOptions.MAX_IN_FLIGHT_REQUESTS;
 import static org.apache.flink.connector.kinesis.table.KinesisConnectorOptions.SINK_FAIL_ON_ERROR;
 import static org.apache.flink.table.factories.utils.FactoryMocks.createTableSink;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Test for {@link KinesisDynamicSink} created by {@link KinesisDynamicTableSinkFactory}. */
 class KinesisDynamicTableSinkFactoryTest {
@@ -174,6 +175,46 @@ class KinesisDynamicTableSinkFactoryTest {
     }
 
     @Test
+    void testGoodTableSinkForNonPartitionedTableWithSinkAndConsumerOptions() {
+        ResolvedSchema sinkSchema = defaultSinkSchema();
+        Map<String, String> tableOptions = defaultTableOptionsWithSinkAndConsumerOptions().build();
+
+        // Construct actual DynamicTableSink using FactoryUtil
+        KinesisDynamicSink actualSink =
+                (KinesisDynamicSink) createTableSink(sinkSchema, tableOptions);
+
+        // Construct expected DynamicTableSink using factory under test
+        KinesisDynamicSink expectedSink =
+                getDefaultSinkBuilder()
+                        .setConsumedDataType(sinkSchema.toPhysicalRowDataType())
+                        .setStream(STREAM_NAME)
+                        .setKinesisClientProperties(defaultProducerProperties())
+                        .setEncodingFormat(new TestFormatFactory.EncodingFormatMock(","))
+                        .setPartitioner(new RandomKinesisPartitionKeyGenerator<>())
+                        .build();
+
+        Assertions.assertThat(actualSink).isEqualTo(expectedSink);
+
+        // verify the produced sink
+        DynamicTableSink.SinkRuntimeProvider sinkFunctionProvider =
+                actualSink.getSinkRuntimeProvider(new SinkRuntimeProviderContext(false));
+        Sink<RowData> sinkFunction = ((SinkV2Provider) sinkFunctionProvider).createSink();
+        Assertions.assertThat(sinkFunction).isInstanceOf(KinesisStreamsSink.class);
+    }
+
+    @Test
+    void testBadTableSinkWithUnsupportedOptions() {
+        ResolvedSchema sinkSchema = defaultSinkSchema();
+        Map<String, String> tableOptions =
+                defaultTableOptions().withTableOption("invalid.option", "some_value").build();
+
+        assertThatThrownBy(() -> createTableSink(sinkSchema, tableOptions))
+                .hasCauseInstanceOf(ValidationException.class)
+                .hasStackTraceContaining("Unsupported options:")
+                .hasStackTraceContaining("invalid.option");
+    }
+
+    @Test
     void testGoodTableSinkForNonPartitionedTableWithProducerOptions() {
         ResolvedSchema sinkSchema = defaultSinkSchema();
         Map<String, String> sinkOptions = defaultTableOptionsWithDeprecatedOptions().build();
@@ -256,6 +297,13 @@ class KinesisDynamicTableSinkFactoryTest {
                 .withTableOption(MAX_BUFFERED_REQUESTS.key(), "100")
                 .withTableOption(FLUSH_BUFFER_SIZE.key(), "1000")
                 .withTableOption(FLUSH_BUFFER_TIMEOUT.key(), "1000");
+    }
+
+    private TableOptionsBuilder defaultTableOptionsWithSinkAndConsumerOptions() {
+        return defaultTableOptionsWithSinkOptions()
+                .withTableOption("scan.stream.initpos", "AT_TIMESTAMP")
+                .withTableOption("scan.stream.initpos-timestamp-format", "yyyy-MM-dd'T'HH:mm:ss")
+                .withTableOption("scan.stream.initpos-timestamp", "2022-10-22T12:00:00");
     }
 
     private TableOptionsBuilder defaultTableOptionsWithDeprecatedOptions() {
