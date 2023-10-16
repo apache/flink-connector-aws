@@ -116,7 +116,7 @@ jobs:
           mvn clean
 
       - name: Run AWS e2e tests
-        if: ${{ env.HAS_AWS_CREDS }}
+        if: env.HAS_AWS_CREDS
         run: |
           set -o pipefail
 

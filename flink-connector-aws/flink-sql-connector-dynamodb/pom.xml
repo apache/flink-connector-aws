@@ -68,7 +68,6 @@ under the License.
                         <configuration>
                             <artifactSet>
                                 <includes>
-                                    <include>org.apache.flink:flink-connector-base</include>
                                     <include>org.apache.flink:flink-connector-aws-base</include>
                                     <include>org.apache.flink:flink-connector-dynamodb</include>
                                     <include>software.amazon.awssdk:*</include>
@@ -105,12 +104,6 @@ under the License.
                             <filters>
                                 <filter>
                                     <artifact>org.apache.flink:flink-connector-dynamodb:*</artifact>
-                                    <excludes>
-                                        <exclude>profile</exclude>
-                                    </excludes>
-                                </filter>
-                                <filter>
-                                    <artifact>org.apache.flink:flink-connector-base:*</artifact>
                                     <excludes>
                                         <exclude>profile</exclude>
                                     </excludes>
