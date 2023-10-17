@@ -30,7 +30,7 @@ under the License.
     </parent>
 
     <artifactId>flink-connector-aws-parent</artifactId>
-    <name>Flink : Connector : AWS : Parent</name>
+    <name>Flink : Connectors : AWS : Parent</name>
     <packaging>pom</packaging>
 
     <modules>
