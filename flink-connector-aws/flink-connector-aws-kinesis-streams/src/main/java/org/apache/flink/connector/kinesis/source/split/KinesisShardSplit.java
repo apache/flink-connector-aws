@@ -23,9 +23,9 @@ import org.apache.flink.api.connector.source.SourceSplit;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitReader;
 import org.apache.flink.connector.kinesis.source.enumerator.KinesisStreamsSourceEnumerator;
 
-import org.apache.flink.shaded.curator5.org.apache.curator.shaded.com.google.common.base.Preconditions;
-
 import java.util.Objects;
+
+import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /**
  * Contains information about the kinesis stream and shard. Serves as a communication mechanism
@@ -41,9 +41,9 @@ public final class KinesisShardSplit implements SourceSplit {
     private final StartingPosition startingPosition;
 
     public KinesisShardSplit(String streamArn, String shardId, StartingPosition startingPosition) {
-        Preconditions.checkNotNull(streamArn, "streamArn cannot be null");
-        Preconditions.checkNotNull(shardId, "shardId cannot be null");
-        Preconditions.checkNotNull(startingPosition, "startingPosition cannot be null");
+        checkNotNull(streamArn, "streamArn cannot be null");
+        checkNotNull(shardId, "shardId cannot be null");
+        checkNotNull(startingPosition, "startingPosition cannot be null");
 
         this.streamArn = streamArn;
         this.shardId = shardId;
