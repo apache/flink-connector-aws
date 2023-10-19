@@ -96,7 +96,7 @@ jobs:
         timeout-minutes: ${{ inputs.timeout_test }}
         run: |
           set -o pipefail
-          
+
           mvn clean install -Dflink.convergence.phase=install -Pcheck-convergence -U -B ${{ env.MVN_CONNECTION_OPTIONS }} \
             -DaltDeploymentRepository=validation_repository::default::file:${{ env.MVN_VALIDATION_DIR }} \
             -Dflink.version=${{ inputs.flink_version }} | tee ${{ env.MVN_BUILD_OUTPUT_FILE }}
@@ -104,19 +104,19 @@ jobs:
       - name: Run e2e tests
         run: |
           set -o pipefail
-          
+
           cd flink-connector-aws-e2e-tests
-          
+
           mvn clean verify ${{ env.MVN_CONNECTION_OPTIONS }} \
             -DaltDeploymentRepository=validation_repository::default::file:${{ env.MVN_VALIDATION_DIR }} \
             -Dflink.version=${{ inputs.flink_version }}  \
             -Prun-end-to-end-tests -DdistDir=${{ env.FLINK_CACHE_DIR }}/flink-${{ inputs.flink_version }} \
             | tee ${{ env.MVN_BUILD_OUTPUT_FILE }}
-          
+
           mvn clean
 
       - name: Run AWS e2e tests
-        if: env.HAS_AWS_CREDS
+        if: env.HAS_AWS_CREDS == 'true'
         run: |
           set -o pipefail
 
