@@ -62,6 +62,8 @@ public class KinesisStreamsConnectorOptionsUtils {
     /** Key for accessing kinesisAsyncClient properties. */
     public static final String KINESIS_CLIENT_PROPERTIES_KEY = "sink.client.properties";
 
+    public static final String CONSUMER_PREFIX = "scan.";
+
     private final AsyncClientOptionsUtils asyncClientOptionsUtils;
     private final AsyncSinkConfigurationValidator asyncSinkconfigurationValidator;
     private final Map<String, String> resolvedOptions;
@@ -75,8 +77,8 @@ public class KinesisStreamsConnectorOptionsUtils {
     private static final String[] NON_VALIDATED_PREFIXES =
             new String[] {
                 AWSOptionUtils.AWS_PROPERTIES_PREFIX,
-                AsyncClientOptionsUtils.SINK_CLIENT_PREFIX,
-                KinesisProducerOptionsMapper.KINESIS_PRODUCER_PREFIX
+                KinesisProducerOptionsMapper.PRODUCER_PREFIX,
+                CONSUMER_PREFIX
             };
 
     public KinesisStreamsConnectorOptionsUtils(
@@ -121,6 +123,9 @@ public class KinesisStreamsConnectorOptionsUtils {
     public static class KinesisProducerOptionsMapper {
         private static final Logger LOG =
                 LoggerFactory.getLogger(KinesisProducerOptionsMapper.class);
+
+        public static final String PRODUCER_PREFIX = "sink.";
+
         /** prefix for deprecated producer options fallback keys. */
         public static final String KINESIS_PRODUCER_PREFIX = "sink.producer.";
 
