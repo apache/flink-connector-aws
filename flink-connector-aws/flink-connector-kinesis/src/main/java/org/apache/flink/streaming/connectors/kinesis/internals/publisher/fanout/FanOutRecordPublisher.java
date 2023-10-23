@@ -168,7 +168,8 @@ public class FanOutRecordPublisher implements RecordPublisher {
                         subscribedShard.getShard().getShardId(),
                         kinesisProxy,
                         configuration.getSubscribeToShardTimeout(),
-                        runningSupplier);
+                        runningSupplier,
+                        configuration.getRecoverableErrorsConfig());
         RecordPublisherRunResult result;
 
         try {

@@ -20,6 +20,7 @@ package org.apache.flink.streaming.connectors.kinesis.internals.publisher.fanout
 import org.apache.flink.streaming.connectors.kinesis.config.ConsumerConfigConstants;
 import org.apache.flink.streaming.connectors.kinesis.config.ConsumerConfigConstants.EFORegistrationType;
 import org.apache.flink.streaming.connectors.kinesis.config.ConsumerConfigConstants.RecordPublisherType;
+import org.apache.flink.streaming.connectors.kinesis.config.RecoverableErrorsConfig;
 import org.apache.flink.streaming.connectors.kinesis.util.KinesisConfigUtil;
 import org.apache.flink.util.Preconditions;
 
@@ -117,6 +118,9 @@ public class FanOutRecordPublisherConfiguration {
 
     /** Exponential backoff power constant for the describe stream consumer operation. */
     private final double describeStreamConsumerExpConstant;
+
+    /** Recoverable error configuration. These are retried indefinitely. */
+    private final RecoverableErrorsConfig recoverableErrorsConfig;
 
     /**
      * Creates a FanOutRecordPublisherConfiguration.
@@ -318,6 +322,8 @@ public class FanOutRecordPublisherConfiguration {
                         .orElse(
                                 ConsumerConfigConstants
                                         .DEFAULT_DESCRIBE_STREAM_CONSUMER_BACKOFF_EXPONENTIAL_CONSTANT);
+
+        this.recoverableErrorsConfig = this.parseRecoverableErrorConfig(configProps);
     }
 
     // ------------------------------------------------------------------------
@@ -471,5 +477,13 @@ public class FanOutRecordPublisherConfiguration {
      */
     public Optional<String> getStreamConsumerArn(String stream) {
         return Optional.ofNullable(streamConsumerArns.get(stream));
+    }
+
+    public RecoverableErrorsConfig parseRecoverableErrorConfig(final Properties config) {
+        return RecoverableErrorsConfig.createConfigFromPropertiesOrThrow(config).orElse(null);
+    }
+
+    public RecoverableErrorsConfig getRecoverableErrorsConfig() {
+        return recoverableErrorsConfig;
     }
 }
