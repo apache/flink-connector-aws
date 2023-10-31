@@ -20,7 +20,7 @@ package org.apache.flink.connector.dynamodb.sink.client;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.connector.aws.config.AWSConfigConstants;
-import org.apache.flink.connector.aws.util.AWSAsyncSinkUtil;
+import org.apache.flink.connector.aws.util.AWSClientUtil;
 import org.apache.flink.connector.aws.util.AWSGeneralUtil;
 import org.apache.flink.connector.dynamodb.sink.DynamoDbConfigConstants;
 
@@ -65,7 +65,7 @@ public class DynamoDbAsyncClientProvider implements SdkClientProvider<DynamoDbAs
             Properties dynamoDbClientProperties, SdkAsyncHttpClient httpClient) {
         AWSGeneralUtil.validateAwsCredentials(dynamoDbClientProperties);
 
-        return AWSAsyncSinkUtil.createAwsAsyncClient(
+        return AWSClientUtil.createAwsAsyncClient(
                 dynamoDbClientProperties,
                 httpClient,
                 DynamoDbAsyncClient.builder(),

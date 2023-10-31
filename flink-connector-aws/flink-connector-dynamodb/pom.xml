@@ -57,7 +57,7 @@ under the License.
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-connector-aws-base</artifactId>
-            <version>${flink.version}</version>
+            <version>${project.version}</version>
         </dependency>
 
         <!-- Flink Connector DynamoDB Dependencies -->
@@ -98,7 +98,7 @@ under the License.
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-connector-aws-base</artifactId>
-            <version>${flink.version}</version>
+            <version>${project.version}</version>
             <type>test-jar</type>
             <scope>test</scope>
         </dependency>
