@@ -17,6 +17,8 @@
 
 package org.apache.flink.streaming.connectors.kinesis.internals.publisher.fanout;
 
+import org.apache.flink.streaming.connectors.kinesis.config.ExceptionConfig;
+import org.apache.flink.streaming.connectors.kinesis.config.RecoverableErrorsConfig;
 import org.apache.flink.streaming.connectors.kinesis.internals.publisher.RecordPublisher.RecordPublisherRunResult;
 import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyAsyncV2Interface;
 import org.apache.flink.streaming.connectors.kinesis.testutils.FakeKinesisFanOutBehavioursFactory;
@@ -30,6 +32,7 @@ import org.junit.rules.ExpectedException;
 import software.amazon.awssdk.services.kinesis.model.StartingPosition;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -57,7 +60,86 @@ public class FanOutShardSubscriberTest {
                         "shardId",
                         errorKinesisV2,
                         DEFAULT_SUBSCRIBE_TO_SHARD_TIMEOUT,
-                        () -> true);
+                        () -> true,
+                        null);
+
+        software.amazon.awssdk.services.kinesis.model.StartingPosition startingPosition =
+                software.amazon.awssdk.services.kinesis.model.StartingPosition.builder().build();
+        subscriber.subscribeToShardAndConsumeRecords(startingPosition, event -> {});
+    }
+
+    @Test
+    public void testRecoverableErrorThrownToConsumerWhenUserConfiguresExceptionToBeRecoverable()
+            throws Exception {
+        thrown.expect(FanOutShardSubscriber.RecoverableFanOutSubscriberException.class);
+        thrown.expectMessage("java.lang.ArithmeticException");
+
+        SubscriptionErrorKinesisAsyncV2 errorKinesisV2 =
+                FakeKinesisFanOutBehavioursFactory.errorDuringSubscription(
+                        new ArithmeticException());
+
+        FanOutShardSubscriber subscriber =
+                new FanOutShardSubscriber(
+                        "consumerArn",
+                        "shardId",
+                        errorKinesisV2,
+                        DEFAULT_SUBSCRIBE_TO_SHARD_TIMEOUT,
+                        () -> true,
+                        new RecoverableErrorsConfig(
+                                Collections.singletonList(
+                                        new ExceptionConfig(ArithmeticException.class))));
+
+        software.amazon.awssdk.services.kinesis.model.StartingPosition startingPosition =
+                software.amazon.awssdk.services.kinesis.model.StartingPosition.builder().build();
+        subscriber.subscribeToShardAndConsumeRecords(startingPosition, event -> {});
+    }
+
+    @Test
+    public void testRecoverableErrorThrownToConsumerWhenUserConfiguredExceptionIsWrapped()
+            throws Exception {
+        thrown.expect(FanOutShardSubscriber.RecoverableFanOutSubscriberException.class);
+        thrown.expectMessage("java.lang.ArithmeticException");
+
+        SubscriptionErrorKinesisAsyncV2 errorKinesisV2 =
+                FakeKinesisFanOutBehavioursFactory.errorDuringSubscription(
+                        new RuntimeException(new ArithmeticException()));
+
+        FanOutShardSubscriber subscriber =
+                new FanOutShardSubscriber(
+                        "consumerArn",
+                        "shardId",
+                        errorKinesisV2,
+                        DEFAULT_SUBSCRIBE_TO_SHARD_TIMEOUT,
+                        () -> true,
+                        new RecoverableErrorsConfig(
+                                Collections.singletonList(
+                                        new ExceptionConfig(ArithmeticException.class))));
+
+        software.amazon.awssdk.services.kinesis.model.StartingPosition startingPosition =
+                software.amazon.awssdk.services.kinesis.model.StartingPosition.builder().build();
+        subscriber.subscribeToShardAndConsumeRecords(startingPosition, event -> {});
+    }
+
+    @Test
+    public void testRetryableErrorThrownToConsumerWhenUserConfiguredExceptionIsNotThrown()
+            throws Exception {
+        thrown.expect(FanOutShardSubscriber.RetryableFanOutSubscriberException.class);
+        thrown.expectMessage("java.lang.ArithmeticException");
+
+        SubscriptionErrorKinesisAsyncV2 errorKinesisV2 =
+                FakeKinesisFanOutBehavioursFactory.errorDuringSubscription(
+                        new RuntimeException(new ArithmeticException()));
+
+        FanOutShardSubscriber subscriber =
+                new FanOutShardSubscriber(
+                        "consumerArn",
+                        "shardId",
+                        errorKinesisV2,
+                        DEFAULT_SUBSCRIBE_TO_SHARD_TIMEOUT,
+                        () -> true,
+                        new RecoverableErrorsConfig(
+                                Collections.singletonList(
+                                        new ExceptionConfig(java.net.UnknownHostException.class))));
 
         software.amazon.awssdk.services.kinesis.model.StartingPosition startingPosition =
                 software.amazon.awssdk.services.kinesis.model.StartingPosition.builder().build();
@@ -79,7 +161,8 @@ public class FanOutShardSubscriberTest {
                         "shardId",
                         errorKinesisV2,
                         DEFAULT_SUBSCRIBE_TO_SHARD_TIMEOUT,
-                        () -> true);
+                        () -> true,
+                        null);
 
         software.amazon.awssdk.services.kinesis.model.StartingPosition startingPosition =
                 software.amazon.awssdk.services.kinesis.model.StartingPosition.builder().build();
@@ -100,7 +183,8 @@ public class FanOutShardSubscriberTest {
                         "shardId",
                         errorKinesisV2,
                         DEFAULT_SUBSCRIBE_TO_SHARD_TIMEOUT,
-                        () -> true);
+                        () -> true,
+                        null);
 
         software.amazon.awssdk.services.kinesis.model.StartingPosition startingPosition =
                 software.amazon.awssdk.services.kinesis.model.StartingPosition.builder().build();
@@ -123,7 +207,8 @@ public class FanOutShardSubscriberTest {
                         "shardId",
                         errorKinesisV2,
                         DEFAULT_SUBSCRIBE_TO_SHARD_TIMEOUT,
-                        () -> true);
+                        () -> true,
+                        null);
 
         StartingPosition startingPosition = StartingPosition.builder().build();
         subscriber.subscribeToShardAndConsumeRecords(startingPosition, event -> {});
@@ -140,7 +225,8 @@ public class FanOutShardSubscriberTest {
                         "shardId",
                         errorKinesisV2,
                         DEFAULT_SUBSCRIBE_TO_SHARD_TIMEOUT,
-                        () -> true);
+                        () -> true,
+                        null);
 
         StartingPosition startingPosition = StartingPosition.builder().build();
         RecordPublisherRunResult result =
@@ -159,7 +245,7 @@ public class FanOutShardSubscriberTest {
 
         FanOutShardSubscriber subscriber =
                 new FanOutShardSubscriber(
-                        "consumerArn", "shardId", kinesis, Duration.ofMillis(1), () -> true);
+                        "consumerArn", "shardId", kinesis, Duration.ofMillis(1), () -> true, null);
 
         StartingPosition startingPosition = StartingPosition.builder().build();
         subscriber.subscribeToShardAndConsumeRecords(startingPosition, event -> {});
@@ -180,7 +266,8 @@ public class FanOutShardSubscriberTest {
                         kinesis,
                         DEFAULT_SUBSCRIBE_TO_SHARD_TIMEOUT,
                         Duration.ofMillis(100),
-                        () -> true);
+                        () -> true,
+                        null);
 
         StartingPosition startingPosition = StartingPosition.builder().build();
         subscriber.subscribeToShardAndConsumeRecords(
@@ -207,7 +294,8 @@ public class FanOutShardSubscriberTest {
                         "shardId",
                         unboundedStream,
                         DEFAULT_SUBSCRIBE_TO_SHARD_TIMEOUT,
-                        run::get);
+                        run::get,
+                        null);
 
         final AtomicInteger batches = new AtomicInteger(0);
 

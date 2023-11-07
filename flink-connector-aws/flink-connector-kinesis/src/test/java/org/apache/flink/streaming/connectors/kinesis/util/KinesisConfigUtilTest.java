@@ -1021,4 +1021,28 @@ public class KinesisConfigUtilTest {
                 .containsKey("aws.kinesis.client.user-agent-prefix")
                 .hasSize(2);
     }
+
+    @Test
+    public void testInvalidCustomRecoverableErrorConfiguration() {
+        exception.expect(IllegalArgumentException.class);
+        exception.expectMessage(
+                "Provided recoverable exception class could not be found: com.NonExistentExceptionClass");
+
+        Properties testConfig = TestUtils.getStandardProperties();
+        testConfig.setProperty(
+                ConsumerConfigConstants.RECOVERABLE_EXCEPTIONS_PREFIX + "[0].exception",
+                "com.NonExistentExceptionClass");
+
+        KinesisConfigUtil.validateConsumerConfiguration(testConfig);
+    }
+
+    @Test
+    public void testValidCustomRecoverableErrorConfiguration() {
+        Properties testConfig = TestUtils.getStandardProperties();
+        testConfig.setProperty(
+                ConsumerConfigConstants.RECOVERABLE_EXCEPTIONS_PREFIX + "[0].exception",
+                "java.net.UnknownHostException");
+
+        KinesisConfigUtil.validateConsumerConfiguration(testConfig);
+    }
 }

@@ -19,9 +19,12 @@ package org.apache.flink.streaming.connectors.kinesis.internals.publisher.fanout
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.streaming.connectors.kinesis.config.ExceptionConfig;
+import org.apache.flink.streaming.connectors.kinesis.config.RecoverableErrorsConfig;
 import org.apache.flink.streaming.connectors.kinesis.internals.publisher.RecordPublisher.RecordPublisherRunResult;
 import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyAsyncV2;
 import org.apache.flink.streaming.connectors.kinesis.proxy.KinesisProxyAsyncV2Interface;
+import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.Preconditions;
 
 import io.netty.handler.timeout.ReadTimeoutException;
@@ -38,6 +41,7 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
 
 import java.time.Duration;
+import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
@@ -121,6 +125,8 @@ public class FanOutShardSubscriber {
 
     private final Supplier<Boolean> runningSupplier;
 
+    private final RecoverableErrorsConfig recoverableErrorsConfig;
+
     /**
      * Create a new Fan Out Shard subscriber.
      *
@@ -130,20 +136,24 @@ public class FanOutShardSubscriber {
      * @param subscribeToShardTimeout A timeout when waiting for a shard subscription to be
      *     established
      * @param runningSupplier a callback to query if the consumer is still running
+     * @param recoverableErrorsConfig recoverable error configuration (errors that are retried
+     *     indefinitely)
      */
     FanOutShardSubscriber(
             final String consumerArn,
             final String shardId,
             final KinesisProxyAsyncV2Interface kinesis,
             final Duration subscribeToShardTimeout,
-            final Supplier<Boolean> runningSupplier) {
+            final Supplier<Boolean> runningSupplier,
+            final RecoverableErrorsConfig recoverableErrorsConfig) {
         this(
                 consumerArn,
                 shardId,
                 kinesis,
                 subscribeToShardTimeout,
                 DEFAULT_QUEUE_TIMEOUT,
-                runningSupplier);
+                runningSupplier,
+                recoverableErrorsConfig);
     }
 
     /**
@@ -164,13 +174,15 @@ public class FanOutShardSubscriber {
             final KinesisProxyAsyncV2Interface kinesis,
             final Duration subscribeToShardTimeout,
             final Duration queueWaitTimeout,
-            final Supplier<Boolean> runningSupplier) {
+            final Supplier<Boolean> runningSupplier,
+            final RecoverableErrorsConfig recoverableErrorsConfig) {
         this.kinesis = Preconditions.checkNotNull(kinesis);
         this.consumerArn = Preconditions.checkNotNull(consumerArn);
         this.shardId = Preconditions.checkNotNull(shardId);
         this.subscribeToShardTimeout = subscribeToShardTimeout;
         this.queueWaitTimeout = queueWaitTimeout;
         this.runningSupplier = runningSupplier;
+        this.recoverableErrorsConfig = recoverableErrorsConfig;
     }
 
     /**
@@ -249,22 +261,21 @@ public class FanOutShardSubscriber {
 
         kinesis.subscribeToShard(request, responseHandler);
 
-        boolean subscriptionEstablished =
-                waitForSubscriptionLatch.await(
+        boolean subscriptionTimedOut =
+                !waitForSubscriptionLatch.await(
                         subscribeToShardTimeout.toMillis(), TimeUnit.MILLISECONDS);
 
-        if (!subscriptionEstablished) {
+        if (subscriptionTimedOut) {
             final String errorMessage =
                     "Timed out acquiring subscription - " + shardId + " (" + consumerArn + ")";
             LOG.error(errorMessage);
             subscription.cancelSubscription();
-            handleError(
-                    new RecoverableFanOutSubscriberException(new TimeoutException(errorMessage)));
+            handleErrorAndRethrow(new TimeoutException(errorMessage));
         }
 
         Throwable throwable = exception.get();
         if (throwable != null) {
-            handleError(throwable);
+            handleErrorAndRethrow(throwable);
         }
 
         LOG.debug("Acquired subscription - {} ({})", shardId, consumerArn);
@@ -282,7 +293,7 @@ public class FanOutShardSubscriber {
      *
      * @param throwable the exception that has occurred
      */
-    private void handleError(final Throwable throwable) throws FanOutSubscriberException {
+    private void handleErrorAndRethrow(final Throwable throwable) throws FanOutSubscriberException {
         Throwable cause;
         if (throwable instanceof CompletionException || throwable instanceof ExecutionException) {
             cause = throwable.getCause();
@@ -302,16 +313,10 @@ public class FanOutShardSubscriber {
             throw new FanOutSubscriberInterruptedException(throwable);
         } else if (cause instanceof FanOutSubscriberException) {
             throw (FanOutSubscriberException) cause;
-        } else if (cause instanceof ReadTimeoutException) {
-            // ReadTimeoutException occurs naturally under backpressure scenarios when full batches
-            // take longer to
-            // process than standard read timeout (default 30s). Recoverable exceptions are intended
-            // to be retried
-            // indefinitely to avoid system degradation under backpressure. The EFO connection
-            // (subscription) to Kinesis
-            // is closed, and reacquired once the queue of records has been processed.
+        } else if (isDefinedAsRecoverable(cause)) {
             throw new RecoverableFanOutSubscriberException(cause);
         } else {
+            // All other errors are treated as retryable
             throw new RetryableFanOutSubscriberException(cause);
         }
     }
@@ -326,6 +331,38 @@ public class FanOutShardSubscriber {
             cause = cause.getCause();
         }
 
+        return false;
+    }
+
+    private boolean isDefinedAsRecoverable(Throwable cause) {
+        // non-customisable list of exceptions that should be recovered (retried indefinitely).
+        if (cause instanceof ReadTimeoutException || cause instanceof TimeoutException) {
+            // ReadTimeoutException occurs naturally under backpressure scenarios when full batches
+            // take longer to
+            // process than standard read timeout (default 30s). Recoverable exceptions are intended
+            // to be retried
+            // indefinitely to avoid system degradation under backpressure. The EFO connection
+            // (subscription) to Kinesis
+            // is closed, and reacquired once the queue of records has been processed.
+            return true;
+        }
+        return isConfiguredAsRecoverable(cause);
+    }
+
+    /**
+     * @param cause Throwable on which to base our exception search
+     * @return true if the input Throwable is configured as a Recoverable Error by the user
+     */
+    private boolean isConfiguredAsRecoverable(Throwable cause) {
+        if (this.recoverableErrorsConfig == null || this.recoverableErrorsConfig.hasNoConfig()) {
+            return false;
+        }
+        for (ExceptionConfig config : this.recoverableErrorsConfig.getExceptionConfigs()) {
+            Optional<Throwable> throwable =
+                    ExceptionUtils.findThrowable(
+                            cause, (Class<Throwable>) config.getExceptionClass());
+            return throwable.isPresent();
+        }
         return false;
     }
 
@@ -386,7 +423,7 @@ public class FanOutShardSubscriber {
                 // The subscription is complete, but the shard might not be, so we return incomplete
                 return INCOMPLETE;
             } else {
-                handleError(subscriptionEvent.getThrowable());
+                handleErrorAndRethrow(subscriptionEvent.getThrowable());
                 result = INCOMPLETE;
                 break;
             }

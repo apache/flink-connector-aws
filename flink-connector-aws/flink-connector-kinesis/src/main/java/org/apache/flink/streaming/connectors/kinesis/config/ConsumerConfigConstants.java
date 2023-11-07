@@ -191,6 +191,13 @@ public class ConsumerConfigConstants extends AWSConfigConstants {
     public static final String REGISTER_STREAM_BACKOFF_EXPONENTIAL_CONSTANT =
             "flink.stream.registerstreamconsumer.backoff.expconst";
 
+    /**
+     * The user-provided list of exceptions to recover from. These exceptions are retried
+     * indefinitely.
+     */
+    public static final String RECOVERABLE_EXCEPTIONS_PREFIX =
+            "flink.shard.consumer.error.recoverable";
+
     /** The maximum number of deregisterStream attempts if we get a recoverable exception. */
     public static final String DEREGISTER_STREAM_RETRIES =
             "flink.stream.deregisterstreamconsumer.maxretries";

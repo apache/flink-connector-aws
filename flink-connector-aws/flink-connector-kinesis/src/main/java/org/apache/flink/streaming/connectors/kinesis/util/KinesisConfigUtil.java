@@ -29,6 +29,7 @@ import org.apache.flink.streaming.connectors.kinesis.config.ConsumerConfigConsta
 import org.apache.flink.streaming.connectors.kinesis.config.ConsumerConfigConstants.InitialPosition;
 import org.apache.flink.streaming.connectors.kinesis.config.ConsumerConfigConstants.RecordPublisherType;
 import org.apache.flink.streaming.connectors.kinesis.config.ProducerConfigConstants;
+import org.apache.flink.streaming.connectors.kinesis.config.RecoverableErrorsConfig;
 
 import com.amazonaws.services.kinesis.producer.KinesisProducerConfiguration;
 
@@ -322,6 +323,12 @@ public class KinesisConfigUtil {
                 config,
                 ConsumerConfigConstants.EFO_HTTP_CLIENT_MAX_CONCURRENCY,
                 "Invalid value given for EFO HTTP client max concurrency. Must be positive.");
+
+        validateRecoverableErrorConfig(config);
+    }
+
+    private static void validateRecoverableErrorConfig(Properties config) {
+        RecoverableErrorsConfig.createConfigFromPropertiesOrThrow(config);
     }
 
     /**

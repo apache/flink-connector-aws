@@ -681,6 +681,14 @@ Connector Options
       <td>Long</td>
       <td>The interval (in milliseconds) after which to consider a shard idle for purposes of watermark generation. A positive value will allow the watermark to progress even when some shards don't receive new records.</td>
     </tr>
+   <tr>
+      <td><h5>shard.consumer.error.recoverable[0].exception</h5></td>
+      <td>optional</td>
+      <td>no</td>
+      <td style="word-wrap: break-word;">(none)</td>
+      <td>String</td>
+      <td>User-specified Exception to retry indefinitely. Example value: `java.net.UnknownHostException`. This configuration is a zero-based array. As such, the specified exceptions must start with index 0. Specified exceptions must be valid Throwables in classpath, or connector will fail to initialize and fail fast.</td>
+    </tr> 
     <tr>
       <td><h5>scan.watermark.sync.interval</h5></td>
       <td>optional</td>
