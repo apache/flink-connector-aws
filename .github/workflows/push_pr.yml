@@ -27,8 +27,10 @@ jobs:
     strategy:
       matrix:
         flink: [1.18.1, 1.19.0]
+        java: [ '8, 11, 17, 21']
     with:
       flink_version: ${{ matrix.flink }}
+      jdk_version: ${{ matrix.java }}
       flink_url: https://archive.apache.org/dist/flink/flink-${{ matrix.flink }}/flink-${{ matrix.flink }}-bin-scala_2.12.tgz
       cache_flink_binary: true
     secrets: inherit
@@ -37,6 +39,8 @@ jobs:
     strategy:
       matrix:
         flink: [1.18.1, 1.19.0]
+        java: [ '8, 11, 17, 21']
     uses: apache/flink-connector-shared-utils/.github/workflows/python_ci.yml@ci_utils
     with:
       flink_version: ${{ matrix.flink }}
+      jdk_version: ${{ matrix.java }}

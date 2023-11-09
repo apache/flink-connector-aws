@@ -26,9 +26,11 @@ jobs:
     strategy:
       matrix:
         flink: [1.18-SNAPSHOT, 1.19-SNAPSHOT, 1.20-SNAPSHOT]
+        java: [ '8, 11, 17, 21']
     uses: ./.github/workflows/common.yml
     with:
       flink_version: ${{ matrix.flink }}
+      jdk_version: ${{ matrix.java }}
       flink_url: https://s3.amazonaws.com/flink-nightly/flink-${{ matrix.flink }}-bin-scala_2.12.tgz
       cache_flink_binary: false
     secrets: inherit
@@ -37,6 +39,8 @@ jobs:
     strategy:
       matrix:
         flink: [1.18-SNAPSHOT, 1.19-SNAPSHOT, 1.20-SNAPSHOT]
+        java: [ '8, 11, 17, 21']
     uses: apache/flink-connector-shared-utils/.github/workflows/python_ci.yml@ci_utils
     with:
       flink_version: ${{ matrix.flink }}
+      jdk_version: ${{ matrix.java }}
