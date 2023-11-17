@@ -194,7 +194,7 @@ For convenience, Flink provides the following schemas out of the box:
 
     <br>To use this deserialization schema one has to add the following additional dependency:
     
-{{< tabs "8c6721c7-4a48-496e-b0fe-6522cf6a5e13" >}}
+{{< tabs "71c8eb0c-6a78-476f-a52e-8a46d83f2ca4" >}}
 {{< tab "AvroDeserializationSchema" >}}
 {{< artifact flink-avro >}}
 {{< /tab >}}
