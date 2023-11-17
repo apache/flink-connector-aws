@@ -183,7 +183,7 @@ Flink Kinesis消费者还需要一个模式来了解如何将 Kinesis 数据流�
 
     <br>要使用此反序列化模式，必须添加以下附加依赖项:
     
-{{< tabs "8c6721c7-4a48-496e-b0fe-6522cf6a5e13" >}}
+{{< tabs "71c8eb0c-6a78-476f-a52e-8a46d83f2ca4" >}}
 {{< tab "AvroDeserializationSchema" >}}
 {{< artifact flink-avro >}}
 {{< /tab >}}
