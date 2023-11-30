@@ -26,7 +26,7 @@ under the License.
     <parent>
         <artifactId>flink-connector-aws</artifactId>
         <groupId>org.apache.flink</groupId>
-        <version>4.2-SNAPSHOT</version>
+        <version>4.3-SNAPSHOT</version>
     </parent>
 
     <artifactId>flink-connector-aws-parent</artifactId>
