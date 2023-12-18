@@ -77,6 +77,7 @@ under the License.
 
         <module>flink-connector-aws</module>
         <module>flink-formats-aws</module>
+        <module>flink-catalog-aws</module>
 
         <module>flink-connector-aws-e2e-tests</module>
     </modules>
