@@ -61,8 +61,8 @@ import static org.apache.flink.formats.avro.glue.schema.registry.AvroGlueFormatO
 import static org.apache.flink.formats.avro.glue.schema.registry.AvroGlueFormatOptions.SCHEMA_TYPE;
 
 /**
- * Table format factory for creating {@link SerializationSchema} and {@link DeserializationSchema}
- * for Glue Schema Registry to RowData.
+ * Table format factory for providing configured instances of AWS Glue Schema Registry Avro to
+ * RowData {@link SerializationSchema} and {@link DeserializationSchema}.
  */
 @Internal
 public class GlueSchemaRegistryAvroFormatFactory
