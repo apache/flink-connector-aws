@@ -37,3 +37,4 @@ tools/flink-*
 tools/releasing/release
 tools/japicmp-output
 */.idea/
+.java-version
