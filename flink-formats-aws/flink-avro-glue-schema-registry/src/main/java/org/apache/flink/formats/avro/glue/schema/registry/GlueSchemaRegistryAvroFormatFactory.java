@@ -18,7 +18,6 @@
 
 package org.apache.flink.formats.avro.glue.schema.registry;
 
-import com.amazonaws.services.schemaregistry.utils.AWSSchemaRegistryConstants;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.serialization.SerializationSchema;
@@ -43,24 +42,37 @@ import org.apache.flink.table.factories.SerializationFormatFactory;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 
-import static org.apache.flink.formats.avro.glue.schema.registry.AvroGlueFormatOptions.*;
+import com.amazonaws.services.schemaregistry.utils.AWSSchemaRegistryConstants;
 
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.flink.formats.avro.glue.schema.registry.AvroGlueFormatOptions.AWS_ENDPOINT;
+import static org.apache.flink.formats.avro.glue.schema.registry.AvroGlueFormatOptions.AWS_REGION;
+import static org.apache.flink.formats.avro.glue.schema.registry.AvroGlueFormatOptions.CACHE_SIZE;
+import static org.apache.flink.formats.avro.glue.schema.registry.AvroGlueFormatOptions.CACHE_TTL_MS;
+import static org.apache.flink.formats.avro.glue.schema.registry.AvroGlueFormatOptions.REGISTRY_NAME;
+import static org.apache.flink.formats.avro.glue.schema.registry.AvroGlueFormatOptions.SCHEMA_AUTO_REGISTRATION;
+import static org.apache.flink.formats.avro.glue.schema.registry.AvroGlueFormatOptions.SCHEMA_COMPATIBILITY;
+import static org.apache.flink.formats.avro.glue.schema.registry.AvroGlueFormatOptions.SCHEMA_COMPRESSION;
+import static org.apache.flink.formats.avro.glue.schema.registry.AvroGlueFormatOptions.SCHEMA_NAME;
+import static org.apache.flink.formats.avro.glue.schema.registry.AvroGlueFormatOptions.SCHEMA_TYPE;
+
 /**
  * Table format factory for creating {@link SerializationSchema} and {@link DeserializationSchema}
  * for Glue Schema Registry to RowData.
  */
 @Internal
-public class GlueSchemaRegistryAvroFormatFactory implements DeserializationFormatFactory, SerializationFormatFactory {
+public class GlueSchemaRegistryAvroFormatFactory
+        implements DeserializationFormatFactory, SerializationFormatFactory {
 
     public static final String IDENTIFIER = "avro-glue";
 
     @Override
-    public DecodingFormat<DeserializationSchema<RowData>> createDecodingFormat(DynamicTableFactory.Context context, ReadableConfig formatOptions) {
+    public DecodingFormat<DeserializationSchema<RowData>> createDecodingFormat(
+            DynamicTableFactory.Context context, ReadableConfig formatOptions) {
         FactoryUtil.validateFactoryOptions(this, formatOptions);
         final Map<String, Object> configMap = buildConfigMap(formatOptions);
 
@@ -86,7 +98,8 @@ public class GlueSchemaRegistryAvroFormatFactory implements DeserializationForma
     }
 
     @Override
-    public EncodingFormat<SerializationSchema<RowData>> createEncodingFormat(DynamicTableFactory.Context context, ReadableConfig formatOptions) {
+    public EncodingFormat<SerializationSchema<RowData>> createEncodingFormat(
+            DynamicTableFactory.Context context, ReadableConfig formatOptions) {
         FactoryUtil.validateFactoryOptions(this, formatOptions);
 
         return new EncodingFormat<SerializationSchema<RowData>>() {
@@ -151,16 +164,24 @@ public class GlueSchemaRegistryAvroFormatFactory implements DeserializationForma
                 .ifPresent(v -> properties.put(AWSSchemaRegistryConstants.CACHE_SIZE, v));
         formatOptions
                 .getOptional(CACHE_TTL_MS)
-                .ifPresent(v -> properties.put(AWSSchemaRegistryConstants.CACHE_TIME_TO_LIVE_MILLIS, v));
+                .ifPresent(
+                        v ->
+                                properties.put(
+                                        AWSSchemaRegistryConstants.CACHE_TIME_TO_LIVE_MILLIS, v));
         formatOptions
                 .getOptional(REGISTRY_NAME)
                 .ifPresent(v -> properties.put(AWSSchemaRegistryConstants.REGISTRY_NAME, v));
         formatOptions
                 .getOptional(SCHEMA_AUTO_REGISTRATION)
-                .ifPresent(v -> properties.put(AWSSchemaRegistryConstants.SCHEMA_AUTO_REGISTRATION_SETTING, v));
+                .ifPresent(
+                        v ->
+                                properties.put(
+                                        AWSSchemaRegistryConstants.SCHEMA_AUTO_REGISTRATION_SETTING,
+                                        v));
         formatOptions
                 .getOptional(SCHEMA_COMPATIBILITY)
-                .ifPresent(v -> properties.put(AWSSchemaRegistryConstants.COMPATIBILITY_SETTING, v));
+                .ifPresent(
+                        v -> properties.put(AWSSchemaRegistryConstants.COMPATIBILITY_SETTING, v));
         formatOptions
                 .getOptional(SCHEMA_COMPRESSION)
                 .ifPresent(v -> properties.put(AWSSchemaRegistryConstants.COMPRESSION_TYPE, v));

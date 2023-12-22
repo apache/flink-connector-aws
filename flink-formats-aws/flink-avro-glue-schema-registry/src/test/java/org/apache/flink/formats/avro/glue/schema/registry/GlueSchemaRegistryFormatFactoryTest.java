@@ -1,4 +1,3 @@
-
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -53,9 +52,7 @@ import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
 
-/**
- * Tests for the {@link GlueSchemaRegistryAvroFormatFactory}.
- */
+/** Tests for the {@link GlueSchemaRegistryAvroFormatFactory}. */
 public class GlueSchemaRegistryFormatFactoryTest {
 
     private static final ResolvedSchema SCHEMA =
@@ -128,7 +125,6 @@ public class GlueSchemaRegistryFormatFactoryTest {
 
         createTableSink(SCHEMA, options);
     }
-
 
     /**
      * Returns the full options modified by the given consumer {@code optionModifier}.

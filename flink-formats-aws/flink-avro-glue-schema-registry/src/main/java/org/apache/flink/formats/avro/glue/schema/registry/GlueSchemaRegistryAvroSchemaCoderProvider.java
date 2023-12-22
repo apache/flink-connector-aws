@@ -61,8 +61,9 @@ public class GlueSchemaRegistryAvroSchemaCoderProvider implements SchemaCoder.Sc
             return false;
         }
 
-        GlueSchemaRegistryAvroSchemaCoderProvider that = (GlueSchemaRegistryAvroSchemaCoderProvider) o;
-        if (transportName == null)  {
+        GlueSchemaRegistryAvroSchemaCoderProvider that =
+                (GlueSchemaRegistryAvroSchemaCoderProvider) o;
+        if (transportName == null) {
             if (that.transportName != null) {
                 return false;
             }

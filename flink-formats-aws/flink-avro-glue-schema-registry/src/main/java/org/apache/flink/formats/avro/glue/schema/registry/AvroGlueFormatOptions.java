@@ -18,15 +18,15 @@
 
 package org.apache.flink.formats.avro.glue.schema.registry;
 
-import com.amazonaws.services.schemaregistry.utils.AWSSchemaRegistryConstants;
-import com.amazonaws.services.schemaregistry.utils.AvroRecordType;
 import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
+
+import com.amazonaws.services.schemaregistry.utils.AWSSchemaRegistryConstants;
+import com.amazonaws.services.schemaregistry.utils.AvroRecordType;
 import software.amazon.awssdk.services.glue.model.Compatibility;
 
 import java.time.Duration;
-
 
 /** Options for AWS Glue Schema Registry Avro format. */
 @PublicEvolving
@@ -79,7 +79,8 @@ public class AvroGlueFormatOptions {
             ConfigOptions.key("schema.name")
                     .stringType()
                     .noDefaultValue()
-                    .withDescription("The Schema name under which to register the schema used by this format during serialization.");
+                    .withDescription(
+                            "The Schema name under which to register the schema used by this format during serialization.");
 
     public static final ConfigOption<AvroRecordType> SCHEMA_TYPE =
             ConfigOptions.key("schema.type")
@@ -87,6 +88,5 @@ public class AvroGlueFormatOptions {
                     .defaultValue(AvroRecordType.GENERIC_RECORD)
                     .withDescription("Record type");
 
-    private AvroGlueFormatOptions() {
-    }
+    private AvroGlueFormatOptions() {}
 }
