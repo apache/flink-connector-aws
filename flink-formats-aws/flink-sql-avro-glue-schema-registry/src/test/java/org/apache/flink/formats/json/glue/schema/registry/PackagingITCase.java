@@ -32,18 +32,10 @@ class PackagingITCase {
     @Test
     void testPackaging() throws Exception {
         final Path jar =
-                ResourceTestUtils.getResource(
-                        ".*/flink-sql-connector-aws-kinesis-streams[^/]*\\.jar");
+                ResourceTestUtils.getResource(".*/flink-sql-avro-glue-schema-registry[^/]*\\.jar");
 
         PackagingTestUtils.assertJarContainsOnlyFilesMatching(
-                jar,
-                Arrays.asList(
-                        "org/apache/flink/",
-                        "org/apache/commons/",
-                        "META-INF/",
-                        "mozilla/",
-                        "mime.types",
-                        "VersionInfo.java"));
+                jar, Arrays.asList("org/apache/flink/", "org/apache/commons/", "META-INF/"));
         PackagingTestUtils.assertJarContainsServiceEntry(jar, Factory.class);
     }
 }

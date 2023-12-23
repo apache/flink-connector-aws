@@ -63,15 +63,29 @@
                             <artifactSet>
                                 <includes>
                                     <include>org.apache.flink:flink-connector-aws-base</include>
-                                    <include>org.apache.flink:flink-connector-dynamodb</include>
+                                    <include>org.apache.flink:flink-avro-glue-schema-registry</include>
+                                    <include>com.amazonaws:*</include>
                                     <include>software.amazon.awssdk:*</include>
-                                    <include>org.reactivestreams:*</include>
-                                    <include>com.typesafe.netty:*</include>
-                                    <include>org.apache.httpcomponents:*</include>
-                                    <include>io.netty:*</include>
-                                    <include>commons-logging:commons-logging</include>
-                                    <include>commons-codec:commons-codec</include>
+                                    <include>software.amazon.glue:*</include>
+
+                                    <include>org.apache.flink:flink-avro</include>
+                                    <include>org.apache.avro:avro</include>
+                                    <include>com.fasterxml.jackson.core:*</include>
+                                    <include>com.fasterxml.jackson.dataformat:*</include>
+                                    <include>org.apache.commons:commons-compress</include>
+                                    <include>org.reactivestreams:reactive-streams</include>
+                                    <include>com.google.guava:guava</include>
+                                    <include>com.google.guava:failureaccess</include>
                                 </includes>
+                                <excludes>
+                                    <exclude>software.amazon.glue:schema-registry-build-tools</exclude>
+
+                                    <exclude>com.google.guava:listenablefuture</exclude>
+                                    <exclude>org.checkerframework:checker-qual</exclude>
+                                    <exclude>com.google.errorprone:error_prone_annotations</exclude>
+                                    <exclude>com.google.j2objc:j2objc-annotations</exclude>
+                                    <exclude>com.google.code.findbugs:jsr305</exclude>
+                                </excludes>
                             </artifactSet>
                             <relocations>
                                 <relocation>
@@ -79,24 +93,28 @@
                                     <shadedPattern>org.apache.flink.avro.registry.glue.shaded.software.amazon</shadedPattern>
                                 </relocation>
                                 <relocation>
+                                    <pattern>com.amazonaws</pattern>
+                                    <shadedPattern>org.apache.flink.avro.registry.glue.shaded.com.amazonaws</shadedPattern>
+                                </relocation>
+                                <relocation>
                                     <pattern>org.apache.kafka</pattern>
                                     <shadedPattern>org.apache.flink.avro.registry.glue.shaded.org.apache.kafka</shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>org.reactivestreams</pattern>
-                                    <shadedPattern>org.apache.flink.connector.dynamodb.shaded.org.reactivestreams</shadedPattern>
+                                    <shadedPattern>org.apache.flink.avro.registry.glue.shaded.org.reactivestreams</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>com.google</pattern>
+                                    <shadedPattern>org.apache.flink.avro.registry.glue.shaded.com.google</shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>com.typesafe.netty</pattern>
-                                    <shadedPattern>org.apache.flink.connector.dynamodb.shaded.com.typesafe.netty</shadedPattern>
+                                    <shadedPattern>org.apache.flink.avro.registry.glue.shaded.com.typesafe.netty</shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>org.apache.http</pattern>
-                                    <shadedPattern>org.apache.flink.connector.dynamodb.shaded.org.apache.http</shadedPattern>
-                                </relocation>
-                                <relocation>
-                                    <pattern>io.netty</pattern>
-                                    <shadedPattern>org.apache.flink.connector.dynamodb.shaded.io.netty</shadedPattern>
+                                    <shadedPattern>org.apache.flink.avro.registry.glue.shaded.org.apache.http</shadedPattern>
                                 </relocation>
 
                                 <!--The following modules must have the same shading pattern as in flink-sql-avro. It is needed to be able to put
@@ -113,12 +131,26 @@
                                     <pattern>org.apache.commons.compress</pattern>
                                     <shadedPattern>org.apache.flink.avro.shaded.org.apache.commons.compress</shadedPattern>
                                 </relocation>
+
                             </relocations>
                             <filters>
                                 <filter>
-                                    <artifact>org.apache.flink:flink-avro-glue-schema-registry:*</artifact>
+                                    <artifact>*:*</artifact>
                                     <excludes>
-                                        <exclude>profile</exclude>
+                                        <exclude>**/MavenPackaging.java</exclude>
+                                        <exclude>**/mime.types</exclude>
+                                        <exclude>**/VersionInfo.java</exclude>
+                                        <exclude>codegen-resources/**</exclude>
+                                        <exclude>mozilla/**</exclude>
+                                    </excludes>
+                                </filter>
+                                <filter>
+                                    <artifact>software.amazon.glue:schema-registry-serde</artifact>
+                                    <!-- Exclude Protobuf-only dependencies -->
+                                    <excludes>
+                                        <exclude>additionalTypes/**</exclude>
+                                        <exclude>java/**</exclude>
+                                        <exclude>metadata/**</exclude>
                                     </excludes>
                                 </filter>
                             </filters>

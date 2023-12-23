@@ -62,7 +62,7 @@ under the License.
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <!-- This has a transitive dependency on mbknor-jackson-jsonschema which needs scala -->
+            <!-- This has a transitive dependency on mbknor-jackson-jsonschema which needs scala 2.12 -->
             <groupId>software.amazon.glue</groupId>
             <artifactId>schema-registry-serde</artifactId>
             <version>${glue.schema.registry.version}</version>

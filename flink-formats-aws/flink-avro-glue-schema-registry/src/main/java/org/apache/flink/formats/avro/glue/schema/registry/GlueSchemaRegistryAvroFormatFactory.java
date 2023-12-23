@@ -107,10 +107,12 @@ public class GlueSchemaRegistryAvroFormatFactory
             public SerializationSchema<RowData> createRuntimeEncoder(
                     DynamicTableSink.Context context, DataType consumedDataType) {
                 final RowType rowType = (RowType) consumedDataType.getLogicalType();
+                final org.apache.avro.Schema avroSchema =
+                        AvroSchemaConverter.convertToSchema(rowType);
                 return new AvroRowDataSerializationSchema(
                         rowType,
                         GlueSchemaRegistryAvroSerializationSchema.forGeneric(
-                                AvroSchemaConverter.convertToSchema(rowType),
+                                avroSchema,
                                 formatOptions.get(SCHEMA_NAME),
                                 buildConfigMap(formatOptions)),
                         RowDataToAvroConverters.createConverter(rowType));
