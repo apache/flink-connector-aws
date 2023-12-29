@@ -36,6 +36,7 @@ under the License.
     <modules>
         <module>flink-avro-glue-schema-registry</module>
         <module>flink-json-glue-schema-registry</module>
+        <module>flink-sql-avro-glue-schema-registry</module>
     </modules>
 
 </project>
