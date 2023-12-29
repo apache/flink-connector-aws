@@ -32,7 +32,6 @@
     <name>Flink : Formats : AWS : SQL : Avro Glue Schema Registry</name>
     <packaging>jar</packaging>
 
-
     <dependencies>
         <dependency>
             <groupId>org.apache.flink</groupId>

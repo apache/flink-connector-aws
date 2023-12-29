@@ -43,6 +43,7 @@ import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 
 import com.amazonaws.services.schemaregistry.utils.AWSSchemaRegistryConstants;
+import org.apache.avro.generic.GenericRecord;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -83,11 +84,15 @@ public class GlueSchemaRegistryAvroFormatFactory
                 final RowType rowType = (RowType) producedDataType.getLogicalType();
                 final TypeInformation<RowData> rowDataTypeInfo =
                         context.createTypeInformation(producedDataType);
-                return new AvroRowDataDeserializationSchema(
+                final org.apache.avro.Schema avroSchema =
+                        AvroSchemaConverter.convertToSchema(rowType);
+                final GlueSchemaRegistryAvroDeserializationSchema<GenericRecord> nestedSchema =
                         GlueSchemaRegistryAvroDeserializationSchema.forGeneric(
-                                AvroSchemaConverter.convertToSchema(rowType), configMap),
-                        AvroToRowDataConverters.createRowConverter(rowType),
-                        rowDataTypeInfo);
+                                avroSchema, configMap);
+                final AvroToRowDataConverters.AvroToRowDataConverter runtimeConverter =
+                        AvroToRowDataConverters.createRowConverter(rowType);
+                return new AvroRowDataDeserializationSchema(
+                        nestedSchema, runtimeConverter, rowDataTypeInfo);
             }
 
             @Override
@@ -109,13 +114,14 @@ public class GlueSchemaRegistryAvroFormatFactory
                 final RowType rowType = (RowType) consumedDataType.getLogicalType();
                 final org.apache.avro.Schema avroSchema =
                         AvroSchemaConverter.convertToSchema(rowType);
-                return new AvroRowDataSerializationSchema(
-                        rowType,
+                final String transportName = formatOptions.get(SCHEMA_NAME);
+                final Map<String, Object> configMap = buildConfigMap(formatOptions);
+                final GlueSchemaRegistryAvroSerializationSchema<GenericRecord> nestedSchema =
                         GlueSchemaRegistryAvroSerializationSchema.forGeneric(
-                                avroSchema,
-                                formatOptions.get(SCHEMA_NAME),
-                                buildConfigMap(formatOptions)),
-                        RowDataToAvroConverters.createConverter(rowType));
+                                avroSchema, transportName, configMap);
+                final RowDataToAvroConverters.RowDataToAvroConverter runtimeConverter =
+                        RowDataToAvroConverters.createConverter(rowType);
+                return new AvroRowDataSerializationSchema(rowType, nestedSchema, runtimeConverter);
             }
 
             @Override
