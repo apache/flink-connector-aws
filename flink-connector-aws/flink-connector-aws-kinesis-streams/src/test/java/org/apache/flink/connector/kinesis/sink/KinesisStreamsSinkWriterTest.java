@@ -18,7 +18,6 @@
 package org.apache.flink.connector.kinesis.sink;
 
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
-import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.connector.aws.testutils.AWSServicesTestUtils;
 import org.apache.flink.connector.base.sink.writer.ElementConverter;
 import org.apache.flink.connector.base.sink.writer.TestSinkInitContext;
@@ -28,6 +27,7 @@ import org.apache.flink.connector.base.sink.writer.strategy.CongestionControlRat
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.kinesis.model.PutRecordsRequestEntry;
 
+import java.io.IOException;
 import java.util.Properties;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
@@ -55,13 +55,13 @@ public class KinesisStreamsSinkWriterTest {
                             .build();
 
     @Test
-    void testCreateKinesisStreamsSinkWriterInitializesRateLimitingStrategyWithExpectedParameters() {
-        Sink.InitContext sinkInitContext = new TestSinkInitContext();
+    void testCreateKinesisStreamsSinkWriterInitializesRateLimitingStrategyWithExpectedParameters()
+            throws IOException {
+        TestSinkInitContext sinkInitContext = new TestSinkInitContext();
         Properties sinkProperties = AWSServicesTestUtils.createConfig("https://fake_aws_endpoint");
-        sinkWriter =
-                new KinesisStreamsSinkWriter<String>(
+        KinesisStreamsSink<String> sink =
+                new KinesisStreamsSink<>(
                         ELEMENT_CONVERTER_PLACEHOLDER,
-                        sinkInitContext,
                         MAX_BATCH_SIZE,
                         MAX_INFLIGHT_REQUESTS,
                         MAX_BUFFERED_REQUESTS,
@@ -70,8 +70,9 @@ public class KinesisStreamsSinkWriterTest {
                         MAX_RECORD_SIZE,
                         FAIL_ON_ERROR,
                         "streamName",
-                        "StreamARN",
+                        "arn:aws:kinesis:us-east-1:000000000000:stream/streamName",
                         sinkProperties);
+        sinkWriter = (KinesisStreamsSinkWriter<String>) sink.createWriter(sinkInitContext);
 
         assertThat(sinkWriter)
                 .extracting("rateLimitingStrategy")

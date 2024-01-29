@@ -61,6 +61,14 @@ under the License.
             <version>${glue.schema.registry.version}</version>
         </dependency>
 
+        <!-- Test dependencies -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>1.18.30</version>
+            <scope>test</scope>
+        </dependency>
+
         <!-- ArchUit test dependencies -->
 
         <dependency>

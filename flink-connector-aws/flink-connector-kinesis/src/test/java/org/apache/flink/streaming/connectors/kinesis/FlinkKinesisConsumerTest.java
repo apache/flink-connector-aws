@@ -284,7 +284,7 @@ public class FlinkKinesisConsumerTest extends TestLogger {
                 new FlinkKinesisConsumer<>("fakeStream", new SimpleStringSchema(), config);
         FlinkKinesisConsumer<?> mockedConsumer = spy(consumer);
 
-        RuntimeContext context = new MockStreamingRuntimeContext(true, 1, 1);
+        RuntimeContext context = new MockStreamingRuntimeContext(true, 1, 0);
 
         mockedConsumer.setRuntimeContext(context);
         mockedConsumer.initializeState(initializationContext);

@@ -26,7 +26,6 @@ import com.amazonaws.services.schemaregistry.deserializers.GlueSchemaRegistryDes
 import com.amazonaws.services.schemaregistry.exception.AWSSchemaRegistryException;
 import com.amazonaws.services.schemaregistry.utils.AWSSchemaRegistryConstants;
 import com.amazonaws.services.schemaregistry.utils.AWSSchemaRegistryConstants.COMPRESSION;
-import lombok.NonNull;
 import org.apache.avro.Schema;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DatumWriter;
@@ -293,7 +292,7 @@ class GlueSchemaRegistryInputStreamDeserializerTest {
         }
 
         @Override
-        public String getSchemaDefinition(@NonNull byte[] data) {
+        public String getSchemaDefinition(byte[] data) {
             return schema.getSchemaDefinition();
         }
 

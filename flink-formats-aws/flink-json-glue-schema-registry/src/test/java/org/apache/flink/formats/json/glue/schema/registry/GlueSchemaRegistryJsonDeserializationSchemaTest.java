@@ -23,7 +23,6 @@ import com.amazonaws.services.schemaregistry.deserializers.GlueSchemaRegistryDes
 import com.amazonaws.services.schemaregistry.exception.AWSSchemaRegistryException;
 import com.amazonaws.services.schemaregistry.serializers.json.JsonDataWithSchema;
 import com.amazonaws.services.schemaregistry.utils.AWSSchemaRegistryConstants;
-import lombok.NonNull;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
@@ -160,7 +159,7 @@ class GlueSchemaRegistryJsonDeserializationSchemaTest {
         }
 
         @Override
-        public Object deserialize(@NonNull AWSDeserializerInput deserializerInput)
+        public Object deserialize(AWSDeserializerInput deserializerInput)
                 throws AWSSchemaRegistryException {
             return userDefinedPojo;
         }
@@ -174,7 +173,7 @@ class GlueSchemaRegistryJsonDeserializationSchemaTest {
         }
 
         @Override
-        public Object deserialize(@NonNull AWSDeserializerInput deserializerInput)
+        public Object deserialize(AWSDeserializerInput deserializerInput)
                 throws AWSSchemaRegistryException {
             return userSchema;
         }

@@ -20,11 +20,15 @@ package org.apache.flink.connector.dynamodb.sink;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.PublicEvolving;
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.connector.base.sink.AsyncSinkBase;
 import org.apache.flink.connector.base.sink.writer.BufferedRequestState;
 import org.apache.flink.connector.base.sink.writer.ElementConverter;
 import org.apache.flink.connector.dynamodb.sink.client.DynamoDbAsyncClientProvider;
+import org.apache.flink.connector.dynamodb.sink.client.SdkClientProvider;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
+
+import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -80,6 +84,7 @@ public class DynamoDbSink<InputT> extends AsyncSinkBase<InputT, DynamoDbWriteReq
     private final boolean failOnError;
     private final String tableName;
     private final List<String> overwriteByPartitionKeys;
+    private transient SdkClientProvider<DynamoDbAsyncClient> asyncClientSdkClientProviderOverride;
 
     protected DynamoDbSink(
             ElementConverter<InputT, DynamoDbWriteRequest> elementConverter,
@@ -152,7 +157,7 @@ public class DynamoDbSink<InputT> extends AsyncSinkBase<InputT, DynamoDbWriteReq
                 failOnError,
                 tableName,
                 overwriteByPartitionKeys,
-                new DynamoDbAsyncClientProvider(dynamoDbClientProperties),
+                getAsyncClientProvider(dynamoDbClientProperties),
                 recoveredState);
     }
 
@@ -161,5 +166,20 @@ public class DynamoDbSink<InputT> extends AsyncSinkBase<InputT, DynamoDbWriteReq
     public SimpleVersionedSerializer<BufferedRequestState<DynamoDbWriteRequest>>
             getWriterStateSerializer() {
         return new DynamoDbWriterStateSerializer();
+    }
+
+    private SdkClientProvider<DynamoDbAsyncClient> getAsyncClientProvider(
+            Properties clientProperties) {
+        if (asyncClientSdkClientProviderOverride != null) {
+            return asyncClientSdkClientProviderOverride;
+        }
+        return new DynamoDbAsyncClientProvider(clientProperties);
+    }
+
+    @Internal
+    @VisibleForTesting
+    void setDynamoDbAsyncClientProvider(
+            SdkClientProvider<DynamoDbAsyncClient> asyncClientSdkClientProviderOverride) {
+        this.asyncClientSdkClientProviderOverride = asyncClientSdkClientProviderOverride;
     }
 }
