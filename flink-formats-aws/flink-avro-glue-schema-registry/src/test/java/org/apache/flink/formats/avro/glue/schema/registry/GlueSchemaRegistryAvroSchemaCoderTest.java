@@ -25,7 +25,6 @@ import com.amazonaws.services.schemaregistry.deserializers.GlueSchemaRegistryDes
 import com.amazonaws.services.schemaregistry.exception.AWSSchemaRegistryException;
 import com.amazonaws.services.schemaregistry.serializers.GlueSchemaRegistrySerializationFacade;
 import com.amazonaws.services.schemaregistry.utils.AWSSchemaRegistryConstants;
-import lombok.NonNull;
 import org.apache.avro.Schema;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -208,9 +207,7 @@ class GlueSchemaRegistryAvroSchemaCoderTest {
 
         @Override
         public UUID getSchemaVersionIdByDefinition(
-                @NonNull String schemaDefinition,
-                @NonNull String schemaName,
-                @NonNull String dataFormat) {
+                String schemaDefinition, String schemaName, String dataFormat) {
             EntityNotFoundException entityNotFoundException =
                     EntityNotFoundException.builder()
                             .message(AWSSchemaRegistryConstants.SCHEMA_NOT_FOUND_MSG)

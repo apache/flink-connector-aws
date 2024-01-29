@@ -20,10 +20,10 @@ package org.apache.flink.formats.json.glue.schema.registry;
 
 import org.apache.flink.annotation.PublicEvolving;
 
-import lombok.NonNull;
-
 import java.io.Serializable;
 import java.util.Map;
+
+import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /** Provider for {@link GlueSchemaRegistryJsonSchemaCoder}. */
 @PublicEvolving
@@ -40,9 +40,9 @@ public class GlueSchemaRegistryJsonSchemaCoderProvider implements Serializable {
      * @param configs configurations for AWS Glue Schema Registry
      */
     public GlueSchemaRegistryJsonSchemaCoderProvider(
-            String transportName, @NonNull Map<String, Object> configs) {
+            String transportName, Map<String, Object> configs) {
         this.transportName = transportName;
-        this.configs = configs;
+        this.configs = checkNotNull(configs);
     }
 
     public GlueSchemaRegistryJsonSchemaCoder get() {

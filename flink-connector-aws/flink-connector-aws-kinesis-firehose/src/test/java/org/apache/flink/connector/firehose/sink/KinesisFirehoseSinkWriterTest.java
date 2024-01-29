@@ -48,22 +48,22 @@ public class KinesisFirehoseSinkWriterTest {
                     .build();
 
     @BeforeEach
-    void setup() {
+    void setup() throws IOException {
         TestSinkInitContext sinkInitContext = new TestSinkInitContext();
         Properties sinkProperties = AWSServicesTestUtils.createConfig("https://fake_aws_endpoint");
-        sinkWriter =
-                new KinesisFirehoseSinkWriter<>(
+        KinesisFirehoseSink<String> sink =
+                new KinesisFirehoseSink<>(
                         ELEMENT_CONVERTER_PLACEHOLDER,
-                        sinkInitContext,
                         50,
                         16,
                         10000,
-                        4 * 1024 * 1024,
-                        5000,
-                        1000 * 1024,
+                        4 * 1024 * 1024L,
+                        5000L,
+                        1000 * 1024L,
                         true,
                         "streamName",
                         sinkProperties);
+        sinkWriter = (KinesisFirehoseSinkWriter<String>) sink.createWriter(sinkInitContext);
     }
 
     @Test
