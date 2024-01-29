@@ -446,64 +446,6 @@ public class DynamoDbSinkWriterTest {
         item.put("number_payload", AttributeValue.builder().n("1234").build());
         return item;
     }
-    //
-    //    private static class TestDynamoDbSink<InputT> extends DynamoDbSink<InputT> {
-    //
-    //        private final SerializableSupplier<SdkClientProvider<DynamoDbAsyncClient>>
-    // clientProvider;
-    //        private final boolean failOnError;
-    //        private final List<String> overwriteByPartitionKeys;
-    //
-    //        TestDynamoDbSink(
-    //                ElementConverter elementConverter,
-    //                int maxBatchSize,
-    //                int maxInFlightRequests,
-    //                int maxBufferedRequests,
-    //                long maxBatchSizeInBytes,
-    //                long maxTimeInBufferMS,
-    //                long maxRecordSizeInBytes,
-    //                boolean failOnError,
-    //                List<String> overwriteByPartitionKeys,
-    //                SerializableSupplier<SdkClientProvider<DynamoDbAsyncClient>> clientProvider) {
-    //            super(
-    //                    elementConverter,
-    //                    maxBatchSize,
-    //                    maxInFlightRequests,
-    //                    maxBufferedRequests,
-    //                    maxBatchSizeInBytes,
-    //                    maxTimeInBufferMS,
-    //                    maxRecordSizeInBytes,
-    //                    failOnError,
-    //                    TABLE_NAME,
-    //                    overwriteByPartitionKeys,
-    //                    new Properties());
-    //            this.clientProvider = clientProvider;
-    //            this.failOnError = failOnError;
-    //            this.overwriteByPartitionKeys = overwriteByPartitionKeys;
-    //        }
-    //
-    //        @Override
-    //        public StatefulSinkWriter<InputT, BufferedRequestState<DynamoDbWriteRequest>>
-    // restoreWriter(
-    //                InitContext context,
-    //                Collection<BufferedRequestState<DynamoDbWriteRequest>> recoveredState)
-    //                throws IOException {
-    //            return new DynamoDbSinkWriter<>(
-    //                    getElementConverter(),
-    //                    context,
-    //                    getMaxBatchSize(),
-    //                    getMaxInFlightRequests(),
-    //                    getMaxBufferedRequests(),
-    //                    getMaxBatchSizeInBytes(),
-    //                    getMaxTimeInBufferMS(),
-    //                    getMaxRecordSizeInBytes(),
-    //                    failOnError,
-    //                    TABLE_NAME,
-    //                    overwriteByPartitionKeys,
-    //                    clientProvider.get(),
-    //                    recoveredState);
-    //        }
-    //    }
 
     private static class TestAsyncDynamoDbClientProvider
             implements SdkClientProvider<DynamoDbAsyncClient> {
