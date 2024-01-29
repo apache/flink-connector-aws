@@ -20,11 +20,15 @@ package org.apache.flink.connector.dynamodb.sink;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.PublicEvolving;
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.connector.base.sink.AsyncSinkBase;
 import org.apache.flink.connector.base.sink.writer.BufferedRequestState;
 import org.apache.flink.connector.base.sink.writer.ElementConverter;
 import org.apache.flink.connector.dynamodb.sink.client.DynamoDbAsyncClientProvider;
+import org.apache.flink.connector.dynamodb.sink.client.SdkClientProvider;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
+
+import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -152,7 +156,7 @@ public class DynamoDbSink<InputT> extends AsyncSinkBase<InputT, DynamoDbWriteReq
                 failOnError,
                 tableName,
                 overwriteByPartitionKeys,
-                new DynamoDbAsyncClientProvider(dynamoDbClientProperties),
+                getSdkClientProvider(),
                 recoveredState);
     }
 
@@ -161,5 +165,11 @@ public class DynamoDbSink<InputT> extends AsyncSinkBase<InputT, DynamoDbWriteReq
     public SimpleVersionedSerializer<BufferedRequestState<DynamoDbWriteRequest>>
             getWriterStateSerializer() {
         return new DynamoDbWriterStateSerializer();
+    }
+
+    @Internal
+    @VisibleForTesting
+    protected SdkClientProvider<DynamoDbAsyncClient> getSdkClientProvider() {
+        return new DynamoDbAsyncClientProvider(dynamoDbClientProperties);
     }
 }

@@ -18,7 +18,6 @@
 
 package org.apache.flink.connector.dynamodb.sink;
 
-import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.connector.base.sink.writer.TestSinkInitContext;
 import org.apache.flink.connector.dynamodb.sink.client.SdkClientProvider;
 
@@ -39,6 +38,7 @@ import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.dynamodb.model.WriteRequest;
 import software.amazon.awssdk.services.sts.model.StsException;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -46,6 +46,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -174,7 +175,7 @@ public class DynamoDbSinkWriterTest {
     }
 
     @Test
-    public void testRetryableExceptionWhenFailOnErrorOnWillNotRetry() {
+    public void testRetryableExceptionWhenFailOnErrorOnWillNotRetry() throws Exception {
         Optional<Exception> exceptionToThrow = getGenericRetryableException();
         boolean failOnError = true;
 
@@ -234,7 +235,7 @@ public class DynamoDbSinkWriterTest {
     }
 
     @Test
-    public void testNonRetryableExceptionWhenFailOnErrorOnWillNotRetry() {
+    public void testNonRetryableExceptionWhenFailOnErrorOnWillNotRetry() throws Exception {
         Optional<Exception> exceptionToThrow = getGenericNonRetryableException();
         boolean failOnError = true;
 
@@ -242,7 +243,7 @@ public class DynamoDbSinkWriterTest {
     }
 
     @Test
-    public void testNonRetryableExceptionWhenFailOnErrorOffWillNotRetry() {
+    public void testNonRetryableExceptionWhenFailOnErrorOffWillNotRetry() throws Exception {
         Optional<Exception> exceptionToThrow = getGenericNonRetryableException();
         boolean failOnError = false;
 
@@ -250,7 +251,7 @@ public class DynamoDbSinkWriterTest {
     }
 
     @Test
-    public void testInterruptedExceptionIsNonRetryable() {
+    public void testInterruptedExceptionIsNonRetryable() throws Exception {
         Optional<Exception> exceptionToThrow = Optional.of(new InterruptedException());
         boolean failOnError = false;
 
@@ -258,7 +259,7 @@ public class DynamoDbSinkWriterTest {
     }
 
     @Test
-    public void testInvalidCredentialsExceptionIsNonRetryable() {
+    public void testInvalidCredentialsExceptionIsNonRetryable() throws Exception {
         Optional<Exception> exceptionToThrow = Optional.of(StsException.builder().build());
         boolean failOnError = false;
 
@@ -266,7 +267,7 @@ public class DynamoDbSinkWriterTest {
     }
 
     @Test
-    public void testResourceNotFoundExceptionIsNonRetryable() {
+    public void testResourceNotFoundExceptionIsNonRetryable() throws Exception {
         Optional<Exception> exceptionToThrow =
                 Optional.of(ResourceNotFoundException.builder().build());
         boolean failOnError = false;
@@ -275,7 +276,7 @@ public class DynamoDbSinkWriterTest {
     }
 
     @Test
-    public void testConditionalCheckFailedExceptionIsNonRetryable() {
+    public void testConditionalCheckFailedExceptionIsNonRetryable() throws Exception {
         Optional<Exception> exceptionToThrow =
                 Optional.of(ConditionalCheckFailedException.builder().build());
         boolean failOnError = false;
@@ -284,7 +285,7 @@ public class DynamoDbSinkWriterTest {
     }
 
     @Test
-    public void testValidationExceptionIsNonRetryable() {
+    public void testValidationExceptionIsNonRetryable() throws Exception {
         Optional<Exception> exceptionToThrow =
                 Optional.of(
                         DynamoDbException.builder()
@@ -299,7 +300,7 @@ public class DynamoDbSinkWriterTest {
     }
 
     @Test
-    public void testSdkClientExceptionIsNonRetryable() {
+    public void testSdkClientExceptionIsNonRetryable() throws Exception {
         Optional<Exception> exceptionToThrow = Optional.of(SdkClientException.builder().build());
         boolean failOnError = false;
 
@@ -307,7 +308,7 @@ public class DynamoDbSinkWriterTest {
     }
 
     @Test
-    public void testGetSizeInBytesNotImplemented() {
+    public void testGetSizeInBytesNotImplemented() throws Exception {
         DynamoDbSinkWriter<Map<String, AttributeValue>> dynamoDbSinkWriter =
                 getDefaultSinkWriter(
                         false, Collections.emptyList(), () -> new TrackingDynamoDbAsyncClient());
@@ -315,7 +316,7 @@ public class DynamoDbSinkWriterTest {
     }
 
     @Test
-    public void testClientClosesWhenWriterIsClosed() {
+    public void testClientClosesWhenWriterIsClosed() throws Exception {
         TestAsyncDynamoDbClientProvider testAsyncDynamoDbClientProvider =
                 new TestAsyncDynamoDbClientProvider(new TrackingDynamoDbAsyncClient());
         DynamoDbSinkWriter<Map<String, AttributeValue>> dynamoDbSinkWriter =
@@ -327,7 +328,7 @@ public class DynamoDbSinkWriterTest {
     }
 
     private void assertThatRequestsAreNotRetried(
-            boolean failOnError, Optional<Exception> exceptionToThrow) {
+            boolean failOnError, Optional<Exception> exceptionToThrow) throws Exception {
         ThrowingDynamoDbAsyncClient<Exception> throwingDynamoDbAsyncClient =
                 new ThrowingDynamoDbAsyncClient<>(exceptionToThrow, str -> true);
         DynamoDbSinkWriter<Map<String, AttributeValue>> dynamoDbSinkWriter =
@@ -343,7 +344,8 @@ public class DynamoDbSinkWriterTest {
     private DynamoDbSinkWriter<Map<String, AttributeValue>> getDefaultSinkWriter(
             boolean failOnError,
             List<String> overwriteByPartitionKeys,
-            Supplier<DynamoDbAsyncClient> clientSupplier) {
+            Supplier<DynamoDbAsyncClient> clientSupplier)
+            throws IOException {
         return getDefaultSinkWriter(
                 failOnError,
                 overwriteByPartitionKeys,
@@ -353,22 +355,29 @@ public class DynamoDbSinkWriterTest {
     private DynamoDbSinkWriter<Map<String, AttributeValue>> getDefaultSinkWriter(
             boolean failOnError,
             List<String> overwriteByPartitionKeys,
-            SdkClientProvider<DynamoDbAsyncClient> dynamoDbAsyncClientProvider) {
-        Sink.InitContext initContext = new TestSinkInitContext();
-        return new DynamoDbSinkWriter(
-                new TestDynamoDbElementConverter(),
-                initContext,
-                2,
-                1,
-                10,
-                1024,
-                1000,
-                1024,
-                failOnError,
-                TABLE_NAME,
-                overwriteByPartitionKeys,
-                dynamoDbAsyncClientProvider,
-                Collections.emptyList());
+            SdkClientProvider<DynamoDbAsyncClient> dynamoDbAsyncClientProvider)
+            throws IOException {
+        DynamoDbSink<Map<String, AttributeValue>> dynamoDbSink =
+                new DynamoDbSink<Map<String, AttributeValue>>(
+                        new TestDynamoDbElementConverter(),
+                        2,
+                        1,
+                        10,
+                        1024,
+                        1000,
+                        1024,
+                        failOnError,
+                        TABLE_NAME,
+                        overwriteByPartitionKeys,
+                        new Properties()) {
+                    @Override
+                    protected SdkClientProvider<DynamoDbAsyncClient> getSdkClientProvider() {
+                        return dynamoDbAsyncClientProvider;
+                    }
+                };
+
+        return (DynamoDbSinkWriter<Map<String, AttributeValue>>)
+                dynamoDbSink.createWriter(new TestSinkInitContext());
     }
 
     private List<DynamoDbWriteRequest> getDefaultInputRequests() {
@@ -437,6 +446,64 @@ public class DynamoDbSinkWriterTest {
         item.put("number_payload", AttributeValue.builder().n("1234").build());
         return item;
     }
+    //
+    //    private static class TestDynamoDbSink<InputT> extends DynamoDbSink<InputT> {
+    //
+    //        private final SerializableSupplier<SdkClientProvider<DynamoDbAsyncClient>>
+    // clientProvider;
+    //        private final boolean failOnError;
+    //        private final List<String> overwriteByPartitionKeys;
+    //
+    //        TestDynamoDbSink(
+    //                ElementConverter elementConverter,
+    //                int maxBatchSize,
+    //                int maxInFlightRequests,
+    //                int maxBufferedRequests,
+    //                long maxBatchSizeInBytes,
+    //                long maxTimeInBufferMS,
+    //                long maxRecordSizeInBytes,
+    //                boolean failOnError,
+    //                List<String> overwriteByPartitionKeys,
+    //                SerializableSupplier<SdkClientProvider<DynamoDbAsyncClient>> clientProvider) {
+    //            super(
+    //                    elementConverter,
+    //                    maxBatchSize,
+    //                    maxInFlightRequests,
+    //                    maxBufferedRequests,
+    //                    maxBatchSizeInBytes,
+    //                    maxTimeInBufferMS,
+    //                    maxRecordSizeInBytes,
+    //                    failOnError,
+    //                    TABLE_NAME,
+    //                    overwriteByPartitionKeys,
+    //                    new Properties());
+    //            this.clientProvider = clientProvider;
+    //            this.failOnError = failOnError;
+    //            this.overwriteByPartitionKeys = overwriteByPartitionKeys;
+    //        }
+    //
+    //        @Override
+    //        public StatefulSinkWriter<InputT, BufferedRequestState<DynamoDbWriteRequest>>
+    // restoreWriter(
+    //                InitContext context,
+    //                Collection<BufferedRequestState<DynamoDbWriteRequest>> recoveredState)
+    //                throws IOException {
+    //            return new DynamoDbSinkWriter<>(
+    //                    getElementConverter(),
+    //                    context,
+    //                    getMaxBatchSize(),
+    //                    getMaxInFlightRequests(),
+    //                    getMaxBufferedRequests(),
+    //                    getMaxBatchSizeInBytes(),
+    //                    getMaxTimeInBufferMS(),
+    //                    getMaxRecordSizeInBytes(),
+    //                    failOnError,
+    //                    TABLE_NAME,
+    //                    overwriteByPartitionKeys,
+    //                    clientProvider.get(),
+    //                    recoveredState);
+    //        }
+    //    }
 
     private static class TestAsyncDynamoDbClientProvider
             implements SdkClientProvider<DynamoDbAsyncClient> {
