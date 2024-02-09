@@ -56,9 +56,6 @@ import java.util.stream.IntStream;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.apache.commons.lang3.RandomStringUtils.randomAlphabetic;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
 import static software.amazon.awssdk.services.kinesis.model.ConsumerStatus.ACTIVE;
 import static software.amazon.awssdk.services.kinesis.model.ConsumerStatus.CREATING;
 import static software.amazon.awssdk.services.kinesis.model.ConsumerStatus.DELETING;
@@ -479,23 +476,18 @@ public class FakeKinesisFanOutBehavioursFactory {
                                                                 .build());
                                     }
 
-                                    Subscription subscription = mock(Subscription.class);
                                     Iterator<SubscribeToShardEvent> iterator =
                                             eventsToSend.iterator();
 
-                                    doAnswer(
-                                                    a -> {
-                                                        if (!iterator.hasNext()) {
-                                                            completeSubscription(subscriber);
-                                                        } else {
+                                    Subscription subscription =
+                                            new FakeSubscription(
+                                                    (n) -> {
+                                                        if (iterator.hasNext()) {
                                                             subscriber.onNext(iterator.next());
+                                                        } else {
+                                                            completeSubscription(subscriber);
                                                         }
-
-                                                        return null;
-                                                    })
-                                            .when(subscription)
-                                            .request(anyLong());
-
+                                                    });
                                     subscriber.onSubscribe(subscription);
                                 });
                         return null;
@@ -689,6 +681,25 @@ public class FakeKinesisFanOutBehavioursFactory {
         @Override
         public void close() {
             // Do nothing by default
+        }
+    }
+
+    private static class FakeSubscription implements Subscription {
+
+        private final java.util.function.Consumer<Long> onRequest;
+
+        public FakeSubscription(java.util.function.Consumer<Long> onRequest) {
+            this.onRequest = onRequest;
+        }
+
+        @Override
+        public void request(long n) {
+            onRequest.accept(n);
+        }
+
+        @Override
+        public void cancel() {
+            // Nothing to do
         }
     }
 
