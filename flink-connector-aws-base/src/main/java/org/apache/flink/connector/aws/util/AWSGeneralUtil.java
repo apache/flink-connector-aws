@@ -171,7 +171,9 @@ public class AWSGeneralUtil {
                         configPrefix);
 
             case AUTO:
-                return DefaultCredentialsProvider.create();
+                // Using builder instead of DefaultCredentialsProvider.create
+                // to get new instance for each call.
+                return DefaultCredentialsProvider.builder().build();
 
             default:
                 throw new IllegalArgumentException(
