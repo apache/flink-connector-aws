@@ -901,6 +901,21 @@ class AWSGeneralUtilTest {
                         "Secret key must be specified either via environment variable (AWS_SECRET_ACCESS_KEY) or system property (aws.secretAccessKey)");
     }
 
+    @Test
+    void testNewInstanceOfDefaultCredentialsProviderCreatedForEachClient() {
+        Properties properties = new Properties();
+        properties.setProperty(AWS_CREDENTIALS_PROVIDER, "AUTO");
+
+        AwsCredentialsProvider credentialsProvider =
+                AWSGeneralUtil.getCredentialsProvider(properties);
+        AwsCredentialsProvider credentialsProvider2 =
+                AWSGeneralUtil.getCredentialsProvider(properties);
+
+        assertThat(credentialsProvider)
+                .withFailMessage("Must create new instance for each call")
+                .isNotSameAs(credentialsProvider2);
+    }
+
     private WebIdentityTokenFileCredentialsProvider.Builder
             mockWebIdentityTokenFileCredentialsProviderBuilder() {
         WebIdentityTokenFileCredentialsProvider.Builder builder =
