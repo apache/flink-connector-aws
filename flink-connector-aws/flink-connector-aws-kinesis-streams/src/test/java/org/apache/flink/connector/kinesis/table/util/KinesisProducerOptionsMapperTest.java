@@ -18,12 +18,14 @@
 
 package org.apache.flink.connector.kinesis.table.util;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.aws.config.AWSConfigConstants;
 import org.apache.flink.connector.kinesis.table.util.KinesisStreamsConnectorOptionsUtils.KinesisProducerOptionsMapper;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -75,5 +77,26 @@ class KinesisProducerOptionsMapperTest {
                 producerOptionsMapper.mapDeprecatedClientOptions();
 
         Assertions.assertThat(actualMappedProperties).isEqualTo(expectedOptions);
+    }
+
+    @Test
+    void testProducerOptionsMapperDoesNotModifyOptionsInstance() {
+        Map<String, String> deprecatedOptions = new HashMap<>();
+        deprecatedOptions.put("sink.producer.kinesis-endpoint", "some-end-point.kinesis");
+        deprecatedOptions.put("sink.producer.kinesis-port", "1234");
+
+        Map<String, String> deprecatedOptionsImmutable =
+                Collections.unmodifiableMap(deprecatedOptions);
+        Assertions.assertThatNoException()
+                .isThrownBy(
+                        () ->
+                                new KinesisProducerOptionsMapper(deprecatedOptionsImmutable)
+                                        .mapDeprecatedClientOptions());
+        Assertions.assertThatNoException()
+                .isThrownBy(
+                        () ->
+                                new KinesisProducerOptionsMapper(
+                                                new Configuration(), deprecatedOptionsImmutable)
+                                        .mapDeprecatedClientOptions());
     }
 }
