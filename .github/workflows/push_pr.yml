@@ -26,7 +26,7 @@ jobs:
     uses: ./.github/workflows/common.yml
     strategy:
       matrix:
-        flink: [1.17.1, 1.18.0]
+        flink: [1.18.1, 1.19.0]
     with:
       flink_version: ${{ matrix.flink }}
       flink_url: https://archive.apache.org/dist/flink/flink-${{ matrix.flink }}/flink-${{ matrix.flink }}-bin-scala_2.12.tgz
@@ -36,7 +36,7 @@ jobs:
   python_test:
     strategy:
       matrix:
-        flink: [ 1.17.1, 1.18.0 ]
+        flink: [1.18.1, 1.19.0]
     uses: apache/flink-connector-shared-utils/.github/workflows/python_ci.yml@ci_utils
     with:
       flink_version: ${{ matrix.flink }}
