@@ -41,10 +41,5 @@ FLINK_PYTHON_DIR=$(dirname "$CURRENT_DIR")
 # set the FLINK_TEST_LIB_DIR to "<root-project-folder>/flink-connector-aws/flink-python-connector-aws/target/dep..."
 export FLINK_TEST_LIBS="${FLINK_PYTHON_DIR}/target/test-dependencies/*"
 
-# Temporarily update the installed 'pyflink_gateway_server.py' files with the new one
-# Needed only until Flink 1.19 release
-echo "Checking ${FLINK_PYTHON_DIR} for 'pyflink_gateway_server.py'"
-find "${FLINK_PYTHON_DIR}/.tox" -name pyflink_gateway_server.py -exec cp "${FLINK_PYTHON_DIR}/pyflink/pyflink_gateway_server.py" {} \;
-
 # python test
 test_all_modules
