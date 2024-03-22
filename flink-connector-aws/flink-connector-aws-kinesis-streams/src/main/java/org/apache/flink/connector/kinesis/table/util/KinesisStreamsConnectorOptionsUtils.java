@@ -36,6 +36,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -148,13 +149,13 @@ public class KinesisStreamsConnectorOptionsUtils {
         public KinesisProducerOptionsMapper(
                 ReadableConfig tableOptions, Map<String, String> resolvedOptions) {
             this.tableOptions = tableOptions;
-            this.resolvedOptions = resolvedOptions;
+            this.resolvedOptions = new HashMap<>(resolvedOptions);
         }
 
         @VisibleForTesting
         public KinesisProducerOptionsMapper(Map<String, String> allOptions) {
             this.tableOptions = Configuration.fromMap(allOptions);
-            this.resolvedOptions = allOptions;
+            this.resolvedOptions = new HashMap<>(allOptions);
         }
 
         public Map<String, String> mapDeprecatedClientOptions() {
