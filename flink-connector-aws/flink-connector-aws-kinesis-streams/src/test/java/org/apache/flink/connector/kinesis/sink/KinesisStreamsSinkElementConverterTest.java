@@ -15,51 +15,25 @@
  * limitations under the License.
  */
 
-package org.apache.flink.connector.firehose.sink;
+package org.apache.flink.connector.kinesis.sink;
 
 import org.apache.flink.api.common.serialization.SerializationSchema;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.connector.base.sink.writer.ElementConverter;
 
-import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
-import software.amazon.awssdk.core.SdkBytes;
-import software.amazon.awssdk.services.firehose.model.Record;
+import software.amazon.awssdk.services.kinesis.model.PutRecordsRequestEntry;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Covers construction and sanity checking of {@link KinesisFirehoseSinkElementConverter}. */
-class KinesisFirehoseSinkElementConverterTest {
-
-    @Test
-    void elementConverterWillComplainASerializationSchemaIsNotSetIfBuildIsCalledWithoutIt() {
-        Assertions.assertThatExceptionOfType(NullPointerException.class)
-                .isThrownBy(() -> KinesisFirehoseSinkElementConverter.<String>builder().build())
-                .withMessageContaining(
-                        "No SerializationSchema was supplied to the KinesisFirehoseSink builder.");
-    }
-
-    @Test
-    void elementConverterUsesProvidedSchemaToSerializeRecord() {
-        ElementConverter<String, Record> elementConverter =
-                KinesisFirehoseSinkElementConverter.<String>builder()
-                        .setSerializationSchema(new SimpleStringSchema())
-                        .build();
-        elementConverter.open(null);
-
-        String testString = "{many hands make light work;";
-
-        Record serializedRecord = elementConverter.apply(testString, null);
-        byte[] serializedString = (new SimpleStringSchema()).serialize(testString);
-        assertThat(serializedRecord.data()).isEqualTo(SdkBytes.fromByteArray(serializedString));
-    }
-
+class KinesisStreamsSinkElementConverterTest {
     @Test
     void elementConverterWillOpenSerializationSchema() {
         OpenCheckingStringSchema openCheckingStringSchema = new OpenCheckingStringSchema();
-        ElementConverter<String, Record> elementConverter =
-                KinesisFirehoseSinkElementConverter.<String>builder()
+        ElementConverter<String, PutRecordsRequestEntry> elementConverter =
+                KinesisStreamsSinkElementConverter.<String>builder()
                         .setSerializationSchema(openCheckingStringSchema)
+                        .setPartitionKeyGenerator(element -> String.valueOf(element.hashCode()))
                         .build();
         elementConverter.open(null);
         assertThat(openCheckingStringSchema.isOpen()).isTrue();

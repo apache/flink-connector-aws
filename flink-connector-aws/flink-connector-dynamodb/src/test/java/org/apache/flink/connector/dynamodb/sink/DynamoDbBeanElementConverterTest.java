@@ -41,6 +41,7 @@ class DynamoDbBeanElementConverterTest {
     void testConvertOrderToDynamoDbWriteRequest() {
         ElementConverter<Order, DynamoDbWriteRequest> elementConverter =
                 new DynamoDbBeanElementConverter<>(Order.class);
+        elementConverter.open(null);
         Order order = new Order("orderId", 1, 2.0);
 
         DynamoDbWriteRequest actual = elementConverter.apply(order, null);
@@ -56,6 +57,7 @@ class DynamoDbBeanElementConverterTest {
     void testConvertOrderToDynamoDbWriteRequestWithIgnoresNull() {
         ElementConverter<Order, DynamoDbWriteRequest> elementConverter =
                 new DynamoDbBeanElementConverter<>(Order.class, true);
+        elementConverter.open(null);
         Order order = new Order(null, 1, 2.0);
 
         DynamoDbWriteRequest actual = elementConverter.apply(order, null);
@@ -67,11 +69,23 @@ class DynamoDbBeanElementConverterTest {
     void testConvertOrderToDynamoDbWriteRequestWritesNull() {
         ElementConverter<Order, DynamoDbWriteRequest> elementConverter =
                 new DynamoDbBeanElementConverter<>(Order.class, false);
+        elementConverter.open(null);
         Order order = new Order(null, 1, 2.0);
 
         DynamoDbWriteRequest actual = elementConverter.apply(order, null);
 
         assertThat(actual.getItem()).containsOnlyKeys("orderId", "quantity", "total");
         assertThat(actual.getItem().get("orderId").nul()).isTrue();
+    }
+
+    @Test
+    void testConvertWithClosedConvertedThrowsException() {
+        ElementConverter<Order, DynamoDbWriteRequest> elementConverter =
+                new DynamoDbBeanElementConverter<>(Order.class);
+        Order order = new Order(null, 1, 2.0);
+
+        assertThatExceptionOfType(NullPointerException.class)
+                .isThrownBy(() -> elementConverter.apply(order, null))
+                .withMessageContaining("Table schema has not been initialized");
     }
 }
