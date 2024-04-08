@@ -58,6 +58,7 @@ import java.util.Properties;
  * <p>If the following parameters are not set in this builder, the following defaults will be used:
  *
  * <ul>
+ *   <li>{@code elementConverter} will be {@link DefaultDynamoDbElementConverter}
  *   <li>{@code maxBatchSize} will be 25
  *   <li>{@code maxInFlightRequests} will be 50
  *   <li>{@code maxBufferedRequests} will be 10000
@@ -145,7 +146,8 @@ public class DynamoDbSinkBuilder<InputT>
     @Override
     public DynamoDbSink<InputT> build() {
         return new DynamoDbSink<>(
-                elementConverter,
+                Optional.ofNullable(elementConverter)
+                        .orElse(new DefaultDynamoDbElementConverter<>()),
                 Optional.ofNullable(getMaxBatchSize()).orElse(DEFAULT_MAX_BATCH_SIZE),
                 Optional.ofNullable(getMaxInFlightRequests())
                         .orElse(DEFAULT_MAX_IN_FLIGHT_REQUESTS),
