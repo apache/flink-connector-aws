@@ -18,8 +18,10 @@
 package org.apache.flink.connector.dynamodb.sink;
 
 import org.apache.flink.annotation.PublicEvolving;
+import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.api.connector.sink2.SinkWriter;
 import org.apache.flink.connector.base.sink.writer.ElementConverter;
+import org.apache.flink.util.Preconditions;
 
 import software.amazon.awssdk.enhanced.dynamodb.mapper.BeanTableSchema;
 import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbBean;
@@ -54,16 +56,16 @@ public class DynamoDbBeanElementConverter<InputT>
 
     @Override
     public DynamoDbWriteRequest apply(InputT element, SinkWriter.Context context) {
-        if (tableSchema == null) {
-            // We have to lazily initialize this because BeanTableSchema is not serializable and
-            // there is no open() method on ElementConverter (FLINK-29938)
-            tableSchema = createTableSchema(recordType);
-        }
-
+        Preconditions.checkNotNull(tableSchema, "Table schema has not been initialized");
         return new DynamoDbWriteRequest.Builder()
                 .setType(DynamoDbWriteRequestType.PUT)
                 .setItem(tableSchema.itemToMap(element, ignoreNulls))
                 .build();
+    }
+
+    @Override
+    public void open(Sink.InitContext context) {
+        tableSchema = createTableSchema(recordType);
     }
 
     private BeanTableSchema<InputT> createTableSchema(final Class<InputT> recordType) {

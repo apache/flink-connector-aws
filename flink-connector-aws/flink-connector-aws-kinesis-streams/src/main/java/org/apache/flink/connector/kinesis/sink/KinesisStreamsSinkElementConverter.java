@@ -19,6 +19,7 @@ package org.apache.flink.connector.kinesis.sink;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.common.serialization.SerializationSchema;
+import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.api.connector.sink2.SinkWriter;
 import org.apache.flink.connector.base.sink.writer.ElementConverter;
 import org.apache.flink.metrics.MetricGroup;
@@ -48,8 +49,6 @@ public class KinesisStreamsSinkElementConverter<InputT>
      */
     private final PartitionKeyGenerator<InputT> partitionKeyGenerator;
 
-    private boolean schemaOpened = false;
-
     private KinesisStreamsSinkElementConverter(
             SerializationSchema<InputT> serializationSchema,
             PartitionKeyGenerator<InputT> partitionKeyGenerator) {
@@ -59,33 +58,30 @@ public class KinesisStreamsSinkElementConverter<InputT>
 
     @Override
     public PutRecordsRequestEntry apply(InputT element, SinkWriter.Context context) {
-        checkOpened();
         return PutRecordsRequestEntry.builder()
                 .data(SdkBytes.fromByteArray(serializationSchema.serialize(element)))
                 .partitionKey(partitionKeyGenerator.apply(element))
                 .build();
     }
 
-    private void checkOpened() {
-        if (!schemaOpened) {
-            try {
-                serializationSchema.open(
-                        new SerializationSchema.InitializationContext() {
-                            @Override
-                            public MetricGroup getMetricGroup() {
-                                return new UnregisteredMetricsGroup();
-                            }
+    @Override
+    public void open(Sink.InitContext context) {
+        try {
+            serializationSchema.open(
+                    new SerializationSchema.InitializationContext() {
+                        @Override
+                        public MetricGroup getMetricGroup() {
+                            return new UnregisteredMetricsGroup();
+                        }
 
-                            @Override
-                            public UserCodeClassLoader getUserCodeClassLoader() {
-                                return SimpleUserCodeClassLoader.create(
-                                        KinesisStreamsSinkElementConverter.class.getClassLoader());
-                            }
-                        });
-                schemaOpened = true;
-            } catch (Exception e) {
-                throw new FlinkRuntimeException("Failed to initialize serialization schema.", e);
-            }
+                        @Override
+                        public UserCodeClassLoader getUserCodeClassLoader() {
+                            return SimpleUserCodeClassLoader.create(
+                                    KinesisStreamsSinkElementConverter.class.getClassLoader());
+                        }
+                    });
+        } catch (Exception e) {
+            throw new FlinkRuntimeException("Failed to initialize serialization schema.", e);
         }
     }
 
