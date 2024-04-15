@@ -27,7 +27,7 @@ jobs:
     strategy:
       matrix:
         flink: [1.18.1, 1.19.0]
-        java: [ '8, 11, 17, 21']
+        java: [ '8, 11, 17']
     with:
       flink_version: ${{ matrix.flink }}
       jdk_version: ${{ matrix.java }}
@@ -39,8 +39,6 @@ jobs:
     strategy:
       matrix:
         flink: [1.18.1, 1.19.0]
-        java: [ '8, 11, 17, 21']
     uses: apache/flink-connector-shared-utils/.github/workflows/python_ci.yml@ci_utils
     with:
       flink_version: ${{ matrix.flink }}
-      jdk_version: ${{ matrix.java }}

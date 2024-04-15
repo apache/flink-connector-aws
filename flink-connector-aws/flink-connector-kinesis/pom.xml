@@ -35,7 +35,7 @@ under the License.
     <properties>
         <aws.kinesis-kpl.version>0.14.1</aws.kinesis-kpl.version>
         <aws.dynamodbstreams-kinesis-adapter.version>1.5.3</aws.dynamodbstreams-kinesis-adapter.version>
-        <hamcrest.version>1.3</hamcrest.version>
+        <hamcrest.version>2.2</hamcrest.version>
         <flink.connector.module.config><!--
         FlinkKinesisConsumerTest --> --add-opens=java.base/java.lang=ALL-UNNAMED <!--
         FlinkKinesisConsumerTest --> --add-opens=java.base/java.util=ALL-UNNAMED <!--
@@ -219,7 +219,7 @@ under the License.
         </dependency>
         <dependency>
             <groupId>org.hamcrest</groupId>
-            <artifactId>hamcrest-all</artifactId>
+            <artifactId>hamcrest</artifactId>
             <version>${hamcrest.version}</version>
             <scope>test</scope>
         </dependency>

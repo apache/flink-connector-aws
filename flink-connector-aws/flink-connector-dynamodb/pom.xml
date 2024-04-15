@@ -35,7 +35,10 @@ under the License.
     <packaging>jar</packaging>
 
     <properties>
-        <flink.connector.module.config><!-- Required by DynamoDbSinkITCase --> --add-opens=java.base/java.util=ALL-UNNAMED</flink.connector.module.config>
+        <flink.connector.module.config><!--
+        Required by DynamoDbSinkITCase --> --add-opens=java.base/java.util=ALL-UNNAMED <!--
+        Required by DynamoDbSinkITCase --> --add-opens=java.base/java.lang=ALL-UNNAMED
+        </flink.connector.module.config>
     </properties>
     <dependencyManagement>
         <dependencies>
