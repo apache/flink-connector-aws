@@ -148,7 +148,17 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
     private transient HashMap<StreamShardMetadata.EquivalenceWrapper, SequenceNumber>
             sequenceNumsToRestore;
 
+    /**
+     * Flag used to control reading from Kinesis: source will read data while value is true. Changed
+     * to false after {@link #cancel()} has been called.
+     */
     private volatile boolean running = true;
+    /**
+     * Flag identifying that operator had been closed. True only after {@link #close()} has been
+     * called. Used to control behaviour of snapshotState: state can be persisted after operator has
+     * been cancelled (during stop-with-savepoint workflow), but not after operator has been closed.
+     */
+    private volatile boolean closed = false;
 
     // ------------------------------------------------------------------------
     //  State for Checkpoint
@@ -419,6 +429,7 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
     @Override
     public void close() throws Exception {
         cancel();
+        closed = true;
         // safe-guard when the fetcher has been interrupted, make sure to not leak resources
         // application might be stopped before connector subtask has been started
         // so we must check if the fetcher is actually created
@@ -478,7 +489,7 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
 
     @Override
     public void snapshotState(FunctionSnapshotContext context) throws Exception {
-        if (!running) {
+        if (closed) {
             LOG.debug("snapshotState() called on closed source; returning null.");
         } else {
             if (LOG.isDebugEnabled()) {
