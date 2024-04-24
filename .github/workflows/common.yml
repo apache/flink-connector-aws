@@ -27,6 +27,11 @@ on:
         description: "Flink version to test against."
         required: true
         type: string
+      jdk_version:
+        description: "Jdk version to test against."
+        required: false
+        default: 8, 11
+        type: string
       cache_flink_binary:
         description: "Whether to cache the Flink binary. Should be false for SNAPSHOT URLs, true otherwise."
         required: true
@@ -47,7 +52,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        jdk: [ 8, 11 ]
+        jdk: ${{ fromJSON(format('[{0}]', inputs.jdk_version)) }}
     timeout-minutes: ${{ inputs.timeout_global }}
     env:
       MVN_COMMON_OPTIONS: -U -B --no-transfer-progress -Dflink.version=${{ inputs.flink_version }}

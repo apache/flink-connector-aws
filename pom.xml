@@ -65,11 +65,17 @@ under the License.
         <assertj.version>3.21.0</assertj.version>
         <archunit.version>0.22.0</archunit.version>
         <testcontainers.version>1.17.2</testcontainers.version>
-        <mockito.version>3.4.6</mockito.version>
+        <mockito.version>3.12.4</mockito.version>
         <powermock.version>2.0.9</powermock.version>
         <kotlin.version>1.7.10</kotlin.version>
 
         <flink.parent.artifactId>flink-connector-aws</flink.parent.artifactId>
+        <!-- This property should contain the add-opens/add-exports commands required for the tests
+         in the given connector's module to pass.
+         It MUST be a space-separated list not containing any newlines,
+         of entries in the form '[-]{2}add-[opens|exports]=<module>/<package>=ALL-UNNAMED'.-->
+        <flink.connector.module.config/>
+        <flink.surefire.baseArgLine>-XX:+UseG1GC -Xms256m -XX:+IgnoreUnrecognizedVMOptions ${flink.connector.module.config}</flink.surefire.baseArgLine>
     </properties>
 
     <modules>
@@ -309,12 +315,12 @@ under the License.
             <dependency>
                 <groupId>net.bytebuddy</groupId>
                 <artifactId>byte-buddy</artifactId>
-                <version>1.10.14</version>
+                <version>1.14.4</version>
             </dependency>
             <dependency>
                 <groupId>net.bytebuddy</groupId>
                 <artifactId>byte-buddy-agent</artifactId>
-                <version>1.10.14</version>
+                <version>1.14.4</version>
             </dependency>
             <dependency>
                 <groupId>junit</groupId>
