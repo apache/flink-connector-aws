@@ -231,7 +231,7 @@ class KinesisStreamsSinkWriter<InputT> extends AsyncSinkWriter<InputT, PutRecord
             Throwable err,
             List<PutRecordsRequestEntry> requestEntries,
             Consumer<List<PutRecordsRequestEntry>> requestResult) {
-        LOG.debug(
+        LOG.warn(
                 "KDS Sink failed to write and will retry {} entries to KDS",
                 requestEntries.size(),
                 err);
@@ -251,7 +251,7 @@ class KinesisStreamsSinkWriter<InputT> extends AsyncSinkWriter<InputT, PutRecord
             PutRecordsResponse response,
             List<PutRecordsRequestEntry> requestEntries,
             Consumer<List<PutRecordsRequestEntry>> requestResult) {
-        LOG.debug(
+        LOG.warn(
                 "KDS Sink failed to write and will retry {} entries to KDS",
                 response.failedRecordCount());
         numRecordsOutErrorsCounter.inc(response.failedRecordCount());
