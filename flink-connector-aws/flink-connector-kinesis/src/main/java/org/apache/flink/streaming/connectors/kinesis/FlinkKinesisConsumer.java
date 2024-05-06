@@ -58,7 +58,9 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 
 import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
@@ -147,6 +149,12 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
     /** The sequence numbers to restore to upon restore from failure. */
     private transient HashMap<StreamShardMetadata.EquivalenceWrapper, SequenceNumber>
             sequenceNumsToRestore;
+
+    /**
+     * The streams present in the {@link #sequenceNumsToRestore} map, which means they were consumed
+     * by the application previously, so we know where to consume from.
+     */
+    private transient Set<String> knownStreams;
 
     /**
      * Flag used to control reading from Kinesis: source will read data while value is true. Changed
@@ -323,14 +331,23 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
         // initial discovery
         List<StreamShardHandle> allShards = fetcher.discoverNewShardsToSubscribe();
 
+        boolean applyStreamInitialPositionForNewStreams =
+                Optional.ofNullable(
+                                configProps.getProperty(
+                                        ConsumerConfigConstants
+                                                .APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS))
+                        .map(Boolean::parseBoolean)
+                        .orElse(
+                                ConsumerConfigConstants
+                                        .DEFAULT_APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS);
+
         for (StreamShardHandle shard : allShards) {
             StreamShardMetadata.EquivalenceWrapper kinesisStreamShard =
                     new StreamShardMetadata.EquivalenceWrapper(
                             KinesisDataFetcher.convertToStreamShardMetadata(shard));
 
             if (sequenceNumsToRestore != null) {
-
-                if (sequenceNumsToRestore.containsKey(kinesisStreamShard)) {
+                if (knownStreams.contains(shard.getStreamName())) {
                     // if the shard was already seen and is contained in the state,
                     // just use the sequence number stored in the state
                     fetcher.registerNewSubscribedShardState(
@@ -348,24 +365,55 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
                                 sequenceNumsToRestore.get(kinesisStreamShard));
                     }
                 } else {
-                    // the shard wasn't discovered in the previous run, therefore should be consumed
-                    // from the beginning
-                    fetcher.registerNewSubscribedShardState(
-                            new KinesisStreamShardState(
-                                    kinesisStreamShard.getShardMetadata(),
-                                    shard,
-                                    SentinelSequenceNumber.SENTINEL_EARLIEST_SEQUENCE_NUM.get()));
+                    if (applyStreamInitialPositionForNewStreams) {
+                        // we're starting fresh (either for the whole consumer or for this stream);
+                        // use the configured start position as initial state
+                        SentinelSequenceNumber startingSeqNum =
+                                InitialPosition.valueOf(
+                                                configProps.getProperty(
+                                                        ConsumerConfigConstants
+                                                                .STREAM_INITIAL_POSITION,
+                                                        ConsumerConfigConstants
+                                                                .DEFAULT_STREAM_INITIAL_POSITION))
+                                        .toSentinelSequenceNumber();
 
-                    if (LOG.isInfoEnabled()) {
-                        LOG.info(
-                                "Subtask {} is seeding the fetcher with new discovered shard {},"
-                                        + " starting state set to the SENTINEL_EARLIEST_SEQUENCE_NUM",
-                                getRuntimeContext().getIndexOfThisSubtask(),
-                                shard.toString());
+                        fetcher.registerNewSubscribedShardState(
+                                new KinesisStreamShardState(
+                                        kinesisStreamShard.getShardMetadata(),
+                                        shard,
+                                        startingSeqNum.get()));
+
+                        if (LOG.isInfoEnabled()) {
+                            LOG.info(
+                                    "Subtask {} will be seeded with initial shard {}, starting state set as sequence number {}",
+                                    getRuntimeContext().getIndexOfThisSubtask(),
+                                    shard.toString(),
+                                    startingSeqNum.get());
+                        }
+                    } else {
+                        // the shard wasn't discovered in the previous run, therefore should be
+                        // consumed
+                        // from the beginning OR this is a new stream we haven't seen yet, and the
+                        // applyStreamInitialPositionForNewStreams flag is false
+                        fetcher.registerNewSubscribedShardState(
+                                new KinesisStreamShardState(
+                                        kinesisStreamShard.getShardMetadata(),
+                                        shard,
+                                        SentinelSequenceNumber.SENTINEL_EARLIEST_SEQUENCE_NUM
+                                                .get()));
+
+                        if (LOG.isInfoEnabled()) {
+                            LOG.info(
+                                    "Subtask {} is seeding the fetcher with new discovered shard {},"
+                                            + " starting state set to the SENTINEL_EARLIEST_SEQUENCE_NUM",
+                                    getRuntimeContext().getIndexOfThisSubtask(),
+                                    shard.toString());
+                        }
                     }
                 }
             } else {
-                // we're starting fresh; use the configured start position as initial state
+                // we're starting fresh (either for the whole consumer or for this stream);
+                // use the configured start position as initial state
                 SentinelSequenceNumber startingSeqNum =
                         InitialPosition.valueOf(
                                         configProps.getProperty(
@@ -466,6 +514,7 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
                 sequenceNumsToRestore = new HashMap<>();
                 for (Tuple2<StreamShardMetadata, SequenceNumber> kinesisSequenceNumber :
                         sequenceNumsStateForCheckpoint.get()) {
+                    StreamShardMetadata streamShardMetadata = kinesisSequenceNumber.f0;
                     sequenceNumsToRestore.put(
                             // we wrap the restored metadata inside an equivalence wrapper that
                             // checks only stream name and shard id,
@@ -474,8 +523,9 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
                             // the savepoint and has a different metadata than what we last stored,
                             // we will still be able to match it in sequenceNumsToRestore. Please
                             // see FLINK-8484 for details.
-                            new StreamShardMetadata.EquivalenceWrapper(kinesisSequenceNumber.f0),
+                            new StreamShardMetadata.EquivalenceWrapper(streamShardMetadata),
                             kinesisSequenceNumber.f1);
+                    knownStreams.add(streamShardMetadata.getStreamName());
                 }
 
                 LOG.info(
