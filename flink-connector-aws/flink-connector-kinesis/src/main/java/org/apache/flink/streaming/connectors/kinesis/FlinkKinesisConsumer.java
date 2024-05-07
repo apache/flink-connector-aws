@@ -51,7 +51,6 @@ import org.apache.flink.streaming.connectors.kinesis.util.KinesisStateUtil;
 import org.apache.flink.streaming.connectors.kinesis.util.StreamConsumerRegistrarUtil;
 import org.apache.flink.streaming.connectors.kinesis.util.WatermarkTracker;
 import org.apache.flink.util.InstantiationUtil;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -351,20 +350,30 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
                 // use the configured start position as initial state
                 registerFromInitialPosition(fetcher, shard, kinesisStreamShard);
             } else {
-                if (knownStreams.contains(stream)) {
+                if (sequenceNumsToRestore.containsKey(kinesisStreamShard)) {
                     // if the shard was already seen and is contained in the state,
                     // just use the sequence number stored in the state
                     registerFromState(fetcher, shard, kinesisStreamShard);
-                } else if (applyStreamInitialPositionForNewStreams) {
-                    // we're starting fresh (either for the whole consumer or for this stream);
-                    // use the configured start position as initial state
-                    registerFromInitialPosition(fetcher, shard, kinesisStreamShard);
                 } else {
-                    // the shard wasn't discovered in the previous run, therefore should be
-                    // consumed
-                    // from the beginning OR this is a new stream we haven't seen yet, and the
-                    // applyStreamInitialPositionForNewStreams flag is false
-                    registerFromBeginning(fetcher, shard, kinesisStreamShard);
+                    // it's either a new shard for a stream that was already seen or a new stream
+                    if (knownStreams.contains(stream)) {
+                        // the shard wasn't discovered in the previous run, therefore should be
+                        // consumed
+                        // from the beginning OR this is a new stream we haven't seen yet, and the
+                        // applyStreamInitialPositionForNewStreams flag is false
+                        registerFromBeginning(fetcher, shard, kinesisStreamShard);
+                    } else {
+                        // it's a new stream
+                        if (applyStreamInitialPositionForNewStreams) {
+                            // the flag is true, so we respect the initial position for the new
+                            // stream
+                            registerFromInitialPosition(fetcher, shard, kinesisStreamShard);
+                        } else {
+                            // the flag is false, so we continue existing behaviour of registering
+                            // from the beginning
+                            registerFromBeginning(fetcher, shard, kinesisStreamShard);
+                        }
+                    }
                 }
             }
         }
