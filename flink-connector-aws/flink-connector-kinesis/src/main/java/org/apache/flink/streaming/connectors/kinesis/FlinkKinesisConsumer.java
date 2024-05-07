@@ -42,6 +42,7 @@ import org.apache.flink.streaming.connectors.kinesis.model.SentinelSequenceNumbe
 import org.apache.flink.streaming.connectors.kinesis.model.SequenceNumber;
 import org.apache.flink.streaming.connectors.kinesis.model.StreamShardHandle;
 import org.apache.flink.streaming.connectors.kinesis.model.StreamShardMetadata;
+import org.apache.flink.streaming.connectors.kinesis.model.StreamShardMetadata.EquivalenceWrapper;
 import org.apache.flink.streaming.connectors.kinesis.serialization.KinesisDeserializationSchema;
 import org.apache.flink.streaming.connectors.kinesis.serialization.KinesisDeserializationSchemaWrapper;
 import org.apache.flink.streaming.connectors.kinesis.table.DefaultShardAssignerFactory;
@@ -54,6 +55,7 @@ import org.apache.flink.util.InstantiationUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -61,6 +63,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
@@ -332,108 +335,35 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
         List<StreamShardHandle> allShards = fetcher.discoverNewShardsToSubscribe();
 
         boolean applyStreamInitialPositionForNewStreams =
-                Optional.ofNullable(
-                                configProps.getProperty(
-                                        ConsumerConfigConstants
-                                                .APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS))
-                        .map(Boolean::parseBoolean)
-                        .orElse(
-                                ConsumerConfigConstants
-                                        .DEFAULT_APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS);
+                getApplyStreamInitialPositionForNewStreamsFlag();
+
+        Set<String> streamsToForceInitialPositionIn = getStreamsToForceInitialPositionIn();
 
         for (StreamShardHandle shard : allShards) {
             StreamShardMetadata.EquivalenceWrapper kinesisStreamShard =
                     new StreamShardMetadata.EquivalenceWrapper(
                             KinesisDataFetcher.convertToStreamShardMetadata(shard));
+            String stream = shard.getStreamName();
 
-            if (sequenceNumsToRestore != null) {
-                if (knownStreams.contains(shard.getStreamName())) {
-                    // if the shard was already seen and is contained in the state,
-                    // just use the sequence number stored in the state
-                    fetcher.registerNewSubscribedShardState(
-                            new KinesisStreamShardState(
-                                    kinesisStreamShard.getShardMetadata(),
-                                    shard,
-                                    sequenceNumsToRestore.get(kinesisStreamShard)));
-
-                    if (LOG.isInfoEnabled()) {
-                        LOG.info(
-                                "Subtask {} is seeding the fetcher with restored shard {},"
-                                        + " starting state set to the restored sequence number {}",
-                                getRuntimeContext().getIndexOfThisSubtask(),
-                                shard.toString(),
-                                sequenceNumsToRestore.get(kinesisStreamShard));
-                    }
-                } else {
-                    if (applyStreamInitialPositionForNewStreams) {
-                        // we're starting fresh (either for the whole consumer or for this stream);
-                        // use the configured start position as initial state
-                        SentinelSequenceNumber startingSeqNum =
-                                InitialPosition.valueOf(
-                                                configProps.getProperty(
-                                                        ConsumerConfigConstants
-                                                                .STREAM_INITIAL_POSITION,
-                                                        ConsumerConfigConstants
-                                                                .DEFAULT_STREAM_INITIAL_POSITION))
-                                        .toSentinelSequenceNumber();
-
-                        fetcher.registerNewSubscribedShardState(
-                                new KinesisStreamShardState(
-                                        kinesisStreamShard.getShardMetadata(),
-                                        shard,
-                                        startingSeqNum.get()));
-
-                        if (LOG.isInfoEnabled()) {
-                            LOG.info(
-                                    "Subtask {} will be seeded with initial shard {}, starting state set as sequence number {}",
-                                    getRuntimeContext().getIndexOfThisSubtask(),
-                                    shard.toString(),
-                                    startingSeqNum.get());
-                        }
-                    } else {
-                        // the shard wasn't discovered in the previous run, therefore should be
-                        // consumed
-                        // from the beginning OR this is a new stream we haven't seen yet, and the
-                        // applyStreamInitialPositionForNewStreams flag is false
-                        fetcher.registerNewSubscribedShardState(
-                                new KinesisStreamShardState(
-                                        kinesisStreamShard.getShardMetadata(),
-                                        shard,
-                                        SentinelSequenceNumber.SENTINEL_EARLIEST_SEQUENCE_NUM
-                                                .get()));
-
-                        if (LOG.isInfoEnabled()) {
-                            LOG.info(
-                                    "Subtask {} is seeding the fetcher with new discovered shard {},"
-                                            + " starting state set to the SENTINEL_EARLIEST_SEQUENCE_NUM",
-                                    getRuntimeContext().getIndexOfThisSubtask(),
-                                    shard.toString());
-                        }
-                    }
-                }
-            } else {
+            if (sequenceNumsToRestore == null || streamsToForceInitialPositionIn.contains(stream)) {
                 // we're starting fresh (either for the whole consumer or for this stream);
                 // use the configured start position as initial state
-                SentinelSequenceNumber startingSeqNum =
-                        InitialPosition.valueOf(
-                                        configProps.getProperty(
-                                                ConsumerConfigConstants.STREAM_INITIAL_POSITION,
-                                                ConsumerConfigConstants
-                                                        .DEFAULT_STREAM_INITIAL_POSITION))
-                                .toSentinelSequenceNumber();
-
-                fetcher.registerNewSubscribedShardState(
-                        new KinesisStreamShardState(
-                                kinesisStreamShard.getShardMetadata(),
-                                shard,
-                                startingSeqNum.get()));
-
-                if (LOG.isInfoEnabled()) {
-                    LOG.info(
-                            "Subtask {} will be seeded with initial shard {}, starting state set as sequence number {}",
-                            getRuntimeContext().getIndexOfThisSubtask(),
-                            shard.toString(),
-                            startingSeqNum.get());
+                registerFromInitialPosition(fetcher, shard, kinesisStreamShard);
+            } else {
+                if (knownStreams.contains(stream)) {
+                    // if the shard was already seen and is contained in the state,
+                    // just use the sequence number stored in the state
+                    registerFromState(fetcher, shard, kinesisStreamShard);
+                } else if (applyStreamInitialPositionForNewStreams) {
+                    // we're starting fresh (either for the whole consumer or for this stream);
+                    // use the configured start position as initial state
+                    registerFromInitialPosition(fetcher, shard, kinesisStreamShard);
+                } else {
+                    // the shard wasn't discovered in the previous run, therefore should be
+                    // consumed
+                    // from the beginning OR this is a new stream we haven't seen yet, and the
+                    // applyStreamInitialPositionForNewStreams flag is false
+                    registerFromBeginning(fetcher, shard, kinesisStreamShard);
                 }
             }
         }
@@ -454,6 +384,95 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
         // check that the fetcher has terminated before fully closing
         fetcher.awaitTermination();
         sourceContext.close();
+    }
+
+    private Set<String> getStreamsToForceInitialPositionIn() {
+        String streamsToForceInitialPositionInStr =
+                Optional.ofNullable(
+                                configProps.getProperty(
+                                        ConsumerConfigConstants
+                                                .STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO))
+                        .orElse(
+                                ConsumerConfigConstants
+                                        .DEFAULT_STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO);
+
+        return Arrays.stream(streamsToForceInitialPositionInStr.split(","))
+                .map(String::trim)
+                .collect(Collectors.toSet());
+    }
+
+    private Boolean getApplyStreamInitialPositionForNewStreamsFlag() {
+        return Optional.ofNullable(
+                        configProps.getProperty(
+                                ConsumerConfigConstants
+                                        .APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS))
+                .map(Boolean::parseBoolean)
+                .orElse(
+                        ConsumerConfigConstants
+                                .DEFAULT_APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS);
+    }
+
+    private void registerFromBeginning(
+            KinesisDataFetcher<T> fetcher,
+            StreamShardHandle shard,
+            EquivalenceWrapper kinesisStreamShard) {
+        fetcher.registerNewSubscribedShardState(
+                new KinesisStreamShardState(
+                        kinesisStreamShard.getShardMetadata(),
+                        shard,
+                        SentinelSequenceNumber.SENTINEL_EARLIEST_SEQUENCE_NUM.get()));
+
+        if (LOG.isInfoEnabled()) {
+            LOG.info(
+                    "Subtask {} is seeding the fetcher with new discovered shard {},"
+                            + " starting state set to the SENTINEL_EARLIEST_SEQUENCE_NUM",
+                    getRuntimeContext().getIndexOfThisSubtask(),
+                    shard.toString());
+        }
+    }
+
+    private void registerFromInitialPosition(
+            KinesisDataFetcher<T> fetcher,
+            StreamShardHandle shard,
+            EquivalenceWrapper kinesisStreamShard) {
+        SentinelSequenceNumber startingSeqNum =
+                InitialPosition.valueOf(
+                                configProps.getProperty(
+                                        ConsumerConfigConstants.STREAM_INITIAL_POSITION,
+                                        ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION))
+                        .toSentinelSequenceNumber();
+
+        fetcher.registerNewSubscribedShardState(
+                new KinesisStreamShardState(
+                        kinesisStreamShard.getShardMetadata(), shard, startingSeqNum.get()));
+
+        if (LOG.isInfoEnabled()) {
+            LOG.info(
+                    "Subtask {} will be seeded with initial shard {}, starting state set as sequence number {}",
+                    getRuntimeContext().getIndexOfThisSubtask(),
+                    shard.toString(),
+                    startingSeqNum.get());
+        }
+    }
+
+    private void registerFromState(
+            KinesisDataFetcher<T> fetcher,
+            StreamShardHandle shard,
+            EquivalenceWrapper kinesisStreamShard) {
+        fetcher.registerNewSubscribedShardState(
+                new KinesisStreamShardState(
+                        kinesisStreamShard.getShardMetadata(),
+                        shard,
+                        sequenceNumsToRestore.get(kinesisStreamShard)));
+
+        if (LOG.isInfoEnabled()) {
+            LOG.info(
+                    "Subtask {} is seeding the fetcher with restored shard {},"
+                            + " starting state set to the restored sequence number {}",
+                    getRuntimeContext().getIndexOfThisSubtask(),
+                    shard.toString(),
+                    sequenceNumsToRestore.get(kinesisStreamShard));
+        }
     }
 
     @Override
