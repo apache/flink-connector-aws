@@ -58,6 +58,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -531,6 +532,7 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
         if (context.isRestored()) {
             if (sequenceNumsToRestore == null) {
                 sequenceNumsToRestore = new HashMap<>();
+                knownStreams = new HashSet<>();
                 for (Tuple2<StreamShardMetadata, SequenceNumber> kinesisSequenceNumber :
                         sequenceNumsStateForCheckpoint.get()) {
                     StreamShardMetadata streamShardMetadata = kinesisSequenceNumber.f0;
