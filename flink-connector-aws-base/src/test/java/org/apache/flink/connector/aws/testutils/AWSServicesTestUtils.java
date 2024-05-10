@@ -20,6 +20,7 @@ package org.apache.flink.connector.aws.testutils;
 import org.apache.flink.connector.aws.config.AWSConfigConstants;
 import org.apache.flink.connector.aws.util.AWSGeneralUtil;
 
+import software.amazon.awssdk.awscore.client.builder.AwsAsyncClientBuilder;
 import software.amazon.awssdk.awscore.client.builder.AwsClientBuilder;
 import software.amazon.awssdk.awscore.client.builder.AwsSyncClientBuilder;
 import software.amazon.awssdk.core.ResponseBytes;
@@ -28,6 +29,7 @@ import software.amazon.awssdk.http.Protocol;
 import software.amazon.awssdk.http.SdkHttpClient;
 import software.amazon.awssdk.http.SdkHttpConfigurationOption;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
+import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.iam.IamClient;
 import software.amazon.awssdk.services.iam.model.CreateRoleRequest;
@@ -40,6 +42,8 @@ import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.S3Object;
 import software.amazon.awssdk.services.s3.waiters.S3Waiter;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
 import software.amazon.awssdk.utils.AttributeMap;
 
 import java.net.URI;
@@ -83,6 +87,20 @@ public class AWSServicesTestUtils {
                 .build();
     }
 
+    public static <
+            S extends SdkClient,
+            T extends
+                    AwsAsyncClientBuilder<? extends T, S> & AwsClientBuilder<? extends T, S>>
+    S createAwsAsyncClient(String endpoint, SdkAsyncHttpClient httpClient, T clientBuilder) {
+        Properties config = createConfig(endpoint);
+        return clientBuilder
+                .httpClient(httpClient)
+                .endpointOverride(URI.create(endpoint))
+                .credentialsProvider(AWSGeneralUtil.getCredentialsProvider(config))
+                .region(AWSGeneralUtil.getRegion(config))
+                .build();
+    }
+
     public static Properties createConfig(String endpoint) {
         Properties config = new Properties();
         config.setProperty(AWS_REGION, Region.AP_SOUTHEAST_1.toString());
@@ -112,6 +130,14 @@ public class AWSServicesTestUtils {
         try (final S3Waiter waiter = s3Client.waiter()) {
             waiter.waitUntilBucketExists(bucketRequestWait);
         }
+    }
+
+    public static void createSqs(String sqsName, SqsClient sqsClient) {
+        CreateQueueRequest createQueueRequest = CreateQueueRequest.builder()
+                .queueName(sqsName)
+                .build();
+
+        sqsClient.createQueue(createQueueRequest);
     }
 
     public static void createIAMRole(IamClient iam, String roleName) {
