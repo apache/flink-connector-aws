@@ -38,14 +38,14 @@ public class SqsExceptionClassifiersTest {
 
     @Test
     public void shouldClassifyNotAuthorizedAsFatal() {
-        AwsServiceException firehoseException =
+        AwsServiceException sqsException =
                 SqsException.builder()
                         .awsErrorDetails(
                                 AwsErrorDetails.builder().errorCode("NotAuthorized").build())
                         .build();
 
         // isFatal returns `true` if an exception is non-fatal
-        assertFalse(classifier.isFatal(firehoseException, ex -> {}));
+        assertFalse(classifier.isFatal(sqsException, ex -> {}));
     }
 
     @Test

@@ -20,7 +20,6 @@ package org.apache.flink.connector.aws.testutils;
 import org.apache.flink.connector.aws.config.AWSConfigConstants;
 import org.apache.flink.connector.aws.util.AWSGeneralUtil;
 
-import software.amazon.awssdk.awscore.client.builder.AwsAsyncClientBuilder;
 import software.amazon.awssdk.awscore.client.builder.AwsClientBuilder;
 import software.amazon.awssdk.awscore.client.builder.AwsSyncClientBuilder;
 import software.amazon.awssdk.core.ResponseBytes;
@@ -29,7 +28,6 @@ import software.amazon.awssdk.http.Protocol;
 import software.amazon.awssdk.http.SdkHttpClient;
 import software.amazon.awssdk.http.SdkHttpConfigurationOption;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
-import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.iam.IamClient;
 import software.amazon.awssdk.services.iam.model.CreateRoleRequest;
@@ -78,20 +76,6 @@ public class AWSServicesTestUtils {
                     T extends
                             AwsSyncClientBuilder<? extends T, S> & AwsClientBuilder<? extends T, S>>
             S createAwsSyncClient(String endpoint, SdkHttpClient httpClient, T clientBuilder) {
-        Properties config = createConfig(endpoint);
-        return clientBuilder
-                .httpClient(httpClient)
-                .endpointOverride(URI.create(endpoint))
-                .credentialsProvider(AWSGeneralUtil.getCredentialsProvider(config))
-                .region(AWSGeneralUtil.getRegion(config))
-                .build();
-    }
-
-    public static <
-            S extends SdkClient,
-            T extends
-                    AwsAsyncClientBuilder<? extends T, S> & AwsClientBuilder<? extends T, S>>
-    S createAwsAsyncClient(String endpoint, SdkAsyncHttpClient httpClient, T clientBuilder) {
         Properties config = createConfig(endpoint);
         return clientBuilder
                 .httpClient(httpClient)
