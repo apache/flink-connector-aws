@@ -66,24 +66,23 @@
                                     <include>com.amazonaws:*</include>
                                     <include>software.amazon.awssdk:*</include>
                                     <include>software.amazon.glue:*</include>
-
                                     <include>org.apache.flink:flink-avro</include>
                                     <include>org.apache.avro:avro</include>
                                     <include>com.fasterxml.jackson.core:*</include>
                                     <include>com.fasterxml.jackson.dataformat:*</include>
                                     <include>org.apache.commons:commons-compress</include>
-                                    <include>org.reactivestreams:reactive-streams</include>
                                     <include>com.google.guava:guava</include>
                                     <include>com.google.guava:failureaccess</include>
                                 </includes>
                                 <excludes>
                                     <exclude>software.amazon.glue:schema-registry-build-tools</exclude>
-
                                     <exclude>com.google.guava:listenablefuture</exclude>
                                     <exclude>org.checkerframework:checker-qual</exclude>
                                     <exclude>com.google.errorprone:error_prone_annotations</exclude>
                                     <exclude>com.google.j2objc:j2objc-annotations</exclude>
                                     <exclude>com.google.code.findbugs:jsr305</exclude>
+                                    <exclude>org.apache.kafka:kafka-clients</exclude>
+                                    <exclude>org.reactivestreams:reactive-streams</exclude>
                                 </excludes>
                             </artifactSet>
                             <relocations>
@@ -94,14 +93,6 @@
                                 <relocation>
                                     <pattern>com.amazonaws</pattern>
                                     <shadedPattern>org.apache.flink.avro.registry.glue.shaded.com.amazonaws</shadedPattern>
-                                </relocation>
-                                <relocation>
-                                    <pattern>org.apache.kafka</pattern>
-                                    <shadedPattern>org.apache.flink.avro.registry.glue.shaded.org.apache.kafka</shadedPattern>
-                                </relocation>
-                                <relocation>
-                                    <pattern>org.reactivestreams</pattern>
-                                    <shadedPattern>org.apache.flink.avro.registry.glue.shaded.org.reactivestreams</shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>com.google</pattern>

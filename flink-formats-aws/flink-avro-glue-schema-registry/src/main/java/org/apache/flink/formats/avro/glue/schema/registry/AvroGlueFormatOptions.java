@@ -62,7 +62,7 @@ public class AvroGlueFormatOptions {
             ConfigOptions.key("schema.autoRegistration")
                     .booleanType()
                     .defaultValue(false)
-                    .withDescription("Whether auto-registration is enabled.  Defaults to true.");
+                    .withDescription("Whether auto-registration is enabled.  Defaults to false.");
 
     public static final ConfigOption<Compatibility> SCHEMA_COMPATIBILITY =
             ConfigOptions.key("schema.compatibility")
