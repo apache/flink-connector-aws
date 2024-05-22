@@ -1,12 +1,13 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,25 +16,29 @@
  * limitations under the License.
  */
 
-package org.apache.flink.connector.sqs.sink;
+package org.apache.flink.connector.sqs.sink.test;
 
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.connector.aws.testutils.AWSServicesTestUtils;
 import org.apache.flink.connector.aws.testutils.LocalstackContainer;
+import org.apache.flink.connector.sqs.sink.SqsSink;
 import org.apache.flink.connector.sqs.sink.testutils.SqsTestUtils;
+import org.apache.flink.connector.testframe.container.FlinkContainers;
+import org.apache.flink.connector.testframe.container.TestcontainersSettings;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.test.junit5.MiniClusterExtension;
 import org.apache.flink.util.DockerImageVersions;
+import org.apache.flink.util.TestLogger;
 
 import org.assertj.core.api.Assertions;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.After;
+import org.junit.AfterClass;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.ClassRule;
+import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.containers.Network;
 import org.testcontainers.utility.DockerImageName;
 import software.amazon.awssdk.core.SdkSystemSetting;
 import software.amazon.awssdk.http.SdkHttpClient;
@@ -49,40 +54,69 @@ import static org.apache.flink.connector.aws.testutils.AWSServicesTestUtils.crea
 import static org.apache.flink.connector.sqs.sink.testutils.SqsTestUtils.createSqsClient;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-/**
- * Integration test suite for the {@code SqsSink} using a localstack container.
- */
-@Testcontainers
-@ExtendWith(MiniClusterExtension.class)
-class SqsSinkITCase {
+/** End to End test for SQS sink API. */
+public class SqsSinkITTest extends TestLogger {
 
-    private static final Logger LOG = LoggerFactory.getLogger(SqsSinkITCase.class);
+    private static final Logger LOG = LoggerFactory.getLogger(SqsSinkITTest.class);
+
     private static final int NUMBER_OF_ELEMENTS = 50;
     private StreamExecutionEnvironment env;
     private SdkHttpClient httpClient;
     private SqsClient sqsClient;
+    private static final Network network = Network.newNetwork();
 
-    @Container
-    private static LocalstackContainer mockSqsContainer =
-            new LocalstackContainer(DockerImageName.parse(DockerImageVersions.LOCALSTACK));
+    @ClassRule
+    public static LocalstackContainer mockSqsContainer =
+            new LocalstackContainer(DockerImageName.parse(DockerImageVersions.LOCALSTACK))
+                    .withNetwork(network)
+                    .withNetworkAliases("localstack");
 
-    @BeforeEach
-    void setup() {
+    public static final TestcontainersSettings TESTCONTAINERS_SETTINGS =
+            TestcontainersSettings.builder()
+                    .environmentVariable("AWS_CBOR_DISABLE", "1")
+                    .environmentVariable(
+                            "FLINK_ENV_JAVA_OPTS",
+                            "-Dorg.apache.flink.sqs.shaded.com.amazonaws.sdk.disableCertChecking -Daws.cborEnabled=false")
+                    .network(network)
+                    .logger(LOG)
+                    .dependsOn(mockSqsContainer)
+                    .build();
+
+    public static final FlinkContainers FLINK =
+            FlinkContainers.builder().withTestcontainersSettings(TESTCONTAINERS_SETTINGS).build();
+
+    @Before
+    public void setup() throws Exception {
         System.setProperty(SdkSystemSetting.CBOR_ENABLED.property(), "false");
+
         httpClient = AWSServicesTestUtils.createHttpClient();
         sqsClient = createSqsClient(mockSqsContainer.getEndpoint(), httpClient);
         env = StreamExecutionEnvironment.getExecutionEnvironment();
+
+        LOG.info("Done setting up the localstack.");
     }
 
-    @AfterEach
-    void teardown() {
+    @BeforeClass
+    public static void setupFlink() throws Exception {
+        FLINK.start();
+    }
+
+    @AfterClass
+    public static void stopFlink() {
+        FLINK.stop();
+    }
+
+    @After
+    public void teardown() {
         System.clearProperty(SdkSystemSetting.CBOR_ENABLED.property());
+        httpClient.close();
+        sqsClient.close();
     }
 
     @Test
-    void sqsSinkWritesCorrectDataToMockAWSServices() throws Exception {
+    public void sqsSinkWritesCorrectDataToMockAWSServices() throws Exception {
         LOG.info("1 - Creating the SQS");
-        AWSServicesTestUtils.createSqs("test-sqs", sqsClient);
+        SqsTestUtils.createSqs("test-sqs", sqsClient);
 
         SqsSink<String> sqsSink =
                 SqsSink.<String>builder()
@@ -118,4 +152,5 @@ class SqsSinkITCase {
 
         Assertions.assertThat(sentDataList.containsAll(receivedDataList)).isTrue();
     }
+
 }

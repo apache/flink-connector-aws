@@ -40,8 +40,6 @@ import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.S3Object;
 import software.amazon.awssdk.services.s3.waiters.S3Waiter;
-import software.amazon.awssdk.services.sqs.SqsClient;
-import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
 import software.amazon.awssdk.utils.AttributeMap;
 
 import java.net.URI;
@@ -114,14 +112,6 @@ public class AWSServicesTestUtils {
         try (final S3Waiter waiter = s3Client.waiter()) {
             waiter.waitUntilBucketExists(bucketRequestWait);
         }
-    }
-
-    public static void createSqs(String sqsName, SqsClient sqsClient) {
-        CreateQueueRequest createQueueRequest = CreateQueueRequest.builder()
-                .queueName(sqsName)
-                .build();
-
-        sqsClient.createQueue(createQueueRequest);
     }
 
     public static void createIAMRole(IamClient iam, String roleName) {

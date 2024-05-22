@@ -21,17 +21,11 @@ import org.apache.flink.connector.aws.testutils.AWSServicesTestUtils;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import software.amazon.awssdk.http.SdkHttpClient;
 import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
 import software.amazon.awssdk.utils.ImmutableMap;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * A set of static methods that can be used to call common AWS services on the Localstack container.
@@ -52,25 +46,16 @@ public class SqsTestUtils {
                 .map(data -> MAPPER.writeValueAsString(ImmutableMap.of("data", data)));
     }
 
-    public static List<String> getSampleData(int endValue) throws JsonProcessingException {
-        List<String> expectedElements = new ArrayList<>();
-        for (int i = 1; i <= endValue; i++) {
-            expectedElements.add(
-                    MAPPER.writeValueAsString(ImmutableMap.of("data", String.valueOf(i))));
-        }
-        return expectedElements;
+    public static void createSqs(String sqsName, SqsClient sqsClient) {
+        CreateQueueRequest createQueueRequest = CreateQueueRequest.builder()
+                .queueName(sqsName)
+                .build();
+
+        sqsClient.createQueue(createQueueRequest);
     }
 
     private static ObjectMapper createObjectMapper() {
         ObjectMapper objectMapper = new ObjectMapper();
-        registerModules(objectMapper);
         return objectMapper;
-    }
-
-    private static void registerModules(ObjectMapper mapper) {
-        mapper.registerModule(new JavaTimeModule())
-                .registerModule((new Jdk8Module()).configureAbsentsAsNulls(true))
-                .disable(SerializationFeature.WRITE_DURATIONS_AS_TIMESTAMPS)
-                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     }
 }

@@ -43,7 +43,6 @@ import static software.amazon.awssdk.http.Protocol.HTTP1_1;
  *
  * SqsSink<String> sqsSink =
  *         SqsSink.<String>builder()
- *                 .setElementConverter(elementConverter)
  *                 .setSqsUrl("sqsUrl")
  *                 .setSqsClientProperties(sinkProperties)
  *                 .setSerializationSchema(new SimpleStringSchema())

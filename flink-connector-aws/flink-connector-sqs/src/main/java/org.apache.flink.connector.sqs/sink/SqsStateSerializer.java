@@ -27,6 +27,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 
 /** SQS implementation {@link AsyncSinkWriterStateSerializer}. */
 @Internal
@@ -44,7 +45,7 @@ public class SqsStateSerializer extends AsyncSinkWriterStateSerializer<SendMessa
     {
         final byte[] requestData = new byte[(int) requestSize];
         in.read(requestData);
-        return SendMessageBatchRequestEntry.builder().messageBody(new String(requestData, StandardCharsets.UTF_8)).build();
+        return SendMessageBatchRequestEntry.builder().id(UUID.randomUUID().toString()).messageBody(new String(requestData, StandardCharsets.UTF_8)).build();
     }
 
     @Override

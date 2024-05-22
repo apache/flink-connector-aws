@@ -69,6 +69,7 @@ class SqsStateSerializerTest {
 
         for (int i = 0; i < actualLength; ++i) {
             Assertions.assertThat((actualRequests.get(i)).getRequestEntry().messageBody()).isEqualTo((expectedRequests.get(i)).getRequestEntry().messageBody());
+            Assertions.assertThat((actualRequests.get(i)).getRequestEntry().id()).isNotNull();
         }
 
     }

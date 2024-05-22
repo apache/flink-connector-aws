@@ -39,7 +39,7 @@ import software.amazon.awssdk.services.sqs.model.SendMessageBatchRequest;
 import software.amazon.awssdk.services.sqs.model.SendMessageBatchRequestEntry;
 import software.amazon.awssdk.services.sqs.model.SendMessageBatchResponse;
 
-import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -122,33 +122,6 @@ class SqsSinkWriter<InputT> extends AsyncSinkWriter<InputT, SendMessageBatchRequ
             long maxRecordSizeInBytes,
             boolean failOnError,
             String sqsUrl,
-            Properties sqsClientProperties) {
-        this(
-                elementConverter,
-                context,
-                maxBatchSize,
-                maxInFlightRequests,
-                maxBufferedRequests,
-                maxBatchSizeInBytes,
-                maxTimeInBufferMS,
-                maxRecordSizeInBytes,
-                failOnError,
-                sqsUrl,
-                sqsClientProperties,
-                Collections.emptyList());
-    }
-
-    SqsSinkWriter(
-            ElementConverter<InputT, SendMessageBatchRequestEntry> elementConverter,
-            Sink.InitContext context,
-            int maxBatchSize,
-            int maxInFlightRequests,
-            int maxBufferedRequests,
-            long maxBatchSizeInBytes,
-            long maxTimeInBufferMS,
-            long maxRecordSizeInBytes,
-            boolean failOnError,
-            String sqsUrl,
             Properties sqsClientProperties,
             Collection<BufferedRequestState<SendMessageBatchRequestEntry>> initialStates) {
         super(
@@ -194,11 +167,7 @@ class SqsSinkWriter<InputT> extends AsyncSinkWriter<InputT, SendMessageBatchRequ
 
     @Override
     protected long getSizeInBytes(SendMessageBatchRequestEntry requestEntry) {
-        try {
-            return requestEntry.messageBody().getBytes("UTF-8").length;
-        } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException(e);
-        }
+        return requestEntry.messageBody().getBytes(StandardCharsets.UTF_8).length;
     }
 
     @Override
@@ -235,7 +204,7 @@ class SqsSinkWriter<InputT> extends AsyncSinkWriter<InputT, SendMessageBatchRequ
             Consumer<List<SendMessageBatchRequestEntry>> requestResult) {
 
         if (response.failed() != null) {
-            LOG.debug("handlePartiallyFailedRequest: SQS Sink failed to write and will retry {} entries to SQS",
+            LOG.warn("handlePartiallyFailedRequest: SQS Sink failed to write and will retry {} entries to SQS",
                     response.failed().size());
             numRecordsOutErrorsCounter.inc(response.failed().size());
         }
@@ -264,9 +233,12 @@ class SqsSinkWriter<InputT> extends AsyncSinkWriter<InputT, SendMessageBatchRequ
     private Optional<SendMessageBatchRequestEntry> getFailedRecord(List<SendMessageBatchRequestEntry> requestEntries,
                                                                    String selectedId)
     {
-        return requestEntries.stream()
-                .filter(entry -> entry.id().equals(selectedId))
-                .findFirst();
+        for (SendMessageBatchRequestEntry entry : requestEntries) {
+            if (entry.id().equals(selectedId)) {
+                return Optional.of(entry);
+            }
+        }
+        return Optional.empty();
     }
 
 }

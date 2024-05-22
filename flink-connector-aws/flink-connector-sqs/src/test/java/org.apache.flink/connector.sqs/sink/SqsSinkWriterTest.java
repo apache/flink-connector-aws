@@ -70,7 +70,7 @@ public class SqsSinkWriterTest {
         String testString = "{many hands make light work;";
         SendMessageBatchRequestEntry record = SendMessageBatchRequestEntry.builder().messageBody(testString).build();
         assertThat(sinkWriter.getSizeInBytes(record))
-                .isEqualTo(testString.getBytes(StandardCharsets.US_ASCII).length);
+                .isEqualTo(testString.getBytes(StandardCharsets.UTF_8).length);
     }
 
     @Test

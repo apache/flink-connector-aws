@@ -25,6 +25,7 @@ import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.services.sqs.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.sqs.model.SqsException;
 
+import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /** Unit tests for {@link SqsExceptionClassifiers}. */
@@ -60,6 +61,20 @@ public class SqsExceptionClassifiersTest {
 
         // isFatal returns `true` if an exception is non-fatal
         assertFalse(classifier.isFatal(sqsException, ex -> {}));
+    }
+
+    @Test
+    public void shouldClassifySocketTimeoutExceptionAsNonFatal() {
+        AwsServiceException sqsException =
+                SqsException.builder()
+                        .awsErrorDetails(
+                                AwsErrorDetails.builder()
+                                        .errorCode("SocketTimeoutException")
+                                        .build())
+                        .build();
+
+        // isFatal returns `true` if an exception is non-fatal
+        assertTrue(classifier.isFatal(sqsException, ex -> {}));
     }
 
     @Test
