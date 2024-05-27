@@ -30,6 +30,7 @@ import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
 import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 import software.amazon.awssdk.services.sqs.SqsAsyncClient;
 import software.amazon.awssdk.services.sqs.model.BatchRequestTooLongException;
 import software.amazon.awssdk.services.sqs.model.BatchResultErrorEntry;
@@ -60,6 +61,9 @@ public class SqsSinkWriterTest {
 
     @Mock
     private SqsAsyncClient sqsAsyncClient;
+
+    @Mock
+    private SdkAsyncHttpClient httpClient;
 
     @Mock
     private Consumer<List<SendMessageBatchRequestEntry>> requestResult;
@@ -223,6 +227,13 @@ public class SqsSinkWriterTest {
     }
 
     @Test
+    public void testClientClosesWhenWriterIsClosed() {
+        sinkWriter.close();
+        verify(sqsAsyncClient).close();
+        verify(httpClient).close();
+    }
+
+    @Test
     void getSizeInBytesReturnsSizeOfBlobBeforeBase64Encoding() {
         String testString = "{many hands make light work;";
         SendMessageBatchRequestEntry record = SendMessageBatchRequestEntry.builder().messageBody(testString).build();
@@ -277,6 +288,7 @@ public class SqsSinkWriterTest {
                         sinkProperties);
         SqsSinkWriter sqsSinkWriter =  (SqsSinkWriter<String>) sink.createWriter(sinkInitContext);
         sqsSinkWriter.setSqsAsyncClient(sqsAsyncClient);
+        sqsSinkWriter.setSdkAsyncHttpClient(httpClient);
         return sqsSinkWriter;
     }
 

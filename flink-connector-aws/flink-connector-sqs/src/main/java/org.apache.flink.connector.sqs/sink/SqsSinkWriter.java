@@ -104,7 +104,7 @@ class SqsSinkWriter<InputT> extends AsyncSinkWriter<InputT, SendMessageBatchRequ
     private final SinkWriterMetricGroup metrics;
 
     /* The asynchronous http client */
-    private final SdkAsyncHttpClient httpClient;
+    private SdkAsyncHttpClient httpClient;
 
     /* The asynchronous SQS client */
     private SqsAsyncClient sqsAsyncClient;
@@ -246,6 +246,12 @@ class SqsSinkWriter<InputT> extends AsyncSinkWriter<InputT, SendMessageBatchRequ
     @VisibleForTesting
     void setSqsAsyncClient(final SqsAsyncClient sqsAsyncClient) {
         this.sqsAsyncClient = sqsAsyncClient;
+    }
+
+    @Internal
+    @VisibleForTesting
+    void setSdkAsyncHttpClient(final SdkAsyncHttpClient httpClient) {
+        this.httpClient = httpClient;
     }
 
 }
