@@ -291,5 +291,4 @@ public class SqsSinkWriterTest {
                 .build();
     }
 
-
 }
