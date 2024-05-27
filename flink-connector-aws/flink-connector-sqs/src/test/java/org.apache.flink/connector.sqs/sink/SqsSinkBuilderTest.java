@@ -63,6 +63,8 @@ class SqsSinkBuilderTest {
                         () ->
                                 SqsSink.<String>builder()
                                         .setSqsUrl("")
+                                        .setSqsClientProperties(new Properties())
+                                        .setFailOnError(true)
                                         .setSerializationSchema(SERIALIZATION_SCHEMA)
                                         .build())
                 .withMessageContaining(

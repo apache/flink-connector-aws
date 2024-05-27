@@ -25,19 +25,44 @@ import org.apache.flink.connector.base.sink.writer.TestSinkInitContext;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
+import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
 import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.services.sqs.SqsAsyncClient;
+import software.amazon.awssdk.services.sqs.model.BatchRequestTooLongException;
+import software.amazon.awssdk.services.sqs.model.BatchResultErrorEntry;
+import software.amazon.awssdk.services.sqs.model.ResourceNotFoundException;
+import software.amazon.awssdk.services.sqs.model.SendMessageBatchRequest;
 import software.amazon.awssdk.services.sqs.model.SendMessageBatchRequestEntry;
+import software.amazon.awssdk.services.sqs.model.SendMessageBatchResponse;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Properties;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /** Covers construction, defaults and sanity checking of {@link SqsSinkWriter}. */
 public class SqsSinkWriterTest {
+
+    @Mock
+    private SqsAsyncClient sqsAsyncClient;
+
+    @Mock
+    private Consumer<List<SendMessageBatchRequestEntry>> requestResult;
 
     private SqsSinkWriter<String> sinkWriter;
 
@@ -48,21 +73,153 @@ public class SqsSinkWriterTest {
 
     @BeforeEach
     void setup() throws IOException {
-        TestSinkInitContext sinkInitContext = new TestSinkInitContext();
-        Properties sinkProperties = AWSServicesTestUtils.createConfig("https://fake_aws_endpoint");
-        SqsSink<String> sink =
-                new SqsSink<>(
-                        ELEMENT_CONVERTER_PLACEHOLDER,
-                        50,
-                        16,
-                        10000,
-                        4 * 1024 * 1024L,
-                        5000L,
-                        1000 * 1024L,
-                        true,
-                        "sqsUrl",
-                        sinkProperties);
-        sinkWriter = (SqsSinkWriter<String>) sink.createWriter(sinkInitContext);
+        MockitoAnnotations.initMocks(this);
+        sinkWriter = getSqsSinkWriter(true);
+    }
+
+    @Test
+    public void testNonRetryableExceptionWhenFailOnErrorFalseWillNotRetry() throws IOException {
+        sinkWriter = getSqsSinkWriter(true);
+        Exception exceptionToThrow =
+                ResourceNotFoundException.builder()
+                        .awsErrorDetails(
+                                AwsErrorDetails.builder()
+                                        .errorCode("SomeErrorCodeThatIsNotUsed")
+                                        .build())
+                        .build();
+
+        CompletableFuture<SendMessageBatchResponse> exceptionalFuture = new CompletableFuture<>();
+        exceptionalFuture.completeExceptionally(exceptionToThrow);
+
+        Mockito.when(sqsAsyncClient.sendMessageBatch(Mockito.any(SendMessageBatchRequest.class)))
+                .thenReturn(exceptionalFuture);
+
+        CompletableFuture<List<SendMessageBatchRequestEntry>> failedRequests = new CompletableFuture<>();
+        Consumer<List<SendMessageBatchRequestEntry>> failedRequestConsumer = failedRequests::complete;
+        sinkWriter.submitRequestEntries(getDefaultInputRequests(), failedRequestConsumer);
+        assertThat(failedRequests).isNotCompleted();
+    }
+
+    @Test
+    public void testRetryableExceptionWhenFailOnErrorTrueWillNotRetry() throws IOException {
+        sinkWriter = getSqsSinkWriter(true);
+        Exception exceptionToThrow =
+                BatchRequestTooLongException.builder()
+                        .awsErrorDetails(
+                                AwsErrorDetails.builder()
+                                        .errorCode("SomeErrorCodeThatIsNotUsed")
+                                        .build())
+                        .build();
+
+        CompletableFuture<SendMessageBatchResponse> exceptionalFuture = new CompletableFuture<>();
+        exceptionalFuture.completeExceptionally(exceptionToThrow);
+
+        Mockito.when(sqsAsyncClient.sendMessageBatch(Mockito.any(SendMessageBatchRequest.class)))
+                .thenReturn(exceptionalFuture);
+
+        CompletableFuture<List<SendMessageBatchRequestEntry>> failedRequests = new CompletableFuture<>();
+        Consumer<List<SendMessageBatchRequestEntry>> failedRequestConsumer = failedRequests::complete;
+        sinkWriter.submitRequestEntries(getDefaultInputRequests(), failedRequestConsumer);
+        assertThat(failedRequests).isNotCompleted();
+    }
+
+    @Test
+    public void testRetryableExceptionWhenFailOnErrorFalseWillRetry() throws IOException {
+        sinkWriter = getSqsSinkWriter(false);
+        Exception exceptionToThrow =
+                BatchRequestTooLongException.builder()
+                        .awsErrorDetails(
+                                AwsErrorDetails.builder()
+                                        .errorCode("SomeErrorCodeThatIsNotUsed")
+                                        .build())
+                        .build();
+
+        CompletableFuture<SendMessageBatchResponse> exceptionalFuture = new CompletableFuture<>();
+        exceptionalFuture.completeExceptionally(exceptionToThrow);
+
+        Mockito.when(sqsAsyncClient.sendMessageBatch(Mockito.any(SendMessageBatchRequest.class)))
+                .thenReturn(exceptionalFuture);
+
+        CompletableFuture<List<SendMessageBatchRequestEntry>> failedRequests = new CompletableFuture<>();
+        Consumer<List<SendMessageBatchRequestEntry>> failedRequestConsumer = failedRequests::complete;
+        sinkWriter.submitRequestEntries(getDefaultInputRequests(), failedRequestConsumer);
+        assertThat(failedRequests).isCompleted();
+    }
+
+    @Test
+    public void testSubmitRequestEntriesWithNoException() throws IOException {
+        sinkWriter = getSqsSinkWriter(true);
+
+        CompletableFuture<SendMessageBatchResponse> mockFuture = CompletableFuture.completedFuture(
+                SendMessageBatchResponse.builder().failed(Collections.emptyList()).successful(Collections.emptyList()).build());
+
+        Mockito.when(sqsAsyncClient.sendMessageBatch(Mockito.any(SendMessageBatchRequest.class))).thenReturn(mockFuture);
+
+        sinkWriter.submitRequestEntries(getDefaultInputRequests(), requestResult);
+        verify(requestResult).accept(Collections.emptyList());
+    }
+
+    @Test
+    public void testSubmitRequestEntriesWithPartialSuccessWithFailOnErrorFalseWillRetry() throws IOException {
+        sinkWriter = getSqsSinkWriter(false);
+        final String uuid = UUID.randomUUID().toString();
+        List<BatchResultErrorEntry> batchResultErrorEntryList = new ArrayList<>();
+        BatchResultErrorEntry batchResultErrorEntry = BatchResultErrorEntry.builder().id(uuid).build();
+        batchResultErrorEntryList.add(batchResultErrorEntry);
+
+        CompletableFuture<SendMessageBatchResponse> mockFuture = CompletableFuture.completedFuture(
+                SendMessageBatchResponse.builder().failed(batchResultErrorEntryList).successful(Collections.emptyList()).build());
+
+        List<SendMessageBatchRequestEntry> sendMessageBatchRequestEntryList =
+                Arrays.asList(SendMessageBatchRequestEntry.builder()
+                        .id(uuid)
+                        .messageBody("test1")
+                        .build());
+        Mockito.when(sqsAsyncClient.sendMessageBatch(Mockito.any(SendMessageBatchRequest.class))).thenReturn(mockFuture);
+        sinkWriter.submitRequestEntries(sendMessageBatchRequestEntryList, requestResult);
+        verify(requestResult).accept(sendMessageBatchRequestEntryList);
+    }
+
+    @Test
+    public void testSubmitRequestEntriesWithPartialSuccessWithFailOnErrorFalseAndFailedIdDoesNotMatchWillNotRetry() throws IOException {
+        sinkWriter = getSqsSinkWriter(false);
+        final String uuid = UUID.randomUUID().toString();
+        List<BatchResultErrorEntry> batchResultErrorEntryList = new ArrayList<>();
+        BatchResultErrorEntry batchResultErrorEntry = BatchResultErrorEntry.builder().id(uuid).build();
+        batchResultErrorEntryList.add(batchResultErrorEntry);
+
+        CompletableFuture<SendMessageBatchResponse> mockFuture = CompletableFuture.completedFuture(
+                SendMessageBatchResponse.builder().failed(batchResultErrorEntryList).successful(Collections.emptyList()).build());
+
+        List<SendMessageBatchRequestEntry> sendMessageBatchRequestEntryList =
+                Arrays.asList(SendMessageBatchRequestEntry.builder()
+                        .id(UUID.randomUUID().toString())
+                        .messageBody("test1")
+                        .build());
+        Mockito.when(sqsAsyncClient.sendMessageBatch(Mockito.any(SendMessageBatchRequest.class))).thenReturn(mockFuture);
+        sinkWriter.submitRequestEntries(sendMessageBatchRequestEntryList, requestResult);
+        verify(requestResult).accept(Collections.emptyList());
+    }
+
+    @Test
+    public void testSubmitRequestEntriesWithPartialSuccessWithFailOnErrorTrueWillNotRetry() throws IOException {
+        sinkWriter = getSqsSinkWriter(true);
+        final String uuid = UUID.randomUUID().toString();
+        List<BatchResultErrorEntry> batchResultErrorEntryList = new ArrayList<>();
+        BatchResultErrorEntry batchResultErrorEntry = BatchResultErrorEntry.builder().id(uuid).build();
+        batchResultErrorEntryList.add(batchResultErrorEntry);
+
+        CompletableFuture<SendMessageBatchResponse> mockFuture = CompletableFuture.completedFuture(
+                SendMessageBatchResponse.builder().failed(batchResultErrorEntryList).successful(Collections.emptyList()).build());
+
+        List<SendMessageBatchRequestEntry> sendMessageBatchRequestEntryList =
+                Arrays.asList(SendMessageBatchRequestEntry.builder()
+                        .id(uuid)
+                        .messageBody("test1")
+                        .build());
+        Mockito.when(sqsAsyncClient.sendMessageBatch(Mockito.any(SendMessageBatchRequest.class))).thenReturn(mockFuture);
+        sinkWriter.submitRequestEntries(sendMessageBatchRequestEntryList, requestResult);
+        verifyNoInteractions(requestResult);
     }
 
     @Test
@@ -102,4 +259,37 @@ public class SqsSinkWriterTest {
         assertThat(ctx.metricGroup().getNumRecordsOutErrorsCounter().getCount()).isEqualTo(12);
         assertThat(ctx.metricGroup().getNumRecordsSendErrorsCounter().getCount()).isEqualTo(12);
     }
+
+    private SqsSinkWriter<String> getSqsSinkWriter(final boolean failOnError) throws IOException {
+        TestSinkInitContext sinkInitContext = new TestSinkInitContext();
+        Properties sinkProperties = AWSServicesTestUtils.createConfig("https://fake_aws_endpoint");
+        SqsSink<String> sink =
+                new SqsSink<>(
+                        ELEMENT_CONVERTER_PLACEHOLDER,
+                        50,
+                        16,
+                        10000,
+                        4 * 1024 * 1024L,
+                        5000L,
+                        1000 * 1024L,
+                        failOnError,
+                        "https://sqs.us-east-2.amazonaws.com/618277569814/fake-sqs",
+                        sinkProperties);
+        SqsSinkWriter sqsSinkWriter =  (SqsSinkWriter<String>) sink.createWriter(sinkInitContext);
+        sqsSinkWriter.setSqsAsyncClient(sqsAsyncClient);
+        return sqsSinkWriter;
+    }
+
+    private List<SendMessageBatchRequestEntry> getDefaultInputRequests() {
+        return Arrays.asList(sinkSendMessageBatchRequestEntry("test1"), sinkSendMessageBatchRequestEntry("test2"));
+    }
+
+    private SendMessageBatchRequestEntry sinkSendMessageBatchRequestEntry(final String messageBody) {
+        return SendMessageBatchRequestEntry.builder()
+                .id(UUID.randomUUID().toString())
+                .messageBody(messageBody)
+                .build();
+    }
+
+
 }

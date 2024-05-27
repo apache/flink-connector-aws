@@ -18,6 +18,7 @@
 package org.apache.flink.connector.sqs.sink;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.connector.aws.sink.throwable.AWSExceptionHandler;
 import org.apache.flink.connector.aws.util.AWSClientUtil;
@@ -106,7 +107,7 @@ class SqsSinkWriter<InputT> extends AsyncSinkWriter<InputT, SendMessageBatchRequ
     private final SdkAsyncHttpClient httpClient;
 
     /* The asynchronous SQS client */
-    private final SqsAsyncClient sqsAsyncClient;
+    private SqsAsyncClient sqsAsyncClient;
 
     /* Flag to whether fatally fail any time we encounter an exception when persisting records */
     private final boolean failOnError;
@@ -239,6 +240,12 @@ class SqsSinkWriter<InputT> extends AsyncSinkWriter<InputT, SendMessageBatchRequ
             }
         }
         return Optional.empty();
+    }
+
+    @Internal
+    @VisibleForTesting
+    void setSqsAsyncClient(final SqsAsyncClient sqsAsyncClient) {
+        this.sqsAsyncClient = sqsAsyncClient;
     }
 
 }
