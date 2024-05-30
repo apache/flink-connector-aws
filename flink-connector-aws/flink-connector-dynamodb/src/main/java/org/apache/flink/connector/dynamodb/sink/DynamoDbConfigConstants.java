@@ -29,4 +29,7 @@ public class DynamoDbConfigConstants {
     /** DynamoDb identifier for user agent prefix. */
     public static final String DYNAMODB_CLIENT_USER_AGENT_PREFIX =
             "aws.dynamodb.client.user-agent-prefix";
+
+    public static final String DYNAMODB_CLIENT_RETRY_STRATEGY_MAX_ATTEMPTS =
+            "aws.dynamodb.client.retry-strategy.max-attempts";
 }

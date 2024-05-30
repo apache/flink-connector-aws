@@ -70,6 +70,7 @@ public class DynamoDbAsyncClientProvider implements SdkClientProvider<DynamoDbAs
                 httpClient,
                 DynamoDbAsyncClient.builder(),
                 DynamoDbConfigConstants.BASE_DYNAMODB_USER_AGENT_PREFIX_FORMAT,
-                DynamoDbConfigConstants.DYNAMODB_CLIENT_USER_AGENT_PREFIX);
+                DynamoDbConfigConstants.DYNAMODB_CLIENT_USER_AGENT_PREFIX,
+                DynamoDbConfigConstants.DYNAMODB_CLIENT_RETRY_STRATEGY_MAX_ATTEMPTS);
     }
 }

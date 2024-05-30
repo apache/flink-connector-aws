@@ -59,6 +59,7 @@ public class SqsAsyncClientProvider implements SdkClientProvider<SqsAsyncClient>
                 httpClient,
                 SqsAsyncClient.builder(),
                 SqsConfigConstants.BASE_SQS_USER_AGENT_PREFIX_FORMAT.key(),
-                SqsConfigConstants.SQS_CLIENT_USER_AGENT_PREFIX.key());
+                SqsConfigConstants.SQS_CLIENT_USER_AGENT_PREFIX.key(),
+                SqsConfigConstants.SQS_CLIENT_RETRY_STRATEGY_MAX_ATTEMPTS.key());
     }
 }

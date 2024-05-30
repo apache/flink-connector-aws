@@ -199,7 +199,9 @@ public class DynamoDbStreamsSource<T>
                         DynamoDbStreamsClient.builder(),
                         DynamodbStreamsSourceConfigConstants
                                 .BASE_DDB_STREAMS_USER_AGENT_PREFIX_FORMAT,
-                        DynamodbStreamsSourceConfigConstants.DDB_STREAMS_CLIENT_USER_AGENT_PREFIX);
+                        DynamodbStreamsSourceConfigConstants.DDB_STREAMS_CLIENT_USER_AGENT_PREFIX,
+                        DynamodbStreamsSourceConfigConstants
+                                .DDB_STREAMS_CLIENT_RETRY_STRATEGY_MAX_ATTEMPTS);
         return new DynamoDbStreamsProxy(dynamoDbStreamsClient, httpClient);
     }
 

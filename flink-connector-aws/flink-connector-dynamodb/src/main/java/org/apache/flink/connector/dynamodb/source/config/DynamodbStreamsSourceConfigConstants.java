@@ -49,4 +49,7 @@ public class DynamodbStreamsSourceConfigConstants {
     /** DynamoDb Streams identifier for user agent prefix. */
     public static final String DDB_STREAMS_CLIENT_USER_AGENT_PREFIX =
             "aws.dynamodbstreams.client.user-agent-prefix";
+
+    public static final String DDB_STREAMS_CLIENT_RETRY_STRATEGY_MAX_ATTEMPTS =
+            "aws.dynamodbstreams.client.retry-strategy.max-attempts";
 }

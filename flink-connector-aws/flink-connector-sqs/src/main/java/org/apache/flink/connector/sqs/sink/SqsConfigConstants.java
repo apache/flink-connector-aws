@@ -36,4 +36,11 @@ public class SqsConfigConstants {
                     .stringType()
                     .noDefaultValue()
                     .withDescription("SQS identifier for user agent prefix.");
+
+    public static final ConfigOption<Integer> SQS_CLIENT_RETRY_STRATEGY_MAX_ATTEMPTS =
+            ConfigOptions.key("aws.sqs.client.retry-strategy.max-attempts")
+                    .intType()
+                    .defaultValue(3)
+                    .withDescription(
+                            "Maximum number of attempts that the retry strategy will allow.");
 }

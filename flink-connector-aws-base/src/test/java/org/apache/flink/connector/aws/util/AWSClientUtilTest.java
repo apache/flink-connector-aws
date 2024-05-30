@@ -22,15 +22,18 @@ import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.awscore.client.builder.AwsAsyncClientBuilder;
 import software.amazon.awssdk.awscore.client.builder.AwsClientBuilder;
+import software.amazon.awssdk.awscore.retry.AwsRetryStrategy;
 import software.amazon.awssdk.core.SdkClient;
 import software.amazon.awssdk.core.client.config.ClientAsyncConfiguration;
 import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.core.client.config.SdkAdvancedClientOption;
 import software.amazon.awssdk.core.client.config.SdkClientConfiguration;
 import software.amazon.awssdk.core.client.config.SdkClientOption;
+import software.amazon.awssdk.core.retry.RetryMode;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.retries.api.RetryStrategy;
 
 import java.net.URI;
 import java.time.Duration;
@@ -109,6 +112,8 @@ class AWSClientUtilTest {
         verify(builder).putAdvancedOption(SdkAdvancedClientOption.USER_AGENT_SUFFIX, null);
         verify(builder, never()).apiCallAttemptTimeout(any());
         verify(builder, never()).apiCallTimeout(any());
+        verify(builder, never()).retryStrategy((RetryStrategy) any());
+        verify(builder, never()).retryStrategy((RetryMode) any());
     }
 
     @Test
@@ -165,6 +170,31 @@ class AWSClientUtilTest {
         verify(builder).apiCallTimeout(Duration.ofMillis(600));
     }
 
+    @Test
+    void testClientOverrideConfigurationRetryStrategy() {
+        SdkClientConfiguration clientConfiguration =
+                SdkClientConfiguration.builder()
+                        .option(
+                                SdkClientOption.RETRY_STRATEGY,
+                                AwsRetryStrategy.standardRetryStrategy()
+                                        .toBuilder()
+                                        .maxAttempts(5)
+                                        .build())
+                        .build();
+
+        ClientOverrideConfiguration.Builder builder = mockClientOverrideConfigurationBuilder();
+
+        AWSClientUtil.createClientOverrideConfiguration(
+                clientConfiguration,
+                builder,
+                formatFlinkUserAgentPrefix(
+                        DEFAULT_USER_AGENT_PREFIX_FORMAT + AWSClientUtil.V2_USER_AGENT_SUFFIX));
+
+        verify(builder)
+                .retryStrategy(
+                        argThat((RetryStrategy retryStrategy) -> retryStrategy.maxAttempts() == 5));
+    }
+
     private MockAsyncClientBuilder mockKinesisAsyncClientBuilder() {
         MockAsyncClientBuilder builder = mock(MockAsyncClientBuilder.class);
         when(builder.overrideConfiguration(any(ClientOverrideConfiguration.class)))
@@ -182,6 +212,7 @@ class AWSClientUtilTest {
         when(builder.putAdvancedOption(any(), any())).thenReturn(builder);
         when(builder.apiCallAttemptTimeout(any())).thenReturn(builder);
         when(builder.apiCallTimeout(any())).thenReturn(builder);
+        when(builder.retryStrategy((RetryStrategy) any())).thenReturn(builder);
 
         return builder;
     }

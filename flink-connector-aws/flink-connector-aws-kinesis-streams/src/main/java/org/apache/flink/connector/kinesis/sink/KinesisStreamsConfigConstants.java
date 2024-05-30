@@ -29,4 +29,7 @@ public class KinesisStreamsConfigConstants {
     /** Kinesis identifier for user agent prefix. */
     public static final String KINESIS_CLIENT_USER_AGENT_PREFIX =
             "aws.kinesis.client.user-agent-prefix";
+
+    public static final String KINESIS_CLIENT_RETRY_STRATEGY_MAX_ATTEMPTS =
+            "aws.kinesis.client.retry-strategy.max-attempts";
 }

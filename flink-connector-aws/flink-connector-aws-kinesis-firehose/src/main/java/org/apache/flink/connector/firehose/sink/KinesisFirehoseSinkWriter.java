@@ -78,7 +78,8 @@ class KinesisFirehoseSinkWriter<InputT> extends AsyncSinkWriter<InputT, Record> 
                 httpClient,
                 FirehoseAsyncClient.builder(),
                 KinesisFirehoseConfigConstants.BASE_FIREHOSE_USER_AGENT_PREFIX_FORMAT,
-                KinesisFirehoseConfigConstants.FIREHOSE_CLIENT_USER_AGENT_PREFIX);
+                KinesisFirehoseConfigConstants.FIREHOSE_CLIENT_USER_AGENT_PREFIX,
+                KinesisFirehoseConfigConstants.FIREHOSE_CLIENT_RETRY_STRATEGY_MAX_ATTEMPTS);
     }
 
     private static final AWSExceptionHandler FIREHOSE_EXCEPTION_HANDLER =
