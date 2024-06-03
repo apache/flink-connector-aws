@@ -55,13 +55,12 @@ import static org.apache.flink.connector.aws.util.AWSCredentialFatalExceptionCla
 import static org.apache.flink.connector.base.sink.writer.AsyncSinkFatalExceptionClassifiers.getInterruptedExceptionClassifier;
 
 /**
- * Sink writer created by {@link SqsSink} to write to SQS. More
- * details on the operation of this sink writer may be found in the doc for {@link
- * SqsSink}. More details on the internals of this sink writer may be found in {@link
- * AsyncSinkWriter}.
+ * Sink writer created by {@link SqsSink} to write to SQS. More details on the operation of this
+ * sink writer may be found in the doc for {@link SqsSink}. More details on the internals of this
+ * sink writer may be found in {@link AsyncSinkWriter}.
  *
- * <p>The {@link SqsAsyncClient} used here may be configured in the standard way for the AWS
- * SDK 2.x. e.g. the provision of {@code AWS_REGION}, {@code AWS_ACCESS_KEY_ID} and {@code
+ * <p>The {@link SqsAsyncClient} used here may be configured in the standard way for the AWS SDK
+ * 2.x. e.g. the provision of {@code AWS_REGION}, {@code AWS_ACCESS_KEY_ID} and {@code
  * AWS_SECRET_ACCESS_KEY} through environment variables etc.
  */
 @Internal
@@ -89,8 +88,7 @@ class SqsSinkWriter<InputT> extends AsyncSinkWriter<InputT, SendMessageBatchRequ
                     FatalExceptionClassifier.createChain(
                             getInterruptedExceptionClassifier(),
                             getInvalidCredentialsExceptionClassifier(),
-                            SqsExceptionClassifiers
-                                    .getResourceNotFoundExceptionClassifier(),
+                            SqsExceptionClassifiers.getResourceNotFoundExceptionClassifier(),
                             SqsExceptionClassifiers.getAccessDeniedExceptionClassifier(),
                             SqsExceptionClassifiers.getNotAuthorizedExceptionClassifier(),
                             getSdkClientMisconfiguredExceptionClassifier()));
@@ -147,12 +145,14 @@ class SqsSinkWriter<InputT> extends AsyncSinkWriter<InputT, SendMessageBatchRequ
 
     @Override
     protected void submitRequestEntries(
-            List<SendMessageBatchRequestEntry> requestEntries, Consumer<List<SendMessageBatchRequestEntry>> requestResult) {
+            List<SendMessageBatchRequestEntry> requestEntries,
+            Consumer<List<SendMessageBatchRequestEntry>> requestResult) {
 
         final SendMessageBatchRequest batchRequest =
                 SendMessageBatchRequest.builder().entries(requestEntries).queueUrl(sqsUrl).build();
 
-        CompletableFuture<SendMessageBatchResponse> future = sqsAsyncClient.sendMessageBatch(batchRequest);
+        CompletableFuture<SendMessageBatchResponse> future =
+                sqsAsyncClient.sendMessageBatch(batchRequest);
 
         future.whenComplete(
                 (response, err) -> {
@@ -177,7 +177,9 @@ class SqsSinkWriter<InputT> extends AsyncSinkWriter<InputT, SendMessageBatchRequ
     }
 
     private void handleFullyFailedRequest(
-            Throwable err, List<SendMessageBatchRequestEntry> requestEntries, Consumer<List<SendMessageBatchRequestEntry>> requestResult) {
+            Throwable err,
+            List<SendMessageBatchRequestEntry> requestEntries,
+            Consumer<List<SendMessageBatchRequestEntry>> requestResult) {
 
         numRecordsOutErrorsCounter.inc(requestEntries.size());
         boolean isFatal = SQS_EXCEPTION_HANDLER.consumeIfFatal(err, getFatalExceptionCons());
@@ -186,8 +188,7 @@ class SqsSinkWriter<InputT> extends AsyncSinkWriter<InputT, SendMessageBatchRequ
         }
 
         if (failOnError) {
-            getFatalExceptionCons()
-                    .accept(new SqsSinkException.SqsFailFastSinkException(err));
+            getFatalExceptionCons().accept(new SqsSinkException.SqsFailFastSinkException(err));
             return;
         }
 
@@ -205,14 +206,14 @@ class SqsSinkWriter<InputT> extends AsyncSinkWriter<InputT, SendMessageBatchRequ
             Consumer<List<SendMessageBatchRequestEntry>> requestResult) {
 
         if (response.failed() != null) {
-            LOG.warn("handlePartiallyFailedRequest: SQS Sink failed to write and will retry {} entries to SQS",
+            LOG.warn(
+                    "handlePartiallyFailedRequest: SQS Sink failed to write and will retry {} entries to SQS",
                     response.failed().size());
             numRecordsOutErrorsCounter.inc(response.failed().size());
         }
 
         if (failOnError) {
-            getFatalExceptionCons()
-                    .accept(new SqsSinkException.SqsFailFastSinkException());
+            getFatalExceptionCons().accept(new SqsSinkException.SqsFailFastSinkException());
             return;
         }
 
@@ -221,7 +222,8 @@ class SqsSinkWriter<InputT> extends AsyncSinkWriter<InputT, SendMessageBatchRequ
                     new ArrayList<>(response.failed().size());
 
             for (final BatchResultErrorEntry failedEntry : response.failed()) {
-                final Optional<SendMessageBatchRequestEntry> retryEntry = getFailedRecord(requestEntries, failedEntry.id());
+                final Optional<SendMessageBatchRequestEntry> retryEntry =
+                        getFailedRecord(requestEntries, failedEntry.id());
                 if (retryEntry.isPresent()) {
                     failedRequestEntries.add(retryEntry.get());
                 }
@@ -231,9 +233,8 @@ class SqsSinkWriter<InputT> extends AsyncSinkWriter<InputT, SendMessageBatchRequ
         }
     }
 
-    private Optional<SendMessageBatchRequestEntry> getFailedRecord(List<SendMessageBatchRequestEntry> requestEntries,
-                                                                   String selectedId)
-    {
+    private Optional<SendMessageBatchRequestEntry> getFailedRecord(
+            List<SendMessageBatchRequestEntry> requestEntries, String selectedId) {
         for (SendMessageBatchRequestEntry entry : requestEntries) {
             if (entry.id().equals(selectedId)) {
                 return Optional.of(entry);
@@ -253,5 +254,4 @@ class SqsSinkWriter<InputT> extends AsyncSinkWriter<InputT, SendMessageBatchRequ
     void setSdkAsyncHttpClient(final SdkAsyncHttpClient httpClient) {
         this.httpClient = httpClient;
     }
-
 }

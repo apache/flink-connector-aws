@@ -47,9 +47,8 @@ public class SqsTestUtils {
     }
 
     public static void createSqs(String sqsName, SqsClient sqsClient) {
-        CreateQueueRequest createQueueRequest = CreateQueueRequest.builder()
-                .queueName(sqsName)
-                .build();
+        CreateQueueRequest createQueueRequest =
+                CreateQueueRequest.builder().queueName(sqsName).build();
 
         sqsClient.createQueue(createQueueRequest);
     }

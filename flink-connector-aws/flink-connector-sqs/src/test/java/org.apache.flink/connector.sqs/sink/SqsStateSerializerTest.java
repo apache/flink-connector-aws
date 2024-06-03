@@ -33,9 +33,7 @@ import java.util.List;
 
 import static org.apache.flink.connector.base.sink.writer.AsyncSinkWriterTestUtils.getTestState;
 
-/**
- * Test class for {@link SqsStateSerializer}.
- */
+/** Test class for {@link SqsStateSerializer}. */
 class SqsStateSerializerTest {
 
     private static final ElementConverter<String, SendMessageBatchRequestEntry> ELEMENT_CONVERTER =
@@ -60,17 +58,21 @@ class SqsStateSerializerTest {
         return requestEntry.messageBody().length();
     }
 
-    private <T extends Serializable> void assertThatBufferStatesAreEqual(BufferedRequestState<SendMessageBatchRequestEntry> actual, BufferedRequestState<SendMessageBatchRequestEntry> expected) {
+    private <T extends Serializable> void assertThatBufferStatesAreEqual(
+            BufferedRequestState<SendMessageBatchRequestEntry> actual,
+            BufferedRequestState<SendMessageBatchRequestEntry> expected) {
         Assertions.assertThat(actual.getStateSize()).isEqualTo(expected.getStateSize());
         int actualLength = actual.getBufferedRequestEntries().size();
         Assertions.assertThat(actualLength).isEqualTo(expected.getBufferedRequestEntries().size());
-        List<RequestEntryWrapper<SendMessageBatchRequestEntry>> actualRequests = actual.getBufferedRequestEntries();
-        List<RequestEntryWrapper<SendMessageBatchRequestEntry>> expectedRequests = expected.getBufferedRequestEntries();
+        List<RequestEntryWrapper<SendMessageBatchRequestEntry>> actualRequests =
+                actual.getBufferedRequestEntries();
+        List<RequestEntryWrapper<SendMessageBatchRequestEntry>> expectedRequests =
+                expected.getBufferedRequestEntries();
 
         for (int i = 0; i < actualLength; ++i) {
-            Assertions.assertThat((actualRequests.get(i)).getRequestEntry().messageBody()).isEqualTo((expectedRequests.get(i)).getRequestEntry().messageBody());
+            Assertions.assertThat((actualRequests.get(i)).getRequestEntry().messageBody())
+                    .isEqualTo((expectedRequests.get(i)).getRequestEntry().messageBody());
             Assertions.assertThat((actualRequests.get(i)).getRequestEntry().id()).isNotNull();
         }
-
     }
 }

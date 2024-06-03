@@ -27,6 +27,5 @@ public class SqsConfigConstants {
             "Apache Flink %s (%s) SQS Connector";
 
     /** SQS identifier for user agent prefix. */
-    public static final String SQS_CLIENT_USER_AGENT_PREFIX =
-            "aws.sqs.client.user-agent-prefix";
+    public static final String SQS_CLIENT_USER_AGENT_PREFIX = "aws.sqs.client.user-agent-prefix";
 }

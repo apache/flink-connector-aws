@@ -34,8 +34,8 @@ import static software.amazon.awssdk.http.Protocol.HTTP1_1;
 /**
  * Builder to construct {@link SqsSink}.
  *
- * <p>The following example shows the minimum setup to create a {@link SqsSink} that
- * writes String values to a SQS named sqsUrl.
+ * <p>The following example shows the minimum setup to create a {@link SqsSink} that writes String
+ * values to a SQS named sqsUrl.
  *
  * <pre>{@code
  * Properties sinkProperties = new Properties();
@@ -97,8 +97,7 @@ public class SqsSinkBuilder<InputT>
     }
 
     /**
-     * Allows the user to specify a serialization schema to serialize each record to persist to
-     * SQS.
+     * Allows the user to specify a serialization schema to serialize each record to persist to SQS.
      *
      * @param schema serialization schema to use
      * @return {@link SqsSinkBuilder} itself
@@ -109,8 +108,8 @@ public class SqsSinkBuilder<InputT>
     }
 
     /**
-     * If writing to SQS results in a partial or full failure being returned, the
-     * job will fail immediately with a {@link SqsSinkException} if failOnError is set.
+     * If writing to SQS results in a partial or full failure being returned, the job will fail
+     * immediately with a {@link SqsSinkException} if failOnError is set.
      *
      * @param failOnError whether to fail on error
      * @return {@link SqsSinkBuilder} itself
@@ -121,8 +120,8 @@ public class SqsSinkBuilder<InputT>
     }
 
     /**
-     * A set of properties used by the sink to create the SQS client. This may be used to set
-     * the aws region, credentials etc. See the docs for usage and syntax.
+     * A set of properties used by the sink to create the SQS client. This may be used to set the
+     * aws region, credentials etc. See the docs for usage and syntax.
      *
      * @param sqsClientProps SQS client properties
      * @return {@link SqsSinkBuilder} itself

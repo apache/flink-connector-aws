@@ -35,11 +35,7 @@ class SqsSinkBuilderTest {
     @Test
     void elementConverterOfSinkMustBeSetWhenBuilt() {
         Assertions.assertThatExceptionOfType(NullPointerException.class)
-                .isThrownBy(
-                        () ->
-                                SqsSink.builder()
-                                        .setSqsUrl("sqlUrl")
-                                        .build())
+                .isThrownBy(() -> SqsSink.builder().setSqsUrl("sqlUrl").build())
                 .withMessageContaining(
                         "No SerializationSchema was supplied to the SQS Sink builder.");
     }
@@ -67,8 +63,7 @@ class SqsSinkBuilderTest {
                                         .setFailOnError(true)
                                         .setSerializationSchema(SERIALIZATION_SCHEMA)
                                         .build())
-                .withMessageContaining(
-                        "The sqs url must be set when initializing the SQS Sink.");
+                .withMessageContaining("The sqs url must be set when initializing the SQS Sink.");
     }
 
     @Test

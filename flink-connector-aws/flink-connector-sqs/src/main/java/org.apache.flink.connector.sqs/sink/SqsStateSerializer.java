@@ -31,21 +31,24 @@ import java.util.UUID;
 
 /** SQS implementation {@link AsyncSinkWriterStateSerializer}. */
 @Internal
-public class SqsStateSerializer extends AsyncSinkWriterStateSerializer<SendMessageBatchRequestEntry> {
+public class SqsStateSerializer
+        extends AsyncSinkWriterStateSerializer<SendMessageBatchRequestEntry> {
     @Override
-    protected void serializeRequestToStream(final SendMessageBatchRequestEntry request, final DataOutputStream out)
-            throws IOException
-    {
+    protected void serializeRequestToStream(
+            final SendMessageBatchRequestEntry request, final DataOutputStream out)
+            throws IOException {
         out.write(request.messageBody().getBytes(StandardCharsets.UTF_8));
     }
 
     @Override
-    protected SendMessageBatchRequestEntry deserializeRequestFromStream(final long requestSize, final DataInputStream in)
-            throws IOException
-    {
+    protected SendMessageBatchRequestEntry deserializeRequestFromStream(
+            final long requestSize, final DataInputStream in) throws IOException {
         final byte[] requestData = new byte[(int) requestSize];
         in.read(requestData);
-        return SendMessageBatchRequestEntry.builder().id(UUID.randomUUID().toString()).messageBody(new String(requestData, StandardCharsets.UTF_8)).build();
+        return SendMessageBatchRequestEntry.builder()
+                .id(UUID.randomUUID().toString())
+                .messageBody(new String(requestData, StandardCharsets.UTF_8))
+                .build();
     }
 
     @Override

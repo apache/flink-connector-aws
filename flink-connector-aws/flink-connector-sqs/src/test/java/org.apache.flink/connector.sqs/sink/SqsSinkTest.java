@@ -79,8 +79,7 @@ class SqsSinkTest {
                                         false,
                                         "",
                                         new Properties()))
-                .withMessageContaining(
-                        "The sqs url must be set when initializing the SQS Sink.");
+                .withMessageContaining("The sqs url must be set when initializing the SQS Sink.");
     }
 
     @Test

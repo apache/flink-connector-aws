@@ -24,7 +24,6 @@ import org.apache.flink.connector.base.sink.throwable.FatalExceptionClassifier;
 import software.amazon.awssdk.services.sqs.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.sqs.model.SqsException;
 
-
 /**
  * Class containing set of {@link FatalExceptionClassifier} for {@link
  * software.amazon.awssdk.services.sqs.model.SqsException}.

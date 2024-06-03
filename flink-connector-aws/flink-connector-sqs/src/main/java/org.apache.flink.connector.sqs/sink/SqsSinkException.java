@@ -19,9 +19,7 @@ package org.apache.flink.connector.sqs.sink;
 
 import org.apache.flink.annotation.PublicEvolving;
 
-/**
- * A {@link RuntimeException} wrapper indicating the exception was thrown from the SQS Sink.
- */
+/** A {@link RuntimeException} wrapper indicating the exception was thrown from the SQS Sink. */
 @PublicEvolving
 class SqsSinkException extends RuntimeException {
 
@@ -34,8 +32,8 @@ class SqsSinkException extends RuntimeException {
     }
 
     /**
-     * When the flag {@code failOnError} is set in {@link SqsSinkWriter}, this exception
-     * is raised as soon as any exception occurs when writing to SQS.
+     * When the flag {@code failOnError} is set in {@link SqsSinkWriter}, this exception is raised
+     * as soon as any exception occurs when writing to SQS.
      */
     static class SqsFailFastSinkException extends SqsSinkException {
 

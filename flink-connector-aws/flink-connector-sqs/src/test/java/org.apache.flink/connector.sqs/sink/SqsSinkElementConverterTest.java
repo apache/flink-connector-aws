@@ -52,7 +52,8 @@ class SqsSinkElementConverterTest {
 
         SendMessageBatchRequestEntry serializedRecord = elementConverter.apply(testString, null);
         byte[] serializedString = (new SimpleStringSchema()).serialize(testString);
-        assertThat(serializedRecord.messageBody()).isEqualTo(new String(serializedString, StandardCharsets.UTF_8));
+        assertThat(serializedRecord.messageBody())
+                .isEqualTo(new String(serializedString, StandardCharsets.UTF_8));
     }
 
     @Test

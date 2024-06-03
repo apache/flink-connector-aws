@@ -32,12 +32,11 @@ import java.util.Collections;
 import java.util.Properties;
 
 /**
- * A SQS Sink that performs async requests against a destination SQS
- * using the buffering protocol specified in {@link AsyncSinkBase}.
+ * A SQS Sink that performs async requests against a destination SQS using the buffering protocol
+ * specified in {@link AsyncSinkBase}.
  *
- * <p>The sink internally uses a {@link
- * software.amazon.awssdk.services.sqs.SqsAsyncClient} to communicate with the AWS
- * endpoint.
+ * <p>The sink internally uses a {@link software.amazon.awssdk.services.sqs.SqsAsyncClient} to
+ * communicate with the AWS endpoint.
  *
  * <p>Please see the writer implementation in {@link SqsSinkWriter}
  *
@@ -71,18 +70,15 @@ public class SqsSink<InputT> extends AsyncSinkBase<InputT, SendMessageBatchReque
                 maxRecordSizeInBytes);
         this.sqsUrl =
                 Preconditions.checkNotNull(
-                        sqsUrl,
-                        "The sqs url must not be null when initializing the SQS Sink.");
+                        sqsUrl, "The sqs url must not be null when initializing the SQS Sink.");
         Preconditions.checkArgument(
-                !this.sqsUrl.isEmpty(),
-                "The sqs url must be set when initializing the SQS Sink.");
+                !this.sqsUrl.isEmpty(), "The sqs url must be set when initializing the SQS Sink.");
         this.failOnError = failOnError;
         this.sqsClientProperties = sqsClientProperties;
     }
 
     /**
-     * Create a {@link SqsSinkBuilder} to allow the fluent construction of a new {@code
-     * SqsSink}.
+     * Create a {@link SqsSinkBuilder} to allow the fluent construction of a new {@code SqsSink}.
      *
      * @param <InputT> type of incoming records
      * @return {@link SqsSinkBuilder}
@@ -92,8 +88,8 @@ public class SqsSink<InputT> extends AsyncSinkBase<InputT, SendMessageBatchReque
     }
 
     @Override
-    public StatefulSinkWriter<InputT, BufferedRequestState<SendMessageBatchRequestEntry>> createWriter(
-            InitContext context) throws IOException {
+    public StatefulSinkWriter<InputT, BufferedRequestState<SendMessageBatchRequestEntry>>
+            createWriter(InitContext context) throws IOException {
         return new SqsSinkWriter<>(
                 getElementConverter(),
                 context,
@@ -110,9 +106,11 @@ public class SqsSink<InputT> extends AsyncSinkBase<InputT, SendMessageBatchReque
     }
 
     @Override
-    public StatefulSinkWriter<InputT, BufferedRequestState<SendMessageBatchRequestEntry>> restoreWriter(
-            InitContext context, Collection<BufferedRequestState<SendMessageBatchRequestEntry>> recoveredState)
-            throws IOException {
+    public StatefulSinkWriter<InputT, BufferedRequestState<SendMessageBatchRequestEntry>>
+            restoreWriter(
+                    InitContext context,
+                    Collection<BufferedRequestState<SendMessageBatchRequestEntry>> recoveredState)
+                    throws IOException {
         return new SqsSinkWriter<>(
                 getElementConverter(),
                 context,
@@ -129,7 +127,8 @@ public class SqsSink<InputT> extends AsyncSinkBase<InputT, SendMessageBatchReque
     }
 
     @Override
-    public SimpleVersionedSerializer<BufferedRequestState<SendMessageBatchRequestEntry>> getWriterStateSerializer() {
+    public SimpleVersionedSerializer<BufferedRequestState<SendMessageBatchRequestEntry>>
+            getWriterStateSerializer() {
         return new SqsStateSerializer();
     }
 }

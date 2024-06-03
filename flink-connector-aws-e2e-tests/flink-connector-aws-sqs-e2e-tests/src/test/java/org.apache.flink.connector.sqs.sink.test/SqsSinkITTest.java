@@ -122,8 +122,7 @@ public class SqsSinkITTest extends TestLogger {
                 SqsSink.<String>builder()
                         .setSerializationSchema(new SimpleStringSchema())
                         .setSqsUrl("http://localhost:4576/queue/test-sqs")
-                        .setSqsClientProperties(
-                                createConfig(mockSqsContainer.getEndpoint()))
+                        .setSqsClientProperties(createConfig(mockSqsContainer.getEndpoint()))
                         .build();
 
         SqsTestUtils.getSampleDataGenerator(env, NUMBER_OF_ELEMENTS).sinkTo(sqsSink);
@@ -131,19 +130,25 @@ public class SqsSinkITTest extends TestLogger {
         List<Message> messages = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
             // Read data from SQS and validate
-            ReceiveMessageRequest receiveMessageRequest = ReceiveMessageRequest.builder()
-                    .queueUrl("http://localhost:4576/queue/test-sqs")
-                    .maxNumberOfMessages(10) // max 10 can be read at a time
-                    .build();
+            ReceiveMessageRequest receiveMessageRequest =
+                    ReceiveMessageRequest.builder()
+                            .queueUrl("http://localhost:4576/queue/test-sqs")
+                            .maxNumberOfMessages(10) // max 10 can be read at a time
+                            .build();
 
             messages.addAll(sqsClient.receiveMessage(receiveMessageRequest).messages());
         }
 
         // Add assertions here to validate the messages
-        assertEquals(NUMBER_OF_ELEMENTS, messages.size(), "Number of messages received should match the number of elements sent");
+        assertEquals(
+                NUMBER_OF_ELEMENTS,
+                messages.size(),
+                "Number of messages received should match the number of elements sent");
 
         List<String> sentDataList = new ArrayList<>();
-        SqsTestUtils.getSampleDataGenerator(env, NUMBER_OF_ELEMENTS).executeAndCollect().forEachRemaining(sentDataList::add);
+        SqsTestUtils.getSampleDataGenerator(env, NUMBER_OF_ELEMENTS)
+                .executeAndCollect()
+                .forEachRemaining(sentDataList::add);
 
         List<String> receivedDataList = new ArrayList<>();
         for (Message message : messages) {
@@ -152,5 +157,4 @@ public class SqsSinkITTest extends TestLogger {
 
         Assertions.assertThat(sentDataList.containsAll(receivedDataList)).isTrue();
     }
-
 }
