@@ -25,7 +25,7 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.sqs.model.SendMessageBatchRequestEntry;
 
-import java.util.Base64;
+import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -52,8 +52,7 @@ class SqsSinkElementConverterTest {
 
         SendMessageBatchRequestEntry serializedRecord = elementConverter.apply(testString, null);
         byte[] serializedString = (new SimpleStringSchema()).serialize(testString);
-        String expectedOutput = Base64.getEncoder().encodeToString(serializedString);
-        assertThat(serializedRecord.messageBody()).isEqualTo(expectedOutput);
+        assertThat(serializedRecord.messageBody()).isEqualTo(new String(serializedString, StandardCharsets.UTF_8));
     }
 
     @Test

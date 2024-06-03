@@ -31,7 +31,7 @@ import org.apache.flink.util.UserCodeClassLoader;
 
 import software.amazon.awssdk.services.sqs.model.SendMessageBatchRequestEntry;
 
-import java.util.Base64;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 /**
@@ -52,14 +52,10 @@ public class SqsSinkElementConverter<InputT>
 
     @Override
     public SendMessageBatchRequestEntry apply(InputT element, SinkWriter.Context context) {
-        String messageBody = null;
-        final byte[] compressedBytes = serializationSchema.serialize(element);
-        if (compressedBytes != null) {
-            messageBody = Base64.getEncoder().encodeToString(compressedBytes);
-        }
+        final byte[] messageBody = serializationSchema.serialize(element);
         return SendMessageBatchRequestEntry.builder()
                 .id(UUID.randomUUID().toString())
-                .messageBody(messageBody)
+                .messageBody(new String(messageBody, StandardCharsets.UTF_8))
                 .build();
     }
 
