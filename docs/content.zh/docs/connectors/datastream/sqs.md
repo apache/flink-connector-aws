@@ -1,9 +1,9 @@
 ---
-title: DynamoDB
+title: SQS
 weight: 5
 type: docs
 aliases:
-- /zh/dev/connectors/dynamodb.html
+- /zh/dev/connectors/sqs.html
 ---
 <!--
 Licensed to the Apache Software Foundation (ASF) under one
