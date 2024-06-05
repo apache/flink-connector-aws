@@ -98,7 +98,7 @@ public class SqsSinkElementConverter<InputT>
         public SqsSinkElementConverter<InputT> build() {
             Preconditions.checkNotNull(
                     serializationSchema,
-                    "No SerializationSchema was supplied to the " + "SQS Sink builder.");
+                    "No SerializationSchema was supplied to the SQS Sink builder.");
             return new SqsSinkElementConverter<>(serializationSchema);
         }
     }
