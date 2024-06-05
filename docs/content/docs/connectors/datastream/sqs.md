@@ -27,7 +27,7 @@ under the License.
 # Amazon SQS Sink
 
 The SQS sink writes to [Amazon SQS](https://aws.amazon.com/sqs) using the [AWS v2 SDK for Java](https://docs.aws.amazon.com/sdk-for-java/latest/developer-guide/home.html). Follow the instructions from the [Amazon SQS Developer Guide](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/welcome.html)
-to setup a SQS.
+to setup a SQS message queue.
 
 To use the connector, add the following Maven dependency to your project:
 
