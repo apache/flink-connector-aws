@@ -83,6 +83,26 @@ class SqsSinkTest {
     }
 
     @Test
+    void sqsMaxBatchSizeMustNotBeGreaterThan10() {
+        Assertions.assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(
+                        () ->
+                                new SqsSink<>(
+                                        elementConverter,
+                                        100,
+                                        50,
+                                        5000,
+                                        256000L,
+                                        5000L,
+                                        256 * 1000L,
+                                        false,
+                                        "testSqlUrl",
+                                        new Properties()))
+                .withMessageContaining(
+                        "The sqs MaxBatchSize must not be greater than 10.");
+    }
+
+    @Test
     void sqsSinkFailsWhenAccessKeyIdIsNotProvided() {
         Properties properties = createConfig("https://non-exisitent-location");
         properties.setProperty(
@@ -116,7 +136,7 @@ class SqsSinkTest {
                 SqsSink.<String>builder()
                         .setSerializationSchema(new SimpleStringSchema())
                         .setSqsUrl("sqs-url")
-                        .setMaxBatchSize(1)
+                        .setMaxBatchSize(5)
                         .setSqsClientProperties(properties)
                         .build();
 

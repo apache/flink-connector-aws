@@ -73,6 +73,10 @@ public class SqsSink<InputT> extends AsyncSinkBase<InputT, SendMessageBatchReque
                         sqsUrl, "The sqs url must not be null when initializing the SQS Sink.");
         Preconditions.checkArgument(
                 !this.sqsUrl.isEmpty(), "The sqs url must be set when initializing the SQS Sink.");
+
+        Preconditions.checkArgument(
+                (this.getMaxBatchSize() <= 10),
+                "The sqs MaxBatchSize must not be greater than 10.");
         this.failOnError = failOnError;
         this.sqsClientProperties = sqsClientProperties;
     }
