@@ -98,8 +98,7 @@ class SqsSinkTest {
                                         false,
                                         "testSqlUrl",
                                         new Properties()))
-                .withMessageContaining(
-                        "The sqs MaxBatchSize must not be greater than 10.");
+                .withMessageContaining("The sqs MaxBatchSize must not be greater than 10.");
     }
 
     @Test
