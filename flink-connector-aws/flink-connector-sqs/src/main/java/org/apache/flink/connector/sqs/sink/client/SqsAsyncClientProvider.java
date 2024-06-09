@@ -19,7 +19,6 @@
 package org.apache.flink.connector.sqs.sink.client;
 
 import org.apache.flink.annotation.Internal;
-import org.apache.flink.connector.aws.config.AWSConfigConstants;
 import org.apache.flink.connector.aws.util.AWSClientUtil;
 import org.apache.flink.connector.aws.util.AWSGeneralUtil;
 import org.apache.flink.connector.sqs.sink.SqsConfigConstants;
@@ -37,8 +36,7 @@ public class SqsAsyncClientProvider implements SdkClientProvider<SqsAsyncClient>
     private final SqsAsyncClient sqsAsyncClient;
 
     public SqsAsyncClientProvider(Properties clientProperties) {
-        this.httpClient =
-                AWSGeneralUtil.createAsyncHttpClient(overrideClientProperties(clientProperties));
+        this.httpClient = AWSGeneralUtil.createAsyncHttpClient(clientProperties);
         this.sqsAsyncClient = buildClient(clientProperties, httpClient);
     }
 
@@ -52,21 +50,12 @@ public class SqsAsyncClientProvider implements SdkClientProvider<SqsAsyncClient>
         AWSGeneralUtil.closeResources(httpClient, sqsAsyncClient);
     }
 
-    private Properties overrideClientProperties(Properties dynamoDbClientProperties) {
-        Properties overridenProperties = new Properties();
-        overridenProperties.putAll(dynamoDbClientProperties);
-
-        // Specify HTTP1_1 protocol since DynamoDB endpoint doesn't support HTTP2
-        overridenProperties.putIfAbsent(AWSConfigConstants.HTTP_PROTOCOL_VERSION, "HTTP1_1");
-        return overridenProperties;
-    }
-
     private SqsAsyncClient buildClient(
-            Properties dynamoDbClientProperties, SdkAsyncHttpClient httpClient) {
-        AWSGeneralUtil.validateAwsCredentials(dynamoDbClientProperties);
+            Properties sqsClientProperties, SdkAsyncHttpClient httpClient) {
+        AWSGeneralUtil.validateAwsCredentials(sqsClientProperties);
 
         return AWSClientUtil.createAwsAsyncClient(
-                dynamoDbClientProperties,
+                sqsClientProperties,
                 httpClient,
                 SqsAsyncClient.builder(),
                 SqsConfigConstants.BASE_SQS_USER_AGENT_PREFIX_FORMAT.key(),

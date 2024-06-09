@@ -19,7 +19,6 @@ package org.apache.flink.connector.sqs.sink;
 
 import org.apache.flink.api.common.serialization.SerializationSchema;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
-import org.apache.flink.connector.aws.config.AWSConfigConstants;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -64,15 +63,5 @@ class SqsSinkBuilderTest {
                                         .setSerializationSchema(SERIALIZATION_SCHEMA)
                                         .build())
                 .withMessageContaining("The sqs url must be set when initializing the SQS Sink.");
-    }
-
-    @Test
-    void defaultProtocolVersionInsertedToConfiguration() {
-        Properties expectedProps = new Properties();
-        expectedProps.setProperty(AWSConfigConstants.HTTP_PROTOCOL_VERSION, "HTTP1_1");
-        Properties defaultProperties =
-                SqsSink.<String>builder().getClientPropertiesWithDefaultHttpProtocol();
-
-        Assertions.assertThat(defaultProperties).isEqualTo(expectedProps);
     }
 }
