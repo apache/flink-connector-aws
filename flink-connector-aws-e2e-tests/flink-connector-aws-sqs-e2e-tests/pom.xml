@@ -68,12 +68,6 @@
             <version>${project.version}</version>
             <scope>test</scope>
             <type>test-jar</type>
-            <exclusions>
-                <exclusion>
-                    <groupId>com.typesafe.netty</groupId>
-                    <artifactId>netty-reactive-streams-http</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
 
         <!-- Other third-party dependencies -->

@@ -110,7 +110,7 @@ Flink's SQS sink is created by using the static builder `SqsSink.<String>builder
     * Url of the SQS to sink to.
 4. _setFailOnError(boolean failOnError)_
     * Optional. Default: `false`.
-    * Whether failed requests to write records to SQS are treated as fatal exceptions in the sink.
+    * Whether failed requests to write records to SQS are treated as fatal exceptions in the sink which will cause a Flink Job to restart
 5. _setMaxBatchSize(int maxBatchSize)_
     * Optional. Default: `10`.
     * Maximum size of a batch to write to SQS.
