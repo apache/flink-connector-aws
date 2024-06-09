@@ -3,7 +3,7 @@ title: SQS
 weight: 5
 type: docs
 aliases:
-- /zh/dev/connectors/sqs.html
+   - /zh/dev/connectors/sqs.html
 ---
 <!--
 Licensed to the Apache Software Foundation (ASF) under one
@@ -49,18 +49,18 @@ sinkProperties.setProperty(AWSConfigConstants.AWS_ROLE_ARN, "replace-this-with-I
 sinkProperties.setProperty(AWSConfigConstants.AWS_ROLE_SESSION_NAME, "any-session-name-string");
 
 SqsSink<String> sqsSink =
-SqsSink.<String>builder()
-                        .setSerializationSchema(new SimpleStringSchema())                // Required
-                        .setSqsUrl("https://sqs.us-east-1.amazonaws.com/xxxx/test-sqs")  // Required
-                        .setSqsClientProperties(sinkProperties)                          // Required
-                        .setFailOnError(false)                                           // Optional
-                        .setMaxBatchSize(10)                                             // Optional
-                        .setMaxInFlightRequests(50)                                      // Optional
-                        .setMaxBufferedRequests(1_000)                                   // Optional
-                        .setMaxBatchSizeInBytes(256 * 1024)                         // Optional
-                        .setMaxTimeInBufferMS(5000)                                      // Optional
-                        .setMaxRecordSizeInBytes(256 * 1024)                            // Optional
-                        .build();
+        SqsSink.<String>builder()
+                .setSerializationSchema(new SimpleStringSchema())                // Required
+                .setSqsUrl("https://sqs.us-east-1.amazonaws.com/xxxx/test-sqs")  // Required
+                .setSqsClientProperties(sinkProperties)                          // Required
+                .setFailOnError(false)                                           // Optional
+                .setMaxBatchSize(10)                                             // Optional
+                .setMaxInFlightRequests(50)                                      // Optional
+                .setMaxBufferedRequests(1_000)                                   // Optional
+                .setMaxBatchSizeInBytes(256 * 1024)                         // Optional
+                .setMaxTimeInBufferMS(5000)                                      // Optional
+                .setMaxRecordSizeInBytes(256 * 1024)                            // Optional
+                .build();
 
 flinkStream.sinkTo(sqsSink)
 
@@ -100,35 +100,35 @@ flinkStream.sinkTo(sqsSink)
 Flink's SQS sink is created by using the static builder `SqsSink.<String>builder()`.
 
 1. __setSqsClientProperties(Properties sinkProperties)__
-    * Required.
-    * Supplies credentials, region and other parameters to the SQS client.
+   * Required.
+   * Supplies credentials, region and other parameters to the SQS client.
 2. __setSerializationSchema(SerializationSchema<InputType> serializationSchema)__
-    * Required.
-    * Supplies a serialization schema to the Sink. This schema is used to serialize elements before sending to SQS.
+   * Required.
+   * Supplies a serialization schema to the Sink. This schema is used to serialize elements before sending to SQS.
 3. __setSqsUrl(String sqsUrl)__
-    * Required.
-    * Url of the SQS to sink to.
+   * Required.
+   * Url of the SQS to sink to.
 4. _setFailOnError(boolean failOnError)_
-    * Optional. Default: `false`.
-    * Whether failed requests to write records to SQS are treated as fatal exceptions in the sink.
+   * Optional. Default: `false`.
+   * Whether failed requests to write records to SQS are treated as fatal exceptions in the sink that cause a Flink Job to restart
 5. _setMaxBatchSize(int maxBatchSize)_
-    * Optional. Default: `10`.
-    * Maximum size of a batch to write to SQS.
+   * Optional. Default: `10`.
+   * Maximum size of a batch to write to SQS.
 6. _setMaxInFlightRequests(int maxInFlightRequests)_
-    * Optional. Default: `50`.
-    * The maximum number of in flight requests allowed before the sink applies backpressure.
+   * Optional. Default: `50`.
+   * The maximum number of in flight requests allowed before the sink applies backpressure.
 7. _setMaxBufferedRequests(int maxBufferedRequests)_
-    * Optional. Default: `5_000`.
-    * The maximum number of records that may be buffered in the sink before backpressure is applied.
+   * Optional. Default: `5_000`.
+   * The maximum number of records that may be buffered in the sink before backpressure is applied.
 8. _setMaxBatchSizeInBytes(int maxBatchSizeInBytes)_
-    * Optional. Default: `256 * 1024`.
-    * The maximum size (in bytes) a batch may become. All batches sent will be smaller than or equal to this size.
+   * Optional. Default: `256 * 1024`.
+   * The maximum size (in bytes) a batch may become. All batches sent will be smaller than or equal to this size.
 9. _setMaxTimeInBufferMS(int maxTimeInBufferMS)_
-    * Optional. Default: `5000`.
-    * The maximum time a record may stay in the sink before being flushed.
+   * Optional. Default: `5000`.
+   * The maximum time a record may stay in the sink before being flushed.
 10. _setMaxRecordSizeInBytes(int maxRecordSizeInBytes)_
-    * Optional. Default: `256 * 1024`.
-    * The maximum record size that the sink will accept, records larger than this will be automatically rejected.
+* Optional. Default: `256 * 1024`.
+* The maximum record size that the sink will accept, records larger than this will be automatically rejected.
 11. _build()_
-    * Constructs and returns the SQS sink.
+* Constructs and returns the SQS sink.
 

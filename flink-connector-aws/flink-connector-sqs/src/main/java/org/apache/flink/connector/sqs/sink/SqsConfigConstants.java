@@ -18,6 +18,8 @@
 package org.apache.flink.connector.sqs.sink;
 
 import org.apache.flink.annotation.PublicEvolving;
+import org.apache.flink.configuration.ConfigOption;
+import org.apache.flink.configuration.ConfigOptions;
 
 /** Defaults for {@link SqsSinkWriter}. */
 @PublicEvolving
@@ -26,6 +28,9 @@ public class SqsConfigConstants {
     public static final String BASE_SQS_USER_AGENT_PREFIX_FORMAT =
             "Apache Flink %s (%s) SQS Connector";
 
-    /** SQS identifier for user agent prefix. */
-    public static final String SQS_CLIENT_USER_AGENT_PREFIX = "aws.sqs.client.user-agent-prefix";
+    public static final ConfigOption<String> SQS_CLIENT_USER_AGENT_PREFIX =
+            ConfigOptions.key("aws.sqs.client.user-agent-prefix")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("SQS identifier for user agent prefix.");
 }

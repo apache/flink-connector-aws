@@ -80,7 +80,7 @@ class SqsSinkWriter<InputT> extends AsyncSinkWriter<InputT, SendMessageBatchRequ
                 httpClient,
                 SqsAsyncClient.builder(),
                 SqsConfigConstants.BASE_SQS_USER_AGENT_PREFIX_FORMAT,
-                SqsConfigConstants.SQS_CLIENT_USER_AGENT_PREFIX);
+                SqsConfigConstants.SQS_CLIENT_USER_AGENT_PREFIX.key());
     }
 
     private static final AWSExceptionHandler SQS_EXCEPTION_HANDLER =
