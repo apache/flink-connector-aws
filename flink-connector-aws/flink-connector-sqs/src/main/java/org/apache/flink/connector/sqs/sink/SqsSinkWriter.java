@@ -18,22 +18,20 @@
 package org.apache.flink.connector.sqs.sink;
 
 import org.apache.flink.annotation.Internal;
-import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.connector.aws.sink.throwable.AWSExceptionHandler;
-import org.apache.flink.connector.aws.util.AWSClientUtil;
 import org.apache.flink.connector.aws.util.AWSGeneralUtil;
 import org.apache.flink.connector.base.sink.throwable.FatalExceptionClassifier;
 import org.apache.flink.connector.base.sink.writer.AsyncSinkWriter;
 import org.apache.flink.connector.base.sink.writer.BufferedRequestState;
 import org.apache.flink.connector.base.sink.writer.ElementConverter;
 import org.apache.flink.connector.base.sink.writer.config.AsyncSinkWriterConfiguration;
+import org.apache.flink.connector.sqs.sink.client.SdkClientProvider;
 import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.groups.SinkWriterMetricGroup;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 import software.amazon.awssdk.services.sqs.SqsAsyncClient;
 import software.amazon.awssdk.services.sqs.model.BatchResultErrorEntry;
 import software.amazon.awssdk.services.sqs.model.SendMessageBatchRequest;
@@ -46,7 +44,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -68,20 +65,7 @@ class SqsSinkWriter<InputT> extends AsyncSinkWriter<InputT, SendMessageBatchRequ
 
     private static final Logger LOG = LoggerFactory.getLogger(SqsSinkWriter.class);
 
-    private static SdkAsyncHttpClient createHttpClient(Properties sqsClientProperties) {
-        return AWSGeneralUtil.createAsyncHttpClient(sqsClientProperties);
-    }
-
-    private static SqsAsyncClient createSqsClient(
-            Properties sqsClientProperties, SdkAsyncHttpClient httpClient) {
-        AWSGeneralUtil.validateAwsCredentials(sqsClientProperties);
-        return AWSClientUtil.createAwsAsyncClient(
-                sqsClientProperties,
-                httpClient,
-                SqsAsyncClient.builder(),
-                SqsConfigConstants.BASE_SQS_USER_AGENT_PREFIX_FORMAT,
-                SqsConfigConstants.SQS_CLIENT_USER_AGENT_PREFIX.key());
-    }
+    private final SdkClientProvider<SqsAsyncClient> clientProvider;
 
     private static final AWSExceptionHandler SQS_EXCEPTION_HANDLER =
             AWSExceptionHandler.withClassifier(
@@ -101,12 +85,6 @@ class SqsSinkWriter<InputT> extends AsyncSinkWriter<InputT, SendMessageBatchRequ
     /* The sink writer metric group */
     private final SinkWriterMetricGroup metrics;
 
-    /* The asynchronous http client */
-    private SdkAsyncHttpClient httpClient;
-
-    /* The asynchronous SQS client */
-    private SqsAsyncClient sqsAsyncClient;
-
     /* Flag to whether fatally fail any time we encounter an exception when persisting records */
     private final boolean failOnError;
 
@@ -121,7 +99,7 @@ class SqsSinkWriter<InputT> extends AsyncSinkWriter<InputT, SendMessageBatchRequ
             long maxRecordSizeInBytes,
             boolean failOnError,
             String sqsUrl,
-            Properties sqsClientProperties,
+            SdkClientProvider<SqsAsyncClient> clientProvider,
             Collection<BufferedRequestState<SendMessageBatchRequestEntry>> initialStates) {
         super(
                 elementConverter,
@@ -139,8 +117,7 @@ class SqsSinkWriter<InputT> extends AsyncSinkWriter<InputT, SendMessageBatchRequ
         this.sqsUrl = sqsUrl;
         this.metrics = context.metricGroup();
         this.numRecordsOutErrorsCounter = metrics.getNumRecordsOutErrorsCounter();
-        this.httpClient = createHttpClient(sqsClientProperties);
-        this.sqsAsyncClient = createSqsClient(sqsClientProperties, httpClient);
+        this.clientProvider = clientProvider;
     }
 
     @Override
@@ -152,7 +129,7 @@ class SqsSinkWriter<InputT> extends AsyncSinkWriter<InputT, SendMessageBatchRequ
                 SendMessageBatchRequest.builder().entries(requestEntries).queueUrl(sqsUrl).build();
 
         CompletableFuture<SendMessageBatchResponse> future =
-                sqsAsyncClient.sendMessageBatch(batchRequest);
+                clientProvider.getClient().sendMessageBatch(batchRequest);
 
         future.whenComplete(
                 (response, err) -> {
@@ -173,7 +150,7 @@ class SqsSinkWriter<InputT> extends AsyncSinkWriter<InputT, SendMessageBatchRequ
 
     @Override
     public void close() {
-        AWSGeneralUtil.closeResources(httpClient, sqsAsyncClient);
+        AWSGeneralUtil.closeResources(clientProvider);
     }
 
     private void handleFullyFailedRequest(
@@ -241,17 +218,5 @@ class SqsSinkWriter<InputT> extends AsyncSinkWriter<InputT, SendMessageBatchRequ
             }
         }
         return Optional.empty();
-    }
-
-    @Internal
-    @VisibleForTesting
-    void setSqsAsyncClient(final SqsAsyncClient sqsAsyncClient) {
-        this.sqsAsyncClient = sqsAsyncClient;
-    }
-
-    @Internal
-    @VisibleForTesting
-    void setSdkAsyncHttpClient(final SdkAsyncHttpClient httpClient) {
-        this.httpClient = httpClient;
     }
 }

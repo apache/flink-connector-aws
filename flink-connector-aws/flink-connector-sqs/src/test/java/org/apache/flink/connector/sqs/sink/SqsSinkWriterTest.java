@@ -22,6 +22,7 @@ import org.apache.flink.api.connector.sink2.SinkWriter;
 import org.apache.flink.connector.aws.testutils.AWSServicesTestUtils;
 import org.apache.flink.connector.base.sink.writer.ElementConverter;
 import org.apache.flink.connector.base.sink.writer.TestSinkInitContext;
+import org.apache.flink.connector.sqs.sink.client.SdkClientProvider;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,7 +31,6 @@ import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
 import software.amazon.awssdk.core.exception.SdkClientException;
-import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 import software.amazon.awssdk.services.sqs.SqsAsyncClient;
 import software.amazon.awssdk.services.sqs.model.BatchRequestTooLongException;
 import software.amazon.awssdk.services.sqs.model.BatchResultErrorEntry;
@@ -61,9 +61,9 @@ public class SqsSinkWriterTest {
 
     @Mock private SqsAsyncClient sqsAsyncClient;
 
-    @Mock private SdkAsyncHttpClient httpClient;
-
     @Mock private Consumer<List<SendMessageBatchRequestEntry>> requestResult;
+
+    @Mock private SdkClientProvider<SqsAsyncClient> asyncClientSdkClientProviderOverride;
 
     private SqsSinkWriter<String> sinkWriter;
 
@@ -263,8 +263,7 @@ public class SqsSinkWriterTest {
     @Test
     public void testClientClosesWhenWriterIsClosed() {
         sinkWriter.close();
-        verify(sqsAsyncClient).close();
-        verify(httpClient).close();
+        verify(asyncClientSdkClientProviderOverride).close();
     }
 
     @Test
@@ -283,7 +282,7 @@ public class SqsSinkWriterTest {
         SqsSink<String> sqsSink =
                 new SqsSink<>(
                         ELEMENT_CONVERTER_PLACEHOLDER,
-                        12,
+                        10,
                         16,
                         10000,
                         4 * 1024 * 1024L,
@@ -302,8 +301,8 @@ public class SqsSinkWriterTest {
                 .withCauseInstanceOf(SdkClientException.class)
                 .withMessageContaining(
                         "Unable to execute HTTP request: Connection refused: localhost/127.0.0.1:443");
-        assertThat(ctx.metricGroup().getNumRecordsOutErrorsCounter().getCount()).isEqualTo(12);
-        assertThat(ctx.metricGroup().getNumRecordsSendErrorsCounter().getCount()).isEqualTo(12);
+        assertThat(ctx.metricGroup().getNumRecordsOutErrorsCounter().getCount()).isEqualTo(10);
+        assertThat(ctx.metricGroup().getNumRecordsSendErrorsCounter().getCount()).isEqualTo(10);
     }
 
     private SqsSinkWriter<String> getSqsSinkWriter(final boolean failOnError) throws IOException {
@@ -312,7 +311,7 @@ public class SqsSinkWriterTest {
         SqsSink<String> sink =
                 new SqsSink<>(
                         ELEMENT_CONVERTER_PLACEHOLDER,
-                        50,
+                        10,
                         16,
                         10000,
                         4 * 1024 * 1024L,
@@ -321,9 +320,9 @@ public class SqsSinkWriterTest {
                         failOnError,
                         "https://sqs.us-east-2.amazonaws.com/618277569814/fake-sqs",
                         sinkProperties);
+        sink.setSqsAsyncClientProvider(asyncClientSdkClientProviderOverride);
+        Mockito.when(asyncClientSdkClientProviderOverride.getClient()).thenReturn(sqsAsyncClient);
         SqsSinkWriter sqsSinkWriter = (SqsSinkWriter<String>) sink.createWriter(sinkInitContext);
-        sqsSinkWriter.setSqsAsyncClient(sqsAsyncClient);
-        sqsSinkWriter.setSdkAsyncHttpClient(httpClient);
         return sqsSinkWriter;
     }
 

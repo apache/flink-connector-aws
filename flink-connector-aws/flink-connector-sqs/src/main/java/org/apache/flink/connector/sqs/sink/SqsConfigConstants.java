@@ -25,8 +25,11 @@ import org.apache.flink.configuration.ConfigOptions;
 @PublicEvolving
 public class SqsConfigConstants {
 
-    public static final String BASE_SQS_USER_AGENT_PREFIX_FORMAT =
-            "Apache Flink %s (%s) SQS Connector";
+    public static final ConfigOption<String> BASE_SQS_USER_AGENT_PREFIX_FORMAT =
+            ConfigOptions.key("Apache Flink %s (%s) SQS Connector")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("SQS useragent prefix format.");
 
     public static final ConfigOption<String> SQS_CLIENT_USER_AGENT_PREFIX =
             ConfigOptions.key("aws.sqs.client.user-agent-prefix")

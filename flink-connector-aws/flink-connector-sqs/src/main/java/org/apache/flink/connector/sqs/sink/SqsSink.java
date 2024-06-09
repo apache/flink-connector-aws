@@ -17,13 +17,18 @@
 
 package org.apache.flink.connector.sqs.sink;
 
+import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.PublicEvolving;
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.connector.base.sink.AsyncSinkBase;
 import org.apache.flink.connector.base.sink.writer.BufferedRequestState;
 import org.apache.flink.connector.base.sink.writer.ElementConverter;
+import org.apache.flink.connector.sqs.sink.client.SdkClientProvider;
+import org.apache.flink.connector.sqs.sink.client.SqsAsyncClientProvider;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
 import org.apache.flink.util.Preconditions;
 
+import software.amazon.awssdk.services.sqs.SqsAsyncClient;
 import software.amazon.awssdk.services.sqs.model.SendMessageBatchRequestEntry;
 
 import java.io.IOException;
@@ -48,6 +53,7 @@ public class SqsSink<InputT> extends AsyncSinkBase<InputT, SendMessageBatchReque
     private final boolean failOnError;
     private final String sqsUrl;
     private final Properties sqsClientProperties;
+    private transient SdkClientProvider<SqsAsyncClient> asyncClientSdkClientProviderOverride;
 
     SqsSink(
             ElementConverter<InputT, SendMessageBatchRequestEntry> elementConverter,
@@ -105,7 +111,7 @@ public class SqsSink<InputT> extends AsyncSinkBase<InputT, SendMessageBatchReque
                 getMaxRecordSizeInBytes(),
                 failOnError,
                 sqsUrl,
-                sqsClientProperties,
+                getAsyncClientProvider(sqsClientProperties),
                 Collections.emptyList());
     }
 
@@ -126,8 +132,22 @@ public class SqsSink<InputT> extends AsyncSinkBase<InputT, SendMessageBatchReque
                 getMaxRecordSizeInBytes(),
                 failOnError,
                 sqsUrl,
-                sqsClientProperties,
+                getAsyncClientProvider(sqsClientProperties),
                 recoveredState);
+    }
+
+    private SdkClientProvider<SqsAsyncClient> getAsyncClientProvider(Properties clientProperties) {
+        if (asyncClientSdkClientProviderOverride != null) {
+            return asyncClientSdkClientProviderOverride;
+        }
+        return new SqsAsyncClientProvider(clientProperties);
+    }
+
+    @Internal
+    @VisibleForTesting
+    void setSqsAsyncClientProvider(
+            SdkClientProvider<SqsAsyncClient> asyncClientSdkClientProviderOverride) {
+        this.asyncClientSdkClientProviderOverride = asyncClientSdkClientProviderOverride;
     }
 
     @Override
