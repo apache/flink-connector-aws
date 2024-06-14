@@ -19,27 +19,62 @@
 package org.apache.flink.connector.kinesis.source.reader;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
+import org.apache.flink.connector.base.source.reader.fetcher.SingleThreadFetcherManager;
+import org.apache.flink.connector.base.source.reader.synchronization.FutureCompletingBlockingQueue;
+import org.apache.flink.connector.kinesis.source.metrics.KinesisShardMetrics;
 import org.apache.flink.connector.kinesis.source.model.TestData;
+import org.apache.flink.connector.kinesis.source.proxy.StreamProxy;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplitState;
-import org.apache.flink.connector.testutils.source.reader.TestingReaderContext;
+import org.apache.flink.connector.kinesis.source.util.KinesisContextProvider;
+import org.apache.flink.connector.kinesis.source.util.TestUtil;
+import org.apache.flink.metrics.testutils.MetricListener;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import software.amazon.awssdk.services.kinesis.model.Record;
 
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
+import static org.apache.flink.connector.kinesis.source.util.KinesisStreamProxyProvider.getTestStreamProxy;
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.getTestSplit;
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.getTestSplitState;
-import static org.assertj.core.api.AssertionsForClassTypes.assertThatNoException;
 import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
 
 class KinesisStreamsSourceReaderTest {
+    private KinesisStreamsSourceReader<TestData> sourceReader;
+    private MetricListener metricListener;
+    private Map<String, KinesisShardMetrics> shardMetricGroupMap;
+
+    @BeforeEach
+    public void init() {
+        metricListener = new MetricListener();
+        shardMetricGroupMap = new ConcurrentHashMap<>();
+        StreamProxy testStreamProxy = getTestStreamProxy();
+        Supplier<PollingKinesisShardSplitReader> splitReaderSupplier =
+                () -> new PollingKinesisShardSplitReader(testStreamProxy, shardMetricGroupMap);
+
+        FutureCompletingBlockingQueue<RecordsWithSplitIds<Record>> elementsQueue =
+                new FutureCompletingBlockingQueue<>();
+
+        sourceReader =
+                new KinesisStreamsSourceReader<>(
+                        elementsQueue,
+                        new SingleThreadFetcherManager<>(elementsQueue, splitReaderSupplier::get),
+                        new KinesisStreamsRecordEmitter<>(null),
+                        new Configuration(),
+                        KinesisContextProvider.KinesisTestingContext.getKinesisTestingContext(
+                                metricListener),
+                        shardMetricGroupMap);
+    }
 
     @Test
     void testInitializedState() throws Exception {
-        KinesisStreamsSourceReader<TestData> sourceReader =
-                new KinesisStreamsSourceReader<>(
-                        null, null, null, new Configuration(), new TestingReaderContext());
         KinesisShardSplit split = getTestSplit();
         assertThat(sourceReader.initializedState(split))
                 .usingRecursiveComparison()
@@ -48,9 +83,6 @@ class KinesisStreamsSourceReaderTest {
 
     @Test
     void testToSplitType() throws Exception {
-        KinesisStreamsSourceReader<TestData> sourceReader =
-                new KinesisStreamsSourceReader<>(
-                        null, null, null, new Configuration(), new TestingReaderContext());
         KinesisShardSplitState splitState = getTestSplitState();
         String splitId = splitState.getSplitId();
         assertThat(sourceReader.toSplitType(splitId, splitState))
@@ -59,11 +91,35 @@ class KinesisStreamsSourceReaderTest {
     }
 
     @Test
-    void testOnSplitFinishedIsNoOp() throws Exception {
-        KinesisStreamsSourceReader<TestData> sourceReader =
-                new KinesisStreamsSourceReader<>(
-                        null, null, null, new Configuration(), new TestingReaderContext());
-        assertThatNoException()
-                .isThrownBy(() -> sourceReader.onSplitFinished(Collections.emptyMap()));
+    void testOnSplitFinishedShardMetricGroupUnregistered() throws Exception {
+        KinesisShardSplit split = getTestSplit();
+
+        List<KinesisShardSplit> splits = Collections.singletonList(split);
+
+        sourceReader.addSplits(splits);
+        sourceReader.isAvailable().get();
+
+        assertThat(shardMetricGroupMap.get(split.getShardId())).isNotNull();
+
+        sourceReader.onSplitFinished(
+                Collections.singletonMap(split.getShardId(), new KinesisShardSplitState(split)));
+
+        assertThat(shardMetricGroupMap.get(split.getShardId())).isNull();
+    }
+
+    @Test
+    void testAddSplitsRegistersAndUpdatesShardMetricGroup() throws Exception {
+        KinesisShardSplit split = getTestSplit();
+
+        List<KinesisShardSplit> splits = Collections.singletonList(split);
+        sourceReader.addSplits(splits);
+
+        // Wait for fetcher tasks to finish to assert after the metric is registered and updated.
+        sourceReader.isAvailable().get();
+
+        assertThat(shardMetricGroupMap.get(split.getShardId())).isNotNull();
+
+        TestUtil.assertMillisBehindLatest(
+                split, TestUtil.MILLIS_BEHIND_LATEST_TEST_VALUE, metricListener);
     }
 }
