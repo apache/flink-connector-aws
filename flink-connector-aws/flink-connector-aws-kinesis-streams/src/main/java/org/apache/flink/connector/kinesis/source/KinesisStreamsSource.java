@@ -37,6 +37,7 @@ import org.apache.flink.connector.kinesis.source.enumerator.KinesisShardAssigner
 import org.apache.flink.connector.kinesis.source.enumerator.KinesisStreamsSourceEnumerator;
 import org.apache.flink.connector.kinesis.source.enumerator.KinesisStreamsSourceEnumeratorState;
 import org.apache.flink.connector.kinesis.source.enumerator.KinesisStreamsSourceEnumeratorStateSerializer;
+import org.apache.flink.connector.kinesis.source.metrics.KinesisShardMetrics;
 import org.apache.flink.connector.kinesis.source.proxy.KinesisStreamProxy;
 import org.apache.flink.connector.kinesis.source.reader.KinesisStreamsRecordEmitter;
 import org.apache.flink.connector.kinesis.source.reader.KinesisStreamsSourceReader;
@@ -55,7 +56,9 @@ import software.amazon.awssdk.services.kinesis.KinesisClient;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.utils.AttributeMap;
 
+import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 /**
@@ -124,10 +127,15 @@ public class KinesisStreamsSource<T>
 
         FutureCompletingBlockingQueue<RecordsWithSplitIds<Record>> elementsQueue =
                 new FutureCompletingBlockingQueue<>();
+
+        Map<String, KinesisShardMetrics> shardMetricGroupMap = new ConcurrentHashMap<>();
+
         // We create a new stream proxy for each split reader since they have their own independent
         // lifecycle.
         Supplier<PollingKinesisShardSplitReader> splitReaderSupplier =
-                () -> new PollingKinesisShardSplitReader(createKinesisStreamProxy(sourceConfig));
+                () ->
+                        new PollingKinesisShardSplitReader(
+                                createKinesisStreamProxy(sourceConfig), shardMetricGroupMap);
         KinesisStreamsRecordEmitter<T> recordEmitter =
                 new KinesisStreamsRecordEmitter<>(deserializationSchema);
 
@@ -136,7 +144,8 @@ public class KinesisStreamsSource<T>
                 new SingleThreadFetcherManager<>(elementsQueue, splitReaderSupplier::get),
                 recordEmitter,
                 sourceConfig,
-                readerContext);
+                readerContext,
+                shardMetricGroupMap);
     }
 
     @Override

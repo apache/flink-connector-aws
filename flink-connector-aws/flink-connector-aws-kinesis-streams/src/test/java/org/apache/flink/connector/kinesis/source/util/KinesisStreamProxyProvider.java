@@ -100,6 +100,7 @@ public class KinesisStreamProxyProvider {
             return GetRecordsResponse.builder()
                     .records(records)
                     .nextShardIterator(shouldCompleteNextShard ? null : "some-shard-iterator")
+                    .millisBehindLatest(TestUtil.MILLIS_BEHIND_LATEST_TEST_VALUE)
                     .build();
         }
 
