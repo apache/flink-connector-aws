@@ -22,6 +22,7 @@ import org.apache.flink.annotation.Internal;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitReader;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsChange;
+import org.apache.flink.connector.kinesis.source.metrics.KinesisShardMetrics;
 import org.apache.flink.connector.kinesis.source.proxy.StreamProxy;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplitState;
@@ -37,6 +38,7 @@ import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Set;
 
 import static java.util.Collections.singleton;
@@ -53,9 +55,12 @@ public class PollingKinesisShardSplitReader implements SplitReader<Record, Kines
 
     private final StreamProxy kinesis;
     private final Deque<KinesisShardSplitState> assignedSplits = new ArrayDeque<>();
+    private final Map<String, KinesisShardMetrics> shardMetricGroupMap;
 
-    public PollingKinesisShardSplitReader(StreamProxy kinesisProxy) {
+    public PollingKinesisShardSplitReader(
+            StreamProxy kinesisProxy, Map<String, KinesisShardMetrics> shardMetricGroupMap) {
         this.kinesis = kinesisProxy;
+        this.shardMetricGroupMap = shardMetricGroupMap;
     }
 
     @Override
@@ -71,6 +76,10 @@ public class PollingKinesisShardSplitReader implements SplitReader<Record, Kines
                         splitState.getShardId(),
                         splitState.getNextStartingPosition());
         boolean isComplete = getRecordsResponse.nextShardIterator() == null;
+
+        shardMetricGroupMap
+                .get(splitState.getShardId())
+                .setMillisBehindLatest(getRecordsResponse.millisBehindLatest());
 
         if (hasNoRecords(getRecordsResponse)) {
             if (isComplete) {
