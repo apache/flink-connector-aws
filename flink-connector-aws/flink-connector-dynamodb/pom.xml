@@ -66,6 +66,7 @@ under the License.
             <version>${project.version}</version>
         </dependency>
 
+
         <!-- Flink Connector DynamoDB Dependencies -->
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
@@ -143,6 +144,12 @@ under the License.
             <artifactId>flink-table-planner-loader</artifactId>
             <version>${flink.version}</version>
             <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>nl.jqno.equalsverifier</groupId>
+            <artifactId>equalsverifier</artifactId>
+            <version>3.14.1</version>
+            <scope>test</scope>
         </dependency>
 
     </dependencies>
