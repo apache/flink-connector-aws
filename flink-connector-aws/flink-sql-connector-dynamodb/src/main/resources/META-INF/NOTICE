@@ -25,6 +25,7 @@ This project bundles the following dependencies under the Apache Software Licens
 - software.amazon.awssdk:aws-json-protocol:2.20.144
 - software.amazon.awssdk:aws-core:2.20.144
 - software.amazon.awssdk:auth:2.20.144
+- software.amazon.awssdk:arns:2.20.144
 - software.amazon.awssdk:apache-client:2.20.144
 - software.amazon.awssdk:annotations:2.20.144
 - org.apache.httpcomponents:httpcore:4.4.14

@@ -25,6 +25,7 @@ import org.apache.flink.util.ExceptionUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
@@ -358,6 +359,17 @@ public class AWSGeneralUtil {
             final AttributeMap config, final ApacheHttpClient.Builder httpClientBuilder) {
         httpClientBuilder.connectionAcquisitionTimeout(CONNECTION_ACQUISITION_TIMEOUT);
         return httpClientBuilder.buildWithDefaults(config.merge(HTTP_CLIENT_DEFAULTS));
+    }
+
+    /**
+     * Extract region from resource ARN.
+     *
+     * @param arn resource ARN
+     * @return An {@link Optional} containing region name (e.g. us-east-1), or an empty {@link
+     *     Optional} if ARN does not contain region component
+     */
+    public static Optional<String> getRegionFromArn(final String arn) {
+        return Arn.fromString(arn).region();
     }
 
     /**
