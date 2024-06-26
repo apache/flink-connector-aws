@@ -787,6 +787,32 @@ class AWSGeneralUtilTest {
     }
 
     @Test
+    void testGetRegionFromValidArn() {
+        assertThat(
+                        AWSGeneralUtil.getRegionFromArn(
+                                "arn:aws:service:eu-west-2:123456789012:resource/test-resource"))
+                .contains("eu-west-2");
+        assertThat(
+                        AWSGeneralUtil.getRegionFromArn(
+                                "arn:aws:kinesis:us-east-1:123456789012:stream/test-stream"))
+                .contains("us-east-1");
+        assertThat(
+                        AWSGeneralUtil.getRegionFromArn(
+                                "arn:aws:service:us-gov-west-1:123456789012:resource/test-resource"))
+                .contains("us-gov-west-1");
+
+        assertThat(AWSGeneralUtil.getRegionFromArn("arn:aws:s3:::resource/test-resource"))
+                .isEmpty();
+    }
+
+    @Test
+    void testGetRegionFromInvalidArn() {
+        assertThatThrownBy(() -> AWSGeneralUtil.getRegionFromArn("malformed-arn"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Malformed ARN");
+    }
+
+    @Test
     void testGetRegion() {
         Region region = AWSGeneralUtil.getRegion(TestUtil.properties(AWS_REGION, "eu-west-2"));
 
