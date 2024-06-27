@@ -26,6 +26,7 @@ import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.SingleThreadMultiplexSourceReaderBase;
 import org.apache.flink.connector.base.source.reader.fetcher.SingleThreadFetcherManager;
 import org.apache.flink.connector.base.source.reader.synchronization.FutureCompletingBlockingQueue;
+import org.apache.flink.connector.kinesis.source.event.SplitsFinishedEvent;
 import org.apache.flink.connector.kinesis.source.metrics.KinesisShardMetrics;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplitState;
@@ -34,6 +35,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.model.Record;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -47,7 +49,7 @@ public class KinesisStreamsSourceReader<T>
         extends SingleThreadMultiplexSourceReaderBase<
                 Record, T, KinesisShardSplit, KinesisShardSplitState> {
 
-    private static final Logger log = LoggerFactory.getLogger(KinesisStreamsSourceReader.class);
+    private static final Logger LOG = LoggerFactory.getLogger(KinesisStreamsSourceReader.class);
     private final Map<String, KinesisShardMetrics> shardMetricGroupMap;
 
     public KinesisStreamsSourceReader(
@@ -63,6 +65,8 @@ public class KinesisStreamsSourceReader<T>
 
     @Override
     protected void onSplitFinished(Map<String, KinesisShardSplitState> finishedSplitIds) {
+        context.sendSourceEventToCoordinator(
+                new SplitsFinishedEvent(new HashSet<>(finishedSplitIds.keySet())));
         finishedSplitIds.keySet().forEach(this::unregisterShardMetricGroup);
     }
 
@@ -93,7 +97,7 @@ public class KinesisStreamsSourceReader<T>
             this.shardMetricGroupMap.put(
                     split.getShardId(), new KinesisShardMetrics(split, context.metricGroup()));
         } else {
-            log.warn(
+            LOG.warn(
                     "Metric group for shard with id {} has already been registered.",
                     split.getShardId());
         }
@@ -104,7 +108,7 @@ public class KinesisStreamsSourceReader<T>
         if (removed != null) {
             removed.unregister();
         } else {
-            log.warn(
+            LOG.warn(
                     "Shard metric group unregister failed. Metric group for {} does not exist.",
                     shardId);
         }

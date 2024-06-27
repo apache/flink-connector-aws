@@ -18,17 +18,21 @@
 
 package org.apache.flink.connector.kinesis.source.util;
 
+import org.apache.flink.connector.kinesis.source.proxy.ListShardsStartingPosition;
 import org.apache.flink.connector.kinesis.source.proxy.StreamProxy;
 import org.apache.flink.connector.kinesis.source.split.StartingPosition;
 
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
-import org.jetbrains.annotations.Nullable;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.services.kinesis.model.Shard;
+import software.amazon.awssdk.services.kinesis.model.ShardFilter;
+import software.amazon.awssdk.services.kinesis.model.ShardFilterType;
+import software.amazon.awssdk.services.kinesis.model.StreamDescriptionSummary;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -52,21 +56,36 @@ public class KinesisStreamProxyProvider {
      * behavior.
      */
     public static class TestKinesisStreamProxy implements StreamProxy {
+        // Describe stream summary configuration
+        private Instant creationTimestamp = Instant.now();
+        private int retentionPeriodHours = 24;
 
         // List shards configuration
         private final List<Shard> shards = new ArrayList<>();
         private Supplier<Exception> listShardsExceptionSupplier;
         private boolean shouldRespectLastSeenShardId = true;
-        private String lastProvidedLastSeenShardId;
+        private ListShardsStartingPosition lastProvidedListShardStartingPosition;
 
         // GetRecords configuration
+        private Supplier<RuntimeException> getRecordsExceptionSupplier;
         private final Map<ShardHandle, Deque<List<Record>>> storedRecords = new HashMap<>();
         private boolean shouldCompleteNextShard = false;
         private boolean closed = false;
 
         @Override
-        public List<Shard> listShards(String streamArn, @Nullable String lastSeenShardId) {
-            this.lastProvidedLastSeenShardId = lastSeenShardId;
+        public StreamDescriptionSummary getStreamDescriptionSummary(String streamArn) {
+            return StreamDescriptionSummary.builder()
+                    .streamARN(streamArn)
+                    .streamName(streamArn.substring(streamArn.lastIndexOf('/') + 1))
+                    .retentionPeriodHours(retentionPeriodHours)
+                    .streamCreationTimestamp(creationTimestamp)
+                    .build();
+        }
+
+        @Override
+        public List<Shard> listShards(
+                String streamArn, ListShardsStartingPosition startingPosition) {
+            this.lastProvidedListShardStartingPosition = startingPosition;
 
             if (listShardsExceptionSupplier != null) {
                 try {
@@ -77,8 +96,11 @@ public class KinesisStreamProxyProvider {
             }
 
             List<Shard> results = new ArrayList<>();
+            ShardFilter shardFilter = startingPosition.getShardFilter();
             for (Shard shard : shards) {
-                if (shouldRespectLastSeenShardId && shard.shardId().equals(lastSeenShardId)) {
+                if (shouldRespectLastSeenShardId
+                        && shardFilter.type().equals(ShardFilterType.AFTER_SHARD_ID)
+                        && shard.shardId().equals(shardFilter.shardId())) {
                     results.clear();
                     continue;
                 }
@@ -92,6 +114,10 @@ public class KinesisStreamProxyProvider {
                 String streamArn, String shardId, StartingPosition startingPosition) {
             ShardHandle shardHandle = new ShardHandle(streamArn, shardId);
 
+            if (getRecordsExceptionSupplier != null) {
+                throw getRecordsExceptionSupplier.get();
+            }
+
             List<Record> records = null;
             if (storedRecords.containsKey(shardHandle)) {
                 records = storedRecords.get(shardHandle).poll();
@@ -104,8 +130,18 @@ public class KinesisStreamProxyProvider {
                     .build();
         }
 
-        public String getLastProvidedLastSeenShardId() {
-            return lastProvidedLastSeenShardId;
+        public void setStreamSummary(Instant creationTimestamp, int retentionPeriodHours) {
+            this.creationTimestamp = creationTimestamp;
+            this.retentionPeriodHours = retentionPeriodHours;
+        }
+
+        public void setGetRecordsExceptionSupplier(
+                Supplier<RuntimeException> getRecordsExceptionSupplier) {
+            this.getRecordsExceptionSupplier = getRecordsExceptionSupplier;
+        }
+
+        public ListShardsStartingPosition getLastProvidedListShardStartingPosition() {
+            return lastProvidedListShardStartingPosition;
         }
 
         public void addShards(String... shardIds) {
