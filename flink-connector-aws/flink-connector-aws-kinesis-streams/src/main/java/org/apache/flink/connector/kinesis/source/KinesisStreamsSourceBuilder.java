@@ -55,6 +55,7 @@ public class KinesisStreamsSourceBuilder<T> {
     private Configuration sourceConfig;
     private KinesisDeserializationSchema<T> deserializationSchema;
     private KinesisShardAssigner kinesisShardAssigner = ShardAssignerFactory.uniformShardAssigner();
+    private boolean preserveShardOrder = true;
 
     public KinesisStreamsSourceBuilder<T> setStreamArn(String streamArn) {
         this.streamArn = streamArn;
@@ -84,8 +85,17 @@ public class KinesisStreamsSourceBuilder<T> {
         return this;
     }
 
+    public KinesisStreamsSourceBuilder<T> setPreserveShardOrder(boolean preserveShardOrder) {
+        this.preserveShardOrder = preserveShardOrder;
+        return this;
+    }
+
     public KinesisStreamsSource<T> build() {
         return new KinesisStreamsSource<>(
-                streamArn, sourceConfig, deserializationSchema, kinesisShardAssigner);
+                streamArn,
+                sourceConfig,
+                deserializationSchema,
+                kinesisShardAssigner,
+                preserveShardOrder);
     }
 }

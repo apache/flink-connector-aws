@@ -19,11 +19,10 @@
 package org.apache.flink.connector.kinesis.source.enumerator;
 
 import org.apache.flink.annotation.Internal;
-import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 
 import javax.annotation.Nullable;
 
-import java.util.Set;
+import java.util.List;
 
 /**
  * State for the {@link KinesisStreamsSourceEnumerator}. This class is stored in state, so any
@@ -31,12 +30,12 @@ import java.util.Set;
  */
 @Internal
 public class KinesisStreamsSourceEnumeratorState {
-    private final Set<KinesisShardSplit> unassignedSplits;
+    private final List<KinesisShardSplitWithAssignmentStatus> splits;
     @Nullable private final String lastSeenShardId;
 
     public KinesisStreamsSourceEnumeratorState(
-            Set<KinesisShardSplit> unassignedSplits, String lastSeenShardId) {
-        this.unassignedSplits = unassignedSplits;
+            List<KinesisShardSplitWithAssignmentStatus> splits, String lastSeenShardId) {
+        this.splits = splits;
         this.lastSeenShardId = lastSeenShardId;
     }
 
@@ -44,7 +43,7 @@ public class KinesisStreamsSourceEnumeratorState {
         return lastSeenShardId;
     }
 
-    public Set<KinesisShardSplit> getUnassignedSplits() {
-        return unassignedSplits;
+    public List<KinesisShardSplitWithAssignmentStatus> getSplits() {
+        return splits;
     }
 }

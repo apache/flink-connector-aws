@@ -29,6 +29,7 @@ import org.apache.flink.metrics.testutils.MetricListener;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.kinesis.model.Record;
+import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -88,6 +89,27 @@ class PollingKinesisShardSplitReaderTest {
         assertThat(retrievedRecords.nextRecordFromSplit()).isNull();
         assertThat(retrievedRecords.nextSplit()).isNull();
         assertThat(retrievedRecords.finishedSplits()).isEmpty();
+    }
+
+    @Test
+    void testSplitWithExpiredShardHandledAsCompleted() throws Exception {
+        // Given assigned split with expired shard
+        KinesisShardSplit testSplit = getTestSplit(TEST_SHARD_ID);
+        testStreamProxy.addShards(testSplit.getShardId());
+        testStreamProxy.setGetRecordsExceptionSupplier(
+                () ->
+                        ResourceNotFoundException.builder()
+                                .message("Shard " + testSplit.getShardId() + " does not exist")
+                                .build());
+        splitReader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(testSplit)));
+
+        // When fetching records
+        RecordsWithSplitIds<Record> retrievedRecords = splitReader.fetch();
+
+        // Then retrieve no records and mark split as complete
+        assertThat(retrievedRecords.nextRecordFromSplit()).isNull();
+        assertThat(retrievedRecords.nextSplit()).isNull();
+        assertThat(retrievedRecords.finishedSplits()).containsExactly(testSplit.splitId());
     }
 
     @Test

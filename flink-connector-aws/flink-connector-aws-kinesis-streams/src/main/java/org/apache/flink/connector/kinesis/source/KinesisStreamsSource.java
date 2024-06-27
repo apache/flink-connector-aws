@@ -88,12 +88,14 @@ public class KinesisStreamsSource<T>
     private final Configuration sourceConfig;
     private final KinesisDeserializationSchema<T> deserializationSchema;
     private final KinesisShardAssigner kinesisShardAssigner;
+    private final boolean preserveShardOrder;
 
     KinesisStreamsSource(
             String streamArn,
             Configuration sourceConfig,
             KinesisDeserializationSchema<T> deserializationSchema,
-            KinesisShardAssigner kinesisShardAssigner) {
+            KinesisShardAssigner kinesisShardAssigner,
+            boolean preserveShardOrder) {
         Preconditions.checkNotNull(streamArn);
         Preconditions.checkArgument(!streamArn.isEmpty(), "stream ARN cannot be empty string");
         Preconditions.checkNotNull(sourceConfig);
@@ -103,6 +105,7 @@ public class KinesisStreamsSource<T>
         this.sourceConfig = sourceConfig;
         this.deserializationSchema = deserializationSchema;
         this.kinesisShardAssigner = kinesisShardAssigner;
+        this.preserveShardOrder = preserveShardOrder;
     }
 
     /**
@@ -167,7 +170,8 @@ public class KinesisStreamsSource<T>
                 sourceConfig,
                 createKinesisStreamProxy(sourceConfig),
                 kinesisShardAssigner,
-                checkpoint);
+                checkpoint,
+                preserveShardOrder);
     }
 
     @Override
