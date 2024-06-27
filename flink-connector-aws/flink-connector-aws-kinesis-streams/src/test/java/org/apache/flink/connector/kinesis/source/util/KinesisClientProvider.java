@@ -23,6 +23,8 @@ import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
 import software.amazon.awssdk.services.kinesis.KinesisServiceClientConfiguration;
 import software.amazon.awssdk.services.kinesis.model.AccessDeniedException;
+import software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryRequest;
+import software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryResponse;
 import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.ExpiredNextTokenException;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsRequest;
@@ -64,6 +66,8 @@ public class KinesisClientProvider {
         private Consumer<GetShardIteratorRequest> getShardIteratorValidation;
         private GetRecordsResponse getRecordsResponse;
         private Consumer<GetRecordsRequest> getRecordsValidation;
+        private DescribeStreamSummaryResponse describeStreamSummaryResponse;
+        private Consumer<DescribeStreamSummaryRequest> describeStreamSummaryRequestValidation;
         private boolean closed = false;
 
         @Override
@@ -134,6 +138,26 @@ public class KinesisClientProvider {
                         KinesisException {
             getRecordsValidation.accept(getRecordsRequest);
             return getRecordsResponse;
+        }
+
+        public void setDescribeStreamSummaryResponse(
+                DescribeStreamSummaryResponse describeStreamSummaryResponse) {
+            this.describeStreamSummaryResponse = describeStreamSummaryResponse;
+        }
+
+        public void setDescribeStreamSummaryRequestValidation(
+                Consumer<DescribeStreamSummaryRequest> describeStreamSummaryRequestValidation) {
+            this.describeStreamSummaryRequestValidation = describeStreamSummaryRequestValidation;
+        }
+
+        @Override
+        public DescribeStreamSummaryResponse describeStreamSummary(
+                DescribeStreamSummaryRequest describeStreamSummaryRequest)
+                throws ResourceNotFoundException, LimitExceededException, InvalidArgumentException,
+                        AccessDeniedException, AwsServiceException, SdkClientException,
+                        KinesisException {
+            describeStreamSummaryRequestValidation.accept(describeStreamSummaryRequest);
+            return describeStreamSummaryResponse;
         }
 
         @Override

@@ -19,25 +19,33 @@
 package org.apache.flink.connector.kinesis.source.enumerator;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.connector.source.ReaderInfo;
+import org.apache.flink.api.connector.source.SourceEvent;
 import org.apache.flink.api.connector.source.SplitEnumerator;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.api.connector.source.SplitsAssignment;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.InitialPosition;
+import org.apache.flink.connector.kinesis.source.enumerator.tracker.SplitTracker;
+import org.apache.flink.connector.kinesis.source.event.SplitsFinishedEvent;
 import org.apache.flink.connector.kinesis.source.exception.KinesisStreamsSourceException;
+import org.apache.flink.connector.kinesis.source.proxy.ListShardsStartingPosition;
 import org.apache.flink.connector.kinesis.source.proxy.StreamProxy;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.connector.kinesis.source.split.StartingPosition;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.services.kinesis.model.InvalidArgumentException;
 import software.amazon.awssdk.services.kinesis.model.Shard;
+import software.amazon.awssdk.services.kinesis.model.StreamDescriptionSummary;
 
 import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -45,6 +53,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.SHARD_DISCOVERY_INTERVAL_MILLIS;
@@ -67,10 +76,9 @@ public class KinesisStreamsSourceEnumerator
     private final StreamProxy streamProxy;
     private final KinesisShardAssigner shardAssigner;
     private final ShardAssignerContext shardAssignerContext;
+    private final SplitTracker splitTracker;
 
     private final Map<Integer, Set<KinesisShardSplit>> splitAssignment = new HashMap<>();
-    private final Set<String> assignedSplitIds = new HashSet<>();
-    private final Set<KinesisShardSplit> unassignedSplits;
 
     private String lastSeenShardId;
 
@@ -80,7 +88,8 @@ public class KinesisStreamsSourceEnumerator
             Configuration sourceConfig,
             StreamProxy streamProxy,
             KinesisShardAssigner shardAssigner,
-            KinesisStreamsSourceEnumeratorState state) {
+            KinesisStreamsSourceEnumeratorState state,
+            boolean preserveShardOrder) {
         this.context = context;
         this.streamArn = streamArn;
         this.sourceConfig = sourceConfig;
@@ -89,23 +98,23 @@ public class KinesisStreamsSourceEnumerator
         this.shardAssignerContext = new ShardAssignerContext(splitAssignment, context);
         if (state == null) {
             this.lastSeenShardId = null;
-            this.unassignedSplits = new HashSet<>();
+            this.splitTracker = new SplitTracker(preserveShardOrder);
         } else {
             this.lastSeenShardId = state.getLastSeenShardId();
-            this.unassignedSplits = state.getUnassignedSplits();
+            this.splitTracker = new SplitTracker(preserveShardOrder, state.getKnownSplits());
         }
     }
 
     @Override
     public void start() {
         if (lastSeenShardId == null) {
-            context.callAsync(this::initialDiscoverSplits, this::assignSplits);
+            context.callAsync(this::initialDiscoverSplits, this::processDiscoveredSplits);
         }
 
         final long shardDiscoveryInterval = sourceConfig.get(SHARD_DISCOVERY_INTERVAL_MILLIS);
         context.callAsync(
                 this::periodicallyDiscoverSplits,
-                this::assignSplits,
+                this::processDiscoveredSplits,
                 shardDiscoveryInterval,
                 shardDiscoveryInterval);
     }
@@ -116,24 +125,28 @@ public class KinesisStreamsSourceEnumerator
     }
 
     @Override
+    public void handleSourceEvent(int subtaskId, SourceEvent sourceEvent) {
+        if (sourceEvent instanceof SplitsFinishedEvent) {
+            handleFinishedSplits(subtaskId, (SplitsFinishedEvent) sourceEvent);
+        }
+    }
+
+    private void handleFinishedSplits(int subtask, SplitsFinishedEvent splitsFinishedEvent) {
+        splitTracker.markAsFinished(splitsFinishedEvent.getFinishedSplitIds());
+        splitAssignment
+                .get(subtask)
+                .removeIf(
+                        split ->
+                                splitsFinishedEvent
+                                        .getFinishedSplitIds()
+                                        .contains(split.splitId()));
+
+        assignSplits();
+    }
+
+    @Override
     public void addSplitsBack(List<KinesisShardSplit> splits, int subtaskId) {
-        if (!splitAssignment.containsKey(subtaskId)) {
-            LOG.warn(
-                    "Unable to add splits back for subtask {} since it is not assigned any splits. Splits: {}",
-                    subtaskId,
-                    splits);
-            return;
-        }
-
-        for (KinesisShardSplit split : splits) {
-            splitAssignment.get(subtaskId).remove(split);
-            assignedSplitIds.remove(split.splitId());
-            unassignedSplits.add(split);
-        }
-
-        // Assign the unassignedSplits
-        // We did not discover any new splits, so we put in an empty list
-        assignSplits(Collections.emptyList(), null);
+        throw new UnsupportedOperationException("Partial recovery is not supported");
     }
 
     @Override
@@ -143,7 +156,9 @@ public class KinesisStreamsSourceEnumerator
 
     @Override
     public KinesisStreamsSourceEnumeratorState snapshotState(long checkpointId) throws Exception {
-        return new KinesisStreamsSourceEnumeratorState(unassignedSplits, lastSeenShardId);
+        List<KinesisShardSplitWithAssignmentStatus> splitStates =
+                splitTracker.snapshotState(checkpointId);
+        return new KinesisStreamsSourceEnumeratorState(splitStates, lastSeenShardId);
     }
 
     @Override
@@ -151,9 +166,91 @@ public class KinesisStreamsSourceEnumerator
         streamProxy.close();
     }
 
-    private List<KinesisShardSplit> initialDiscoverSplits() {
-        List<Shard> shards = streamProxy.listShards(streamArn, lastSeenShardId);
-        return mapToSplits(shards, sourceConfig.get(STREAM_INITIAL_POSITION));
+    @VisibleForTesting
+    List<KinesisShardSplit> initialDiscoverSplits() {
+        StreamDescriptionSummary streamDescriptionSummary =
+                streamProxy.getStreamDescriptionSummary(streamArn);
+        InitialPosition initialPosition = sourceConfig.get(STREAM_INITIAL_POSITION);
+        Instant currentTimestamp = Instant.now();
+        Optional<Instant> initialTimestamp = parseStreamTimestampStartingPosition(sourceConfig);
+
+        ListShardsStartingPosition shardDiscoveryStartingPosition =
+                getInitialPositionForShardDiscovery(initialPosition, currentTimestamp);
+        StartingPosition initialStartingPosition =
+                getInitialStartingPosition(initialPosition, currentTimestamp);
+
+        List<Shard> shards;
+        try {
+            shards = streamProxy.listShards(streamArn, shardDiscoveryStartingPosition);
+        } catch (InvalidArgumentException e) {
+            // If initial timestamp is older than retention period of the stream,
+            // fall back to TRIM_HORIZON for shard discovery
+            Instant trimHorizonTimestamp =
+                    Instant.now()
+                            .minus(
+                                    streamDescriptionSummary.retentionPeriodHours(),
+                                    ChronoUnit.HOURS);
+            boolean isInitialTimestampBeforeTrimHorizon =
+                    initialTimestamp.map(trimHorizonTimestamp::isAfter).orElse(false);
+            if (initialPosition.equals(InitialPosition.AT_TIMESTAMP)
+                    && isInitialTimestampBeforeTrimHorizon) {
+                LOG.warn(
+                        "Configured initial position timestamp is before stream TRIM_HORIZON. Falling back to TRIM_HORIZON");
+                shards = streamProxy.listShards(streamArn, ListShardsStartingPosition.fromStart());
+            } else {
+                throw new KinesisStreamsSourceException("Unable to list shards", e);
+            }
+        }
+
+        return mapToSplits(shards, initialStartingPosition);
+    }
+
+    @VisibleForTesting
+    ListShardsStartingPosition getInitialPositionForShardDiscovery(
+            InitialPosition initialPosition, Instant currentTime) {
+        switch (initialPosition) {
+            case LATEST:
+                return ListShardsStartingPosition.fromTimestamp(currentTime);
+            case AT_TIMESTAMP:
+                Instant timestamp =
+                        parseStreamTimestampStartingPosition(sourceConfig)
+                                .orElseThrow(
+                                        () ->
+                                                new IllegalArgumentException(
+                                                        "Stream initial timestamp must be specified when initial position set to AT_TIMESTAMP"));
+                return ListShardsStartingPosition.fromTimestamp(timestamp);
+            case TRIM_HORIZON:
+                return ListShardsStartingPosition.fromStart();
+        }
+
+        throw new IllegalArgumentException(
+                "Unsupported initial position configuration " + initialPosition);
+    }
+
+    @VisibleForTesting
+    StartingPosition getInitialStartingPosition(
+            InitialPosition initialPosition, Instant currentTime) {
+        switch (initialPosition) {
+            case LATEST:
+                // If LATEST is requested, we still set the starting position to the time of
+                // startup. This way, the job starts reading from a deterministic timestamp
+                // (i.e. time of job submission), even if it enters a restart loop immediately
+                // after submission.
+                return StartingPosition.fromTimestamp(currentTime);
+            case AT_TIMESTAMP:
+                Instant timestamp =
+                        parseStreamTimestampStartingPosition(sourceConfig)
+                                .orElseThrow(
+                                        () ->
+                                                new IllegalArgumentException(
+                                                        "Stream initial timestamp must be specified when initial position set to AT_TIMESTAMP"));
+                return StartingPosition.fromTimestamp(timestamp);
+            case TRIM_HORIZON:
+                return StartingPosition.fromStart();
+        }
+
+        throw new IllegalArgumentException(
+                "Unsupported initial position configuration " + initialPosition);
     }
 
     /**
@@ -163,36 +260,29 @@ public class KinesisStreamsSourceEnumerator
      * @return list of discovered splits
      */
     private List<KinesisShardSplit> periodicallyDiscoverSplits() {
-        List<Shard> shards = streamProxy.listShards(streamArn, lastSeenShardId);
+        List<Shard> shards =
+                streamProxy.listShards(
+                        streamArn, ListShardsStartingPosition.fromShardId(lastSeenShardId));
         // Any shard discovered after the initial startup should be read from the start, since they
         // come from resharding
-        return mapToSplits(shards, InitialPosition.TRIM_HORIZON);
+        return mapToSplits(shards, StartingPosition.fromStart());
     }
 
     private List<KinesisShardSplit> mapToSplits(
-            List<Shard> shards, InitialPosition initialPosition) {
-        StartingPosition startingPosition;
-        switch (initialPosition) {
-            case LATEST:
-                // If LATEST is requested, we still set the starting position to the time of
-                // startup. This way, the job starts reading from a deterministic timestamp
-                // (i.e. time of job submission), even if it enters a restart loop immediately
-                // after submission.
-                startingPosition = StartingPosition.fromTimestamp(Instant.now());
-                break;
-            case AT_TIMESTAMP:
-                startingPosition =
-                        StartingPosition.fromTimestamp(
-                                parseStreamTimestampStartingPosition(sourceConfig).toInstant());
-                break;
-            case TRIM_HORIZON:
-            default:
-                startingPosition = StartingPosition.fromStart();
-        }
+            List<Shard> shards, StartingPosition startingPosition) {
 
         List<KinesisShardSplit> splits = new ArrayList<>();
         for (Shard shard : shards) {
-            splits.add(new KinesisShardSplit(streamArn, shard.shardId(), startingPosition));
+            Set<String> parentShardIds = new HashSet<>();
+            if (shard.parentShardId() != null) {
+                parentShardIds.add(shard.parentShardId());
+            }
+            if (shard.adjacentParentShardId() != null) {
+                parentShardIds.add(shard.adjacentParentShardId());
+            }
+            splits.add(
+                    new KinesisShardSplit(
+                            streamArn, shard.shardId(), startingPosition, parentShardIds));
         }
 
         return splits;
@@ -206,37 +296,39 @@ public class KinesisStreamsSourceEnumerator
      * @param discoveredSplits list of discovered splits
      * @param throwable thrown when discovering splits. Will be null if no throwable thrown.
      */
-    private void assignSplits(List<KinesisShardSplit> discoveredSplits, Throwable throwable) {
+    private void processDiscoveredSplits(
+            List<KinesisShardSplit> discoveredSplits, Throwable throwable) {
         if (throwable != null) {
             throw new KinesisStreamsSourceException("Failed to list shards.", throwable);
         }
+
+        splitTracker.addSplits(discoveredSplits);
+        updateLastSeenShardId(discoveredSplits);
 
         if (context.registeredReaders().size() < context.currentParallelism()) {
             LOG.info(
                     "Insufficient registered readers, skipping assignment of discovered splits until all readers are registered. Required number of readers: {}, Registered readers: {}",
                     context.currentParallelism(),
                     context.registeredReaders().size());
-            unassignedSplits.addAll(discoveredSplits);
             return;
         }
 
+        assignSplits();
+    }
+
+    private void assignSplits() {
         Map<Integer, List<KinesisShardSplit>> newSplitAssignments = new HashMap<>();
-        for (KinesisShardSplit split : unassignedSplits) {
-            assignSplitToSubtask(split, newSplitAssignments);
-        }
-        unassignedSplits.clear();
-        for (KinesisShardSplit split : discoveredSplits) {
+        for (KinesisShardSplit split : splitTracker.splitsAvailableForAssignment()) {
             assignSplitToSubtask(split, newSplitAssignments);
         }
 
-        updateLastSeenShardId(discoveredSplits);
         updateSplitAssignment(newSplitAssignments);
         context.assignSplits(new SplitsAssignment<>(newSplitAssignments));
     }
 
     private void assignSplitToSubtask(
             KinesisShardSplit split, Map<Integer, List<KinesisShardSplit>> newSplitAssignments) {
-        if (assignedSplitIds.contains(split.splitId())) {
+        if (splitTracker.isAssigned(split.splitId())) {
             LOG.info(
                     "Skipping assignment of shard {} from stream {} because it is already assigned.",
                     split.getShardId(),
@@ -261,7 +353,7 @@ public class KinesisStreamsSourceEnumerator
             subtaskList.add(split);
             newSplitAssignments.put(selectedSubtask, subtaskList);
         }
-        assignedSplitIds.add(split.splitId());
+        splitTracker.markAsAssigned(Collections.singletonList(split));
     }
 
     private void updateLastSeenShardId(List<KinesisShardSplit> discoveredSplits) {

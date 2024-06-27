@@ -18,10 +18,12 @@
 
 package org.apache.flink.connector.kinesis.source.reader;
 
+import org.apache.flink.api.connector.source.SourceEvent;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.fetcher.SingleThreadFetcherManager;
 import org.apache.flink.connector.base.source.reader.synchronization.FutureCompletingBlockingQueue;
+import org.apache.flink.connector.kinesis.source.event.SplitsFinishedEvent;
 import org.apache.flink.connector.kinesis.source.metrics.KinesisShardMetrics;
 import org.apache.flink.connector.kinesis.source.model.TestData;
 import org.apache.flink.connector.kinesis.source.proxy.StreamProxy;
@@ -29,6 +31,7 @@ import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplitState;
 import org.apache.flink.connector.kinesis.source.util.KinesisContextProvider;
 import org.apache.flink.connector.kinesis.source.util.TestUtil;
+import org.apache.flink.connector.testutils.source.reader.TestingReaderContext;
 import org.apache.flink.metrics.testutils.MetricListener;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +41,7 @@ import software.amazon.awssdk.services.kinesis.model.Record;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
@@ -47,6 +51,7 @@ import static org.apache.flink.connector.kinesis.source.util.TestUtil.getTestSpl
 import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
 
 class KinesisStreamsSourceReaderTest {
+    private TestingReaderContext testingReaderContext;
     private KinesisStreamsSourceReader<TestData> sourceReader;
     private MetricListener metricListener;
     private Map<String, KinesisShardMetrics> shardMetricGroupMap;
@@ -62,14 +67,17 @@ class KinesisStreamsSourceReaderTest {
         FutureCompletingBlockingQueue<RecordsWithSplitIds<Record>> elementsQueue =
                 new FutureCompletingBlockingQueue<>();
 
+        testingReaderContext =
+                KinesisContextProvider.KinesisTestingContext.getKinesisTestingContext(
+                        metricListener);
         sourceReader =
                 new KinesisStreamsSourceReader<>(
                         elementsQueue,
-                        new SingleThreadFetcherManager<>(elementsQueue, splitReaderSupplier::get),
+                        new SingleThreadFetcherManager<>(
+                                elementsQueue, splitReaderSupplier::get, new Configuration()),
                         new KinesisStreamsRecordEmitter<>(null),
                         new Configuration(),
-                        KinesisContextProvider.KinesisTestingContext.getKinesisTestingContext(
-                                metricListener),
+                        testingReaderContext,
                         shardMetricGroupMap);
     }
 
@@ -88,6 +96,25 @@ class KinesisStreamsSourceReaderTest {
         assertThat(sourceReader.toSplitType(splitId, splitState))
                 .usingRecursiveComparison()
                 .isEqualTo(splitState.getKinesisShardSplit());
+    }
+
+    @Test
+    void testOnSplitFinishedEventSent() {
+        KinesisShardSplit split = getTestSplit();
+
+        testingReaderContext.clearSentEvents();
+
+        sourceReader.onSplitFinished(
+                Collections.singletonMap(split.splitId(), new KinesisShardSplitState(split)));
+
+        List<SourceEvent> events = testingReaderContext.getSentEvents();
+
+        Set<String> expectedSplitIds = Collections.singleton(split.splitId());
+        assertThat(events)
+                .singleElement()
+                .isInstanceOf(SplitsFinishedEvent.class)
+                .usingRecursiveComparison()
+                .isEqualTo(new SplitsFinishedEvent(expectedSplitIds));
     }
 
     @Test

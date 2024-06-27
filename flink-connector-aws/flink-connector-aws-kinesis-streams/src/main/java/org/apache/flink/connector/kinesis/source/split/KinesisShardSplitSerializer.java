@@ -19,6 +19,7 @@
 package org.apache.flink.connector.kinesis.source.split;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
 import org.apache.flink.core.io.VersionMismatchException;
 
@@ -30,6 +31,9 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Serializes and deserializes the {@link KinesisShardSplit}. This class needs to handle
@@ -38,7 +42,8 @@ import java.time.Instant;
 @Internal
 public class KinesisShardSplitSerializer implements SimpleVersionedSerializer<KinesisShardSplit> {
 
-    private static final int CURRENT_VERSION = 0;
+    private static final int CURRENT_VERSION = 1;
+    private static final Set<Integer> COMPATIBLE_VERSIONS = new HashSet<>(Arrays.asList(0, 1));
 
     @Override
     public int getVersion() {
@@ -47,6 +52,39 @@ public class KinesisShardSplitSerializer implements SimpleVersionedSerializer<Ki
 
     @Override
     public byte[] serialize(KinesisShardSplit split) throws IOException {
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                DataOutputStream out = new DataOutputStream(baos)) {
+
+            out.writeUTF(split.getStreamArn());
+            out.writeUTF(split.getShardId());
+            out.writeUTF(split.getStartingPosition().getShardIteratorType().toString());
+            if (split.getStartingPosition().getStartingMarker() == null) {
+                out.writeBoolean(false);
+            } else {
+                out.writeBoolean(true);
+                Object startingMarker = split.getStartingPosition().getStartingMarker();
+                out.writeBoolean(startingMarker instanceof Instant);
+                if (startingMarker instanceof Instant) {
+                    out.writeLong(((Instant) startingMarker).toEpochMilli());
+                }
+                out.writeBoolean(startingMarker instanceof String);
+                if (startingMarker instanceof String) {
+                    out.writeUTF((String) startingMarker);
+                }
+            }
+            out.writeInt(split.getParentShardIds().size());
+            for (String parentShardId : split.getParentShardIds()) {
+                out.writeUTF(parentShardId);
+            }
+
+            out.flush();
+            return baos.toByteArray();
+        }
+    }
+
+    /** This method used only to test backwards compatibility of deserialization logic. */
+    @VisibleForTesting
+    byte[] serializeV0(KinesisShardSplit split) throws IOException {
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 DataOutputStream out = new DataOutputStream(baos)) {
 
@@ -76,7 +114,7 @@ public class KinesisShardSplitSerializer implements SimpleVersionedSerializer<Ki
     public KinesisShardSplit deserialize(int version, byte[] serialized) throws IOException {
         try (ByteArrayInputStream bais = new ByteArrayInputStream(serialized);
                 DataInputStream in = new DataInputStream(bais)) {
-            if (version != getVersion()) {
+            if (!COMPATIBLE_VERSIONS.contains(version)) {
                 throw new VersionMismatchException(
                         "Trying to deserialize KinesisShardSplit serialized with unsupported version "
                                 + version
@@ -99,8 +137,19 @@ public class KinesisShardSplitSerializer implements SimpleVersionedSerializer<Ki
                 }
             }
 
+            Set<String> parentShardIds = new HashSet<>();
+            if (version == CURRENT_VERSION) {
+                int parentShardCount = in.readInt();
+                for (int i = 0; i < parentShardCount; i++) {
+                    parentShardIds.add(in.readUTF());
+                }
+            }
+
             return new KinesisShardSplit(
-                    streamArn, shardId, new StartingPosition(shardIteratorType, startingMarker));
+                    streamArn,
+                    shardId,
+                    new StartingPosition(shardIteratorType, startingMarker),
+                    parentShardIds);
         }
     }
 }

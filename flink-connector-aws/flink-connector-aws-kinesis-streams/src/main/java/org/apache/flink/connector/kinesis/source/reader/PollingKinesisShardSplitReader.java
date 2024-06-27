@@ -28,8 +28,11 @@ import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplitState;
 import org.apache.flink.connector.kinesis.source.split.StartingPosition;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.awssdk.services.kinesis.model.Record;
+import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 
 import javax.annotation.Nullable;
 
@@ -49,6 +52,7 @@ import static java.util.Collections.singleton;
  */
 @Internal
 public class PollingKinesisShardSplitReader implements SplitReader<Record, KinesisShardSplit> {
+    private static final Logger LOG = LoggerFactory.getLogger(PollingKinesisShardSplitReader.class);
 
     private static final RecordsWithSplitIds<Record> INCOMPLETE_SHARD_EMPTY_RECORDS =
             new KinesisRecordsWithSplitIds(Collections.emptyIterator(), null, false);
@@ -70,11 +74,20 @@ public class PollingKinesisShardSplitReader implements SplitReader<Record, Kines
             return INCOMPLETE_SHARD_EMPTY_RECORDS;
         }
 
-        GetRecordsResponse getRecordsResponse =
-                kinesis.getRecords(
-                        splitState.getStreamArn(),
-                        splitState.getShardId(),
-                        splitState.getNextStartingPosition());
+        GetRecordsResponse getRecordsResponse;
+        try {
+            getRecordsResponse =
+                    kinesis.getRecords(
+                            splitState.getStreamArn(),
+                            splitState.getShardId(),
+                            splitState.getNextStartingPosition());
+        } catch (ResourceNotFoundException e) {
+            LOG.warn(
+                    "Failed to fetch records from shard {}: shard no longer exists. Marking split as complete",
+                    splitState.getSplitId());
+            return new KinesisRecordsWithSplitIds(
+                    Collections.emptyIterator(), splitState.getSplitId(), true);
+        }
         boolean isComplete = getRecordsResponse.nextShardIterator() == null;
 
         shardMetricGroupMap
