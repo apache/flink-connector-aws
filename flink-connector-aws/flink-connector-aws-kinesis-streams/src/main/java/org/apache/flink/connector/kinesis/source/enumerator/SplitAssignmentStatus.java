@@ -20,30 +20,31 @@ package org.apache.flink.connector.kinesis.source.enumerator;
 
 import org.apache.flink.annotation.Internal;
 
-import javax.annotation.Nullable;
-
-import java.util.List;
-
 /**
- * State for the {@link KinesisStreamsSourceEnumerator}. This class is stored in state, so any
- * changes need to be backwards compatible
+ * Assignment status of {@link org.apache.flink.connector.kinesis.source.split.KinesisShardSplit}.
  */
 @Internal
-public class KinesisStreamsSourceEnumeratorState {
-    private final List<KinesisShardSplitWithAssignmentStatus> knownSplits;
-    @Nullable private final String lastSeenShardId;
+public enum SplitAssignmentStatus {
+    ASSIGNED(0),
+    UNASSIGNED(1);
 
-    public KinesisStreamsSourceEnumeratorState(
-            List<KinesisShardSplitWithAssignmentStatus> knownSplits, String lastSeenShardId) {
-        this.knownSplits = knownSplits;
-        this.lastSeenShardId = lastSeenShardId;
+    private final int statusCode;
+
+    SplitAssignmentStatus(int statusCode) {
+        this.statusCode = statusCode;
     }
 
-    public String getLastSeenShardId() {
-        return lastSeenShardId;
+    public int getStatusCode() {
+        return statusCode;
     }
 
-    public List<KinesisShardSplitWithAssignmentStatus> getKnownSplits() {
-        return knownSplits;
+    public static SplitAssignmentStatus fromStatusCode(int statusCode) {
+        for (SplitAssignmentStatus status : SplitAssignmentStatus.values()) {
+            if (status.getStatusCode() == statusCode) {
+                return status;
+            }
+        }
+
+        throw new IllegalArgumentException("Unknown status code: " + statusCode);
     }
 }

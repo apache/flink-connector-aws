@@ -32,7 +32,9 @@ import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.kinesis.model.Record;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -65,12 +67,24 @@ public class TestUtil {
         return getTestSplit(STREAM_ARN, shardId);
     }
 
+    public static KinesisShardSplit getTestSplit(String shardId, Set<String> parentShards) {
+        return getTestSplit(STREAM_ARN, shardId, parentShards);
+    }
+
     public static KinesisShardSplit getTestSplit(String streamArn, String shardId) {
-        return new KinesisShardSplit(streamArn, shardId, StartingPosition.fromStart());
+        return new KinesisShardSplit(
+                streamArn, shardId, StartingPosition.fromStart(), Collections.emptySet());
+    }
+
+    public static KinesisShardSplit getTestSplit(
+            String streamArn, String shardId, Set<String> parentShards) {
+        return new KinesisShardSplit(
+                streamArn, shardId, StartingPosition.fromStart(), parentShards);
     }
 
     public static KinesisShardSplit getTestSplit(StartingPosition startingPosition) {
-        return new KinesisShardSplit(STREAM_ARN, SHARD_ID, startingPosition);
+        return new KinesisShardSplit(
+                STREAM_ARN, SHARD_ID, startingPosition, Collections.emptySet());
     }
 
     public static ReaderInfo getTestReaderInfo(final int subtaskId) {

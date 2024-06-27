@@ -19,6 +19,7 @@
 package org.apache.flink.connector.kinesis.source.enumerator;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplitSerializer;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
@@ -29,7 +30,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /** Used to serialize and deserialize the {@link KinesisStreamsSourceEnumeratorState}. */
@@ -37,7 +41,8 @@ import java.util.Set;
 public class KinesisStreamsSourceEnumeratorStateSerializer
         implements SimpleVersionedSerializer<KinesisStreamsSourceEnumeratorState> {
 
-    private static final int CURRENT_VERSION = 0;
+    private static final Set<Integer> COMPATIBLE_VERSIONS = new HashSet<>(Arrays.asList(0, 1));
+    private static final int CURRENT_VERSION = 1;
 
     private final KinesisShardSplitSerializer splitSerializer;
 
@@ -64,10 +69,39 @@ public class KinesisStreamsSourceEnumeratorStateSerializer
                 out.writeUTF(kinesisStreamsSourceEnumeratorState.getLastSeenShardId());
             }
 
-            out.writeInt(kinesisStreamsSourceEnumeratorState.getUnassignedSplits().size());
+            out.writeInt(kinesisStreamsSourceEnumeratorState.getKnownSplits().size());
             out.writeInt(splitSerializer.getVersion());
-            for (KinesisShardSplit split :
-                    kinesisStreamsSourceEnumeratorState.getUnassignedSplits()) {
+            for (KinesisShardSplitWithAssignmentStatus split :
+                    kinesisStreamsSourceEnumeratorState.getKnownSplits()) {
+                byte[] serializedSplit = splitSerializer.serialize(split.split());
+                out.writeInt(serializedSplit.length);
+                out.write(serializedSplit);
+                out.writeInt(split.assignmentStatus().getStatusCode());
+            }
+
+            out.flush();
+
+            return baos.toByteArray();
+        }
+    }
+
+    /** Used to test backwards compatibility of state. */
+    @VisibleForTesting
+    byte[] serializeV0(KinesisStreamsSourceEnumeratorStateV0 kinesisStreamsSourceEnumeratorState)
+            throws IOException {
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                DataOutputStream out = new DataOutputStream(baos)) {
+
+            boolean hasLastSeenShardId =
+                    kinesisStreamsSourceEnumeratorState.getLastSeenShardId() != null;
+            out.writeBoolean(hasLastSeenShardId);
+            if (hasLastSeenShardId) {
+                out.writeUTF(kinesisStreamsSourceEnumeratorState.getLastSeenShardId());
+            }
+
+            out.writeInt(kinesisStreamsSourceEnumeratorState.getKnownSplits().size());
+            out.writeInt(splitSerializer.getVersion());
+            for (KinesisShardSplit split : kinesisStreamsSourceEnumeratorState.getKnownSplits()) {
                 byte[] serializedSplit = splitSerializer.serialize(split);
                 out.writeInt(serializedSplit.length);
                 out.write(serializedSplit);
@@ -85,7 +119,7 @@ public class KinesisStreamsSourceEnumeratorStateSerializer
         try (ByteArrayInputStream bais = new ByteArrayInputStream(serializedEnumeratorState);
                 DataInputStream in = new DataInputStream(bais)) {
 
-            if (version != getVersion()) {
+            if (!COMPATIBLE_VERSIONS.contains(version)) {
                 throw new VersionMismatchException(
                         "Trying to deserialize KinesisStreamsSourceEnumeratorState serialized with unsupported version "
                                 + version
@@ -102,20 +136,23 @@ public class KinesisStreamsSourceEnumeratorStateSerializer
 
             final int numUnassignedSplits = in.readInt();
             final int splitSerializerVersion = in.readInt();
-            if (splitSerializerVersion != splitSerializer.getVersion()) {
-                throw new VersionMismatchException(
-                        "Trying to deserialize KinesisShardSplit serialized with unsupported version "
-                                + splitSerializerVersion
-                                + ". Serializer version is "
-                                + splitSerializer.getVersion());
-            }
-            Set<KinesisShardSplit> unassignedSplits = new HashSet<>(numUnassignedSplits);
+
+            List<KinesisShardSplitWithAssignmentStatus> knownSplits =
+                    new ArrayList<>(numUnassignedSplits);
             for (int i = 0; i < numUnassignedSplits; i++) {
                 int serializedLength = in.readInt();
                 byte[] serializedSplit = new byte[serializedLength];
                 if (in.read(serializedSplit) != -1) {
-                    unassignedSplits.add(
-                            splitSerializer.deserialize(splitSerializerVersion, serializedSplit));
+                    KinesisShardSplit deserializedSplit =
+                            splitSerializer.deserialize(splitSerializerVersion, serializedSplit);
+                    SplitAssignmentStatus assignmentStatus = SplitAssignmentStatus.UNASSIGNED;
+                    if (version == CURRENT_VERSION) {
+                        assignmentStatus = SplitAssignmentStatus.fromStatusCode(in.readInt());
+                    }
+                    knownSplits.add(
+                            new KinesisShardSplitWithAssignmentStatus(
+                                    deserializedSplit, assignmentStatus));
+
                 } else {
                     throw new IOException(
                             "Unexpectedly reading more bytes than is present in stream.");
@@ -126,7 +163,7 @@ public class KinesisStreamsSourceEnumeratorStateSerializer
                 throw new IOException("Unexpected trailing bytes when deserializing.");
             }
 
-            return new KinesisStreamsSourceEnumeratorState(unassignedSplits, lastSeenShardId);
+            return new KinesisStreamsSourceEnumeratorState(knownSplits, lastSeenShardId);
         }
     }
 }

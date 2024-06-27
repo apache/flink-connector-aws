@@ -16,34 +16,33 @@
  * limitations under the License.
  */
 
-package org.apache.flink.connector.kinesis.source.enumerator;
+package org.apache.flink.connector.kinesis.source.event;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.api.connector.source.SourceEvent;
 
-import javax.annotation.Nullable;
+import java.util.Set;
 
-import java.util.List;
-
-/**
- * State for the {@link KinesisStreamsSourceEnumerator}. This class is stored in state, so any
- * changes need to be backwards compatible
- */
+/** Source event used by source reader to communicate that splits are finished to enumerator. */
 @Internal
-public class KinesisStreamsSourceEnumeratorState {
-    private final List<KinesisShardSplitWithAssignmentStatus> knownSplits;
-    @Nullable private final String lastSeenShardId;
+public class SplitsFinishedEvent implements SourceEvent {
+    private static final long serialVersionUID = 1L;
 
-    public KinesisStreamsSourceEnumeratorState(
-            List<KinesisShardSplitWithAssignmentStatus> knownSplits, String lastSeenShardId) {
-        this.knownSplits = knownSplits;
-        this.lastSeenShardId = lastSeenShardId;
+    private final Set<String> finishedSplitIds;
+
+    public SplitsFinishedEvent(Set<String> finishedSplitIds) {
+        this.finishedSplitIds = finishedSplitIds;
     }
 
-    public String getLastSeenShardId() {
-        return lastSeenShardId;
+    public Set<String> getFinishedSplitIds() {
+        return finishedSplitIds;
     }
 
-    public List<KinesisShardSplitWithAssignmentStatus> getKnownSplits() {
-        return knownSplits;
+    @Override
+    public String toString() {
+        return "SplitsFinishedEvent{"
+                + "finishedSplitIds=["
+                + String.join(",", finishedSplitIds)
+                + "]}";
     }
 }

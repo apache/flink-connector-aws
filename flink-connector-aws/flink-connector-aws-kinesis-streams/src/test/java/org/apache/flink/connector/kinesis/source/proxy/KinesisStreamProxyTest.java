@@ -22,12 +22,14 @@ import org.apache.flink.connector.kinesis.source.split.StartingPosition;
 import org.apache.flink.connector.kinesis.source.util.KinesisClientProvider.ListShardItem;
 import org.apache.flink.connector.kinesis.source.util.KinesisClientProvider.TestingKinesisClient;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.NullAndEmptySource;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import software.amazon.awssdk.http.SdkHttpClient;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
+import software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryRequest;
+import software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryResponse;
 import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsRequest;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
@@ -36,7 +38,9 @@ import software.amazon.awssdk.services.kinesis.model.KinesisRequest;
 import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.services.kinesis.model.Shard;
+import software.amazon.awssdk.services.kinesis.model.ShardFilter;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
+import software.amazon.awssdk.services.kinesis.model.StreamDescriptionSummary;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -54,12 +58,47 @@ import static org.assertj.core.api.AssertionsForClassTypes.assertThatNoException
 class KinesisStreamProxyTest {
     private static final SdkHttpClient HTTP_CLIENT = ApacheHttpClient.builder().build();
 
+    private static final String STREAM_ARN =
+            "arn:aws:kinesis:us-east-1:123456789012:stream/stream-name";
+
+    private TestingKinesisClient testKinesisClient;
+    private KinesisStreamProxy kinesisStreamProxy;
+
+    @BeforeEach
+    public void setUp() {
+        testKinesisClient = new TestingKinesisClient();
+        kinesisStreamProxy = new KinesisStreamProxy(testKinesisClient, HTTP_CLIENT);
+    }
+
+    @Test
+    public void testDescribeStreamSummary() {
+        StreamDescriptionSummary streamDescriptionSummary =
+                StreamDescriptionSummary.builder()
+                        .streamARN(STREAM_ARN)
+                        .streamCreationTimestamp(Instant.now())
+                        .retentionPeriodHours(24)
+                        .build();
+        DescribeStreamSummaryResponse describeStreamSummaryResponse =
+                DescribeStreamSummaryResponse.builder()
+                        .streamDescriptionSummary(streamDescriptionSummary)
+                        .build();
+        testKinesisClient.setDescribeStreamSummaryResponse(describeStreamSummaryResponse);
+        testKinesisClient.setDescribeStreamSummaryRequestValidation(
+                request -> {
+                    DescribeStreamSummaryRequest expectedRequest =
+                            DescribeStreamSummaryRequest.builder().streamARN(STREAM_ARN).build();
+                    assertThat(request).isEqualTo(expectedRequest);
+                });
+
+        StreamDescriptionSummary response =
+                kinesisStreamProxy.getStreamDescriptionSummary(STREAM_ARN);
+
+        assertThat(response).isEqualTo(streamDescriptionSummary);
+    }
+
     @ParameterizedTest
-    @NullAndEmptySource
-    @ValueSource(strings = {"shardId-000000000002"})
-    void testListShardsSingleCall(String lastSeenShardId) {
-        final String streamArn =
-                "arn:aws:kinesis:us-east-1:123456789012:stream/LoadTestBeta_Input_0";
+    @MethodSource("provideListShardStartingPosition")
+    void testListShardsSingleCall(final ListShardsStartingPosition startingPosition) {
         final List<Shard> expectedShards = getTestShards(0, 3);
 
         List<ListShardItem> listShardItems =
@@ -67,66 +106,67 @@ class KinesisStreamProxyTest {
                         ListShardItem.builder()
                                 .validation(
                                         getListShardRequestValidation(
-                                                streamArn, lastSeenShardId, null))
+                                                STREAM_ARN,
+                                                startingPosition.getShardFilter(),
+                                                null))
                                 .shards(expectedShards)
                                 .nextToken(null)
                                 .build());
-        TestingKinesisClient testKinesisClient = new TestingKinesisClient();
         testKinesisClient.setListShardsResponses(listShardItems);
 
-        KinesisStreamProxy kinesisStreamProxy =
-                new KinesisStreamProxy(testKinesisClient, HTTP_CLIENT);
-
-        assertThat(kinesisStreamProxy.listShards(streamArn, lastSeenShardId))
+        assertThat(kinesisStreamProxy.listShards(STREAM_ARN, startingPosition))
                 .isEqualTo(expectedShards);
+    }
+
+    private static Stream<ListShardsStartingPosition> provideListShardStartingPosition() {
+        return Stream.of(
+                ListShardsStartingPosition.fromStart(),
+                ListShardsStartingPosition.fromTimestamp(Instant.ofEpochSecond(1720622954)),
+                ListShardsStartingPosition.fromShardId(generateShardId(12)));
     }
 
     @Test
     void testListShardsMultipleCalls() {
-        final String streamArn =
-                "arn:aws:kinesis:us-east-1:123456789012:stream/LoadTestBeta_Input_0";
         final String lastSeenShardId = "shardId-000000000000";
         final List<Shard> expectedShards = getTestShards(0, 3);
 
+        ListShardsStartingPosition startingPosition =
+                ListShardsStartingPosition.fromShardId(lastSeenShardId);
         List<ListShardItem> listShardItems =
                 Stream.of(
                                 ListShardItem.builder()
                                         .validation(
                                                 getListShardRequestValidation(
-                                                        streamArn, lastSeenShardId, null))
+                                                        STREAM_ARN,
+                                                        startingPosition.getShardFilter(),
+                                                        null))
                                         .shards(expectedShards.subList(0, 1))
                                         .nextToken("next-token-1")
                                         .build(),
                                 ListShardItem.builder()
                                         .validation(
                                                 getListShardRequestValidation(
-                                                        streamArn, null, "next-token-1"))
+                                                        STREAM_ARN, null, "next-token-1"))
                                         .shards(expectedShards.subList(1, 2))
                                         .nextToken("next-token-2")
                                         .build(),
                                 ListShardItem.builder()
                                         .validation(
                                                 getListShardRequestValidation(
-                                                        streamArn, null, "next-token-2"))
+                                                        STREAM_ARN, null, "next-token-2"))
                                         .shards(expectedShards.subList(2, 4))
                                         .nextToken(null)
                                         .build())
                         .collect(Collectors.toList());
 
-        TestingKinesisClient testKinesisClient = new TestingKinesisClient();
         testKinesisClient.setListShardsResponses(listShardItems);
 
-        KinesisStreamProxy kinesisStreamProxy =
-                new KinesisStreamProxy(testKinesisClient, HTTP_CLIENT);
-
-        assertThat(kinesisStreamProxy.listShards(streamArn, lastSeenShardId))
+        assertThat(kinesisStreamProxy.listShards(STREAM_ARN, startingPosition))
                 .isEqualTo(expectedShards);
     }
 
     @Test
     void testGetRecordsInitialReadFromTrimHorizon() {
-        final String streamArn =
-                "arn:aws:kinesis:us-east-1:123456789012:stream/LoadTestBeta_Input_0";
         final String shardId = "shardId-000000000002";
         final StartingPosition startingPosition = StartingPosition.fromStart();
 
@@ -137,12 +177,11 @@ class KinesisStreamProxyTest {
                         .nextShardIterator("next-iterator")
                         .build();
 
-        TestingKinesisClient testKinesisClient = new TestingKinesisClient();
         testKinesisClient.setNextShardIterator(expectedShardIterator);
         testKinesisClient.setShardIteratorValidation(
                 validateEqual(
                         GetShardIteratorRequest.builder()
-                                .streamARN(streamArn)
+                                .streamARN(STREAM_ARN)
                                 .shardId(shardId)
                                 .shardIteratorType(ShardIteratorType.TRIM_HORIZON)
                                 .build()));
@@ -150,21 +189,16 @@ class KinesisStreamProxyTest {
         testKinesisClient.setGetRecordsValidation(
                 validateEqual(
                         GetRecordsRequest.builder()
-                                .streamARN(streamArn)
+                                .streamARN(STREAM_ARN)
                                 .shardIterator(expectedShardIterator)
                                 .build()));
 
-        KinesisStreamProxy kinesisStreamProxy =
-                new KinesisStreamProxy(testKinesisClient, HTTP_CLIENT);
-
-        assertThat(kinesisStreamProxy.getRecords(streamArn, shardId, startingPosition))
+        assertThat(kinesisStreamProxy.getRecords(STREAM_ARN, shardId, startingPosition))
                 .isEqualTo(expectedGetRecordsResponse);
     }
 
     @Test
     void testGetRecordsInitialReadFromTimestamp() {
-        final String streamArn =
-                "arn:aws:kinesis:us-east-1:123456789012:stream/LoadTestBeta_Input_0";
         final String shardId = "shardId-000000000002";
         final Instant timestamp = Instant.now();
         final StartingPosition startingPosition = StartingPosition.fromTimestamp(timestamp);
@@ -176,12 +210,11 @@ class KinesisStreamProxyTest {
                         .nextShardIterator("next-iterator")
                         .build();
 
-        TestingKinesisClient testKinesisClient = new TestingKinesisClient();
         testKinesisClient.setNextShardIterator(expectedShardIterator);
         testKinesisClient.setShardIteratorValidation(
                 validateEqual(
                         GetShardIteratorRequest.builder()
-                                .streamARN(streamArn)
+                                .streamARN(STREAM_ARN)
                                 .shardId(shardId)
                                 .shardIteratorType(ShardIteratorType.AT_TIMESTAMP)
                                 .timestamp(timestamp)
@@ -190,21 +223,16 @@ class KinesisStreamProxyTest {
         testKinesisClient.setGetRecordsValidation(
                 validateEqual(
                         GetRecordsRequest.builder()
-                                .streamARN(streamArn)
+                                .streamARN(STREAM_ARN)
                                 .shardIterator(expectedShardIterator)
                                 .build()));
 
-        KinesisStreamProxy kinesisStreamProxy =
-                new KinesisStreamProxy(testKinesisClient, HTTP_CLIENT);
-
-        assertThat(kinesisStreamProxy.getRecords(streamArn, shardId, startingPosition))
+        assertThat(kinesisStreamProxy.getRecords(STREAM_ARN, shardId, startingPosition))
                 .isEqualTo(expectedGetRecordsResponse);
     }
 
     @Test
     void testGetRecordsInitialReadFromSequenceNumber() {
-        final String streamArn =
-                "arn:aws:kinesis:us-east-1:123456789012:stream/LoadTestBeta_Input_0";
         final String shardId = "shardId-000000000002";
         final String sequenceNumber = "some-sequence-number";
         final StartingPosition startingPosition =
@@ -217,12 +245,11 @@ class KinesisStreamProxyTest {
                         .nextShardIterator("next-iterator")
                         .build();
 
-        TestingKinesisClient testKinesisClient = new TestingKinesisClient();
         testKinesisClient.setNextShardIterator(expectedShardIterator);
         testKinesisClient.setShardIteratorValidation(
                 validateEqual(
                         GetShardIteratorRequest.builder()
-                                .streamARN(streamArn)
+                                .streamARN(STREAM_ARN)
                                 .shardId(shardId)
                                 .shardIteratorType(ShardIteratorType.AFTER_SEQUENCE_NUMBER)
                                 .startingSequenceNumber(sequenceNumber)
@@ -231,14 +258,11 @@ class KinesisStreamProxyTest {
         testKinesisClient.setGetRecordsValidation(
                 validateEqual(
                         GetRecordsRequest.builder()
-                                .streamARN(streamArn)
+                                .streamARN(STREAM_ARN)
                                 .shardIterator(expectedShardIterator)
                                 .build()));
 
-        KinesisStreamProxy kinesisStreamProxy =
-                new KinesisStreamProxy(testKinesisClient, HTTP_CLIENT);
-
-        assertThat(kinesisStreamProxy.getRecords(streamArn, shardId, startingPosition))
+        assertThat(kinesisStreamProxy.getRecords(STREAM_ARN, shardId, startingPosition))
                 .isEqualTo(expectedGetRecordsResponse);
     }
 
@@ -261,10 +285,6 @@ class KinesisStreamProxyTest {
                         .records(Record.builder().build())
                         .nextShardIterator("third-shard-iterator")
                         .build();
-
-        TestingKinesisClient testKinesisClient = new TestingKinesisClient();
-        KinesisStreamProxy kinesisStreamProxy =
-                new KinesisStreamProxy(testKinesisClient, HTTP_CLIENT);
 
         // When read for the first time
         testKinesisClient.setNextShardIterator(firstShardIterator);
@@ -308,8 +328,6 @@ class KinesisStreamProxyTest {
 
     @Test
     void testGetRecordsEagerlyRetriesExpiredIterators() {
-        final String streamArn =
-                "arn:aws:kinesis:us-east-1:123456789012:stream/LoadTestBeta_Input_0";
         final String shardId = "shardId-000000000002";
         final StartingPosition startingPosition = StartingPosition.fromStart();
 
@@ -320,10 +338,6 @@ class KinesisStreamProxyTest {
                         .records(Record.builder().build())
                         .nextShardIterator(secondShardIterator)
                         .build();
-
-        TestingKinesisClient testKinesisClient = new TestingKinesisClient();
-        KinesisStreamProxy kinesisStreamProxy =
-                new KinesisStreamProxy(testKinesisClient, HTTP_CLIENT);
 
         // When expired shard iterator is thrown on the first GetRecords() call
         AtomicBoolean firstGetRecordsCall = new AtomicBoolean(true);
@@ -340,21 +354,19 @@ class KinesisStreamProxyTest {
                     // Then getRecords called with second shard iterator
                     validateEqual(
                             GetRecordsRequest.builder()
-                                    .streamARN(streamArn)
+                                    .streamARN(STREAM_ARN)
                                     .shardIterator(secondShardIterator)
                                     .build());
                 });
 
         // Then getRecords called with second shard iterator
-        assertThat(kinesisStreamProxy.getRecords(streamArn, shardId, startingPosition))
+        assertThat(kinesisStreamProxy.getRecords(STREAM_ARN, shardId, startingPosition))
                 .isEqualTo(getRecordsResponse);
         assertThat(firstGetRecordsCall.get()).isFalse();
     }
 
     @Test
     void testGetRecordsHandlesCompletedShard() {
-        final String streamArn =
-                "arn:aws:kinesis:us-east-1:123456789012:stream/LoadTestBeta_Input_0";
         final String shardId = "shardId-000000000002";
         final String sequenceNumber = "some-sequence-number";
         final StartingPosition startingPosition =
@@ -365,12 +377,11 @@ class KinesisStreamProxyTest {
         final GetRecordsResponse expectedGetRecordsResponse =
                 GetRecordsResponse.builder().records(Record.builder().build()).build();
 
-        TestingKinesisClient testKinesisClient = new TestingKinesisClient();
         testKinesisClient.setNextShardIterator(expectedShardIterator);
         testKinesisClient.setShardIteratorValidation(
                 validateEqual(
                         GetShardIteratorRequest.builder()
-                                .streamARN(streamArn)
+                                .streamARN(STREAM_ARN)
                                 .shardId(shardId)
                                 .shardIteratorType(ShardIteratorType.AFTER_SEQUENCE_NUMBER)
                                 .startingSequenceNumber(sequenceNumber)
@@ -379,16 +390,13 @@ class KinesisStreamProxyTest {
         testKinesisClient.setGetRecordsValidation(
                 validateEqual(
                         GetRecordsRequest.builder()
-                                .streamARN(streamArn)
+                                .streamARN(STREAM_ARN)
                                 .shardIterator(expectedShardIterator)
                                 .build()));
 
-        KinesisStreamProxy kinesisStreamProxy =
-                new KinesisStreamProxy(testKinesisClient, HTTP_CLIENT);
-
         assertThatNoException()
                 .isThrownBy(
-                        () -> kinesisStreamProxy.getRecords(streamArn, shardId, startingPosition));
+                        () -> kinesisStreamProxy.getRecords(STREAM_ARN, shardId, startingPosition));
     }
 
     @Test
@@ -411,12 +419,12 @@ class KinesisStreamProxyTest {
     }
 
     private Consumer<ListShardsRequest> getListShardRequestValidation(
-            final String streamArn, final String startShardId, final String nextToken) {
+            final String streamArn, final ShardFilter shardFilter, final String nextToken) {
         return req -> {
             ListShardsRequest expectedReq =
                     ListShardsRequest.builder()
                             .streamARN(streamArn)
-                            .exclusiveStartShardId(startShardId)
+                            .shardFilter(shardFilter)
                             .nextToken(nextToken)
                             .build();
             assertThat(req).isEqualTo(expectedReq);

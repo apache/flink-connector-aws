@@ -24,6 +24,7 @@ import org.apache.flink.api.connector.source.mocks.MockSplitEnumeratorContext;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.InitialPosition;
 import org.apache.flink.connector.kinesis.source.enumerator.assigner.ShardAssignerFactory;
+import org.apache.flink.connector.kinesis.source.proxy.ListShardsStartingPosition;
 import org.apache.flink.connector.kinesis.source.proxy.StreamProxy;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.connector.kinesis.source.util.TestUtil;
@@ -36,10 +37,10 @@ import org.junit.jupiter.params.provider.MethodSource;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Stream;
 
 import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.STREAM_INITIAL_POSITION;
@@ -80,7 +81,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             sourceConfig,
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
-                            null);
+                            null,
+                            true);
             // When enumerator starts
             enumerator.start();
             // Then initial discovery scheduled, with periodic discovery after
@@ -108,7 +110,7 @@ class KinesisStreamsSourceEnumeratorTest {
             assertThat(
                             initialSplitAssignment.assignment().get(subtaskId).stream()
                                     .map(KinesisShardSplit::getShardId))
-                    .containsExactly(shardIds);
+                    .containsExactlyInAnyOrder(shardIds);
             assertThat(
                             initialSplitAssignment.assignment().get(subtaskId).stream()
                                     .map(KinesisShardSplit::getStartingPosition))
@@ -137,7 +139,7 @@ class KinesisStreamsSourceEnumeratorTest {
             assertThat(
                             afterReshardingSplitAssignment.assignment().get(subtaskId).stream()
                                     .map(KinesisShardSplit::getShardId))
-                    .containsExactly(additionalShards);
+                    .containsExactlyInAnyOrder(additionalShards);
             assertThat(
                             afterReshardingSplitAssignment.assignment().get(subtaskId).stream()
                                     .map(KinesisShardSplit::getStartingPosition))
@@ -160,10 +162,9 @@ class KinesisStreamsSourceEnumeratorTest {
             TestKinesisStreamProxy streamProxy = getTestStreamProxy();
             final String completedShard = generateShardId(0);
             final String lastSeenShard = generateShardId(1);
-            final Set<String> completedShardIds = Collections.singleton(completedShard);
 
             KinesisStreamsSourceEnumeratorState state =
-                    new KinesisStreamsSourceEnumeratorState(Collections.emptySet(), lastSeenShard);
+                    new KinesisStreamsSourceEnumeratorState(Collections.emptyList(), lastSeenShard);
 
             final Configuration sourceConfig = new Configuration();
             sourceConfig.set(STREAM_INITIAL_POSITION, initialPosition);
@@ -177,7 +178,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             sourceConfig,
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
-                            state);
+                            state,
+                            true);
             // When enumerator starts
             enumerator.start();
             // Then no initial discovery is scheduled, but a periodic discovery is scheduled
@@ -203,7 +205,7 @@ class KinesisStreamsSourceEnumeratorTest {
             assertThat(
                             firstUpdateSplitAssignment.assignment().get(subtaskId).stream()
                                     .map(KinesisShardSplit::getShardId))
-                    .containsExactly(generateShardId(2), generateShardId(3));
+                    .containsExactlyInAnyOrder(generateShardId(2), generateShardId(3));
             assertThat(
                             firstUpdateSplitAssignment.assignment().get(subtaskId).stream()
                                     .map(KinesisShardSplit::getStartingPosition))
@@ -214,57 +216,42 @@ class KinesisStreamsSourceEnumeratorTest {
         }
     }
 
-    @Test
-    void testReturnedSplitsWillBeReassigned() throws Throwable {
+    @ParameterizedTest
+    @MethodSource("provideInitialPositionForShardDiscovery")
+    void testInitialPositionForListShardsMapping(
+            Instant currentTimestamp,
+            InitialPosition initialPosition,
+            String initialTimestamp,
+            ListShardsStartingPosition expected)
+            throws Exception {
         try (MockSplitEnumeratorContext<KinesisShardSplit> context =
                 new MockSplitEnumeratorContext<>(NUM_SUBTASKS)) {
             TestKinesisStreamProxy streamProxy = getTestStreamProxy();
+
+            final Configuration sourceConfig = new Configuration();
+            sourceConfig.set(STREAM_INITIAL_POSITION, initialPosition);
+            sourceConfig.set(STREAM_INITIAL_TIMESTAMP, initialTimestamp);
+
             KinesisStreamsSourceEnumerator enumerator =
-                    getSimpleEnumeratorWithNoState(context, streamProxy);
+                    new KinesisStreamsSourceEnumerator(
+                            context,
+                            STREAM_ARN,
+                            sourceConfig,
+                            streamProxy,
+                            ShardAssignerFactory.uniformShardAssigner(),
+                            null,
+                            true);
 
-            // Given enumerator is initialised with one registered reader, with 4 shards in stream
-            final int subtaskId = 1;
-            context.registerReader(TestUtil.getTestReaderInfo(subtaskId));
-            enumerator.addReader(subtaskId);
-            String[] shardIds =
-                    new String[] {
-                        generateShardId(0),
-                        generateShardId(1),
-                        generateShardId(2),
-                        generateShardId(3)
-                    };
-            streamProxy.addShards(shardIds);
-
-            // When first discovery runs
-            context.runNextOneTimeCallable();
-            SplitsAssignment<KinesisShardSplit> initialSplitAssignment =
-                    context.getSplitsAssignmentSequence().get(0);
-
-            // Then all 4 shards discovered on startup
-            assertThat(initialSplitAssignment.assignment()).containsOnlyKeys(subtaskId);
             assertThat(
-                            initialSplitAssignment.assignment().get(subtaskId).stream()
-                                    .map(KinesisShardSplit::getShardId))
-                    .containsExactly(shardIds);
-
-            // Given one shard split is returned
-            KinesisShardSplit returnedSplit =
-                    initialSplitAssignment.assignment().get(subtaskId).get(0);
-            enumerator.addSplitsBack(Collections.singletonList(returnedSplit), subtaskId);
-
-            // When first periodic discovery runs
-            context.runPeriodicCallable(0);
-            // Then returned split will be assigned
-            SplitsAssignment<KinesisShardSplit> firstReturnedSplitAssignment =
-                    context.getSplitsAssignmentSequence().get(1);
-            assertThat(firstReturnedSplitAssignment.assignment()).containsOnlyKeys(subtaskId);
-            assertThat(firstReturnedSplitAssignment.assignment().get(subtaskId))
-                    .containsExactly(returnedSplit);
+                            enumerator.getInitialPositionForShardDiscovery(
+                                    initialPosition, currentTimestamp))
+                    .usingRecursiveComparison()
+                    .isEqualTo(expected);
         }
     }
 
     @Test
-    void testAddSplitsBackWithoutSplitIsNoOp() throws Throwable {
+    void testAddSplitsBackThrowsException() throws Throwable {
         try (MockSplitEnumeratorContext<KinesisShardSplit> context =
                 new MockSplitEnumeratorContext<>(NUM_SUBTASKS)) {
             TestKinesisStreamProxy streamProxy = getTestStreamProxy();
@@ -272,56 +259,8 @@ class KinesisStreamsSourceEnumeratorTest {
                     getSimpleEnumeratorWithNoState(context, streamProxy);
             List<KinesisShardSplit> splits = Collections.singletonList(getTestSplit());
 
-            // Given enumerator has no assigned splits
-            // When we add splits back
-            // Then handled gracefully with no exception thrown
-            assertThatNoException().isThrownBy(() -> enumerator.addSplitsBack(splits, 1));
-        }
-    }
-
-    @Test
-    void testAddSplitsBackAssignsUnassignedSplits() throws Throwable {
-        try (MockSplitEnumeratorContext<KinesisShardSplit> context =
-                new MockSplitEnumeratorContext<>(NUM_SUBTASKS)) {
-            TestKinesisStreamProxy streamProxy = getTestStreamProxy();
-            KinesisStreamsSourceEnumerator enumerator =
-                    getSimpleEnumeratorWithNoState(context, streamProxy);
-
-            // Given enumerator has assigned splits
-            final int subtaskId = 1;
-            context.registerReader(TestUtil.getTestReaderInfo(subtaskId));
-            enumerator.addReader(subtaskId);
-            String[] shardIds =
-                    new String[] {
-                        generateShardId(0),
-                        generateShardId(1),
-                        generateShardId(2),
-                        generateShardId(3)
-                    };
-            streamProxy.addShards(shardIds);
-            context.runNextOneTimeCallable();
-
-            // Ensure that there are splits assigned
-            SplitsAssignment<KinesisShardSplit> initialSplitAssignment =
-                    context.getSplitsAssignmentSequence().get(0);
-            assertThat(initialSplitAssignment.assignment()).containsOnlyKeys(subtaskId);
-            assertThat(
-                            initialSplitAssignment.assignment().get(subtaskId).stream()
-                                    .map(KinesisShardSplit::getShardId))
-                    .containsExactly(shardIds);
-
-            // When we add splits back
-            KinesisShardSplit returnedSplit =
-                    initialSplitAssignment.assignment().get(subtaskId).get(0);
-            enumerator.addSplitsBack(Collections.singletonList(returnedSplit), 1);
-
-            // Then splits are reassigned
-            assertThat(context.getSplitsAssignmentSequence()).hasSizeGreaterThan(1);
-            SplitsAssignment<KinesisShardSplit> secondSplitAssignment =
-                    context.getSplitsAssignmentSequence().get(1);
-            assertThat(secondSplitAssignment.assignment()).containsOnlyKeys(subtaskId);
-            assertThat(secondSplitAssignment.assignment().get(subtaskId))
-                    .containsExactly(returnedSplit);
+            assertThatExceptionOfType(UnsupportedOperationException.class)
+                    .isThrownBy(() -> enumerator.addSplitsBack(splits, 1));
         }
     }
 
@@ -354,7 +293,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             sourceConfig,
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
-                            null);
+                            null,
+                            true);
             enumerator.start();
 
             // Given List Shard request throws an Exception
@@ -383,7 +323,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             sourceConfig,
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
-                            null);
+                            null,
+                            true);
             enumerator.start();
 
             // Given enumerator is initialised with one registered reader, with 4 shards in stream
@@ -409,7 +350,7 @@ class KinesisStreamsSourceEnumeratorTest {
             assertThat(
                             initialSplitAssignment.assignment().get(subtaskId).stream()
                                     .map(KinesisShardSplit::getShardId))
-                    .containsExactly(shardIds);
+                    .containsExactlyInAnyOrder(shardIds);
 
             // Given ListShards doesn't respect lastSeenShardId, and returns already assigned shards
             streamProxy.setShouldRespectLastSeenShardId(false);
@@ -436,7 +377,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             sourceConfig,
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
-                            null);
+                            null,
+                            true);
             enumerator.start();
 
             // Given enumerator is initialised without a reader
@@ -494,7 +436,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             sourceConfig,
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
-                            null);
+                            null,
+                            true);
             enumerator.start();
 
             // Given enumerator is initialised without only one reader
@@ -560,7 +503,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             sourceConfig,
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
-                            null);
+                            null,
+                            true);
             enumerator.start();
 
             // Given enumerator is initialised with one registered reader, with 4 shards in stream
@@ -587,7 +531,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             sourceConfig,
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
-                            snapshottedState);
+                            snapshottedState,
+                            true);
             restoredEnumerator.start();
             // Given enumerator is initialised with one registered reader, with 4 shards in stream
             restoredContext.registerReader(TestUtil.getTestReaderInfo(subtaskId));
@@ -595,7 +540,11 @@ class KinesisStreamsSourceEnumeratorTest {
             restoredContext.runPeriodicCallable(0);
 
             // Then ListShards receives a ListShards call with the lastSeenShardId
-            assertThat(streamProxy.getLastProvidedLastSeenShardId())
+            assertThat(
+                            streamProxy
+                                    .getLastProvidedListShardStartingPosition()
+                                    .getShardFilter()
+                                    .shardId())
                     .isEqualTo(shardIds[shardIds.length - 1]);
         }
     }
@@ -613,7 +562,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             sourceConfig,
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
-                            null);
+                            null,
+                            true);
 
             assertThatNoException()
                     .isThrownBy(() -> enumerator.handleSourceEvent(1, new SourceEvent() {}));
@@ -633,7 +583,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             sourceConfig,
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
-                            null);
+                            null,
+                            true);
             enumerator.start();
 
             assertThatNoException().isThrownBy(enumerator::close);
@@ -651,7 +602,8 @@ class KinesisStreamsSourceEnumeratorTest {
                         sourceConfig,
                         streamProxy,
                         ShardAssignerFactory.uniformShardAssigner(),
-                        null);
+                        null,
+                        true);
         enumerator.start();
         assertThat(context.getOneTimeCallables()).hasSize(1);
         assertThat(context.getPeriodicCallables()).hasSize(1);
@@ -666,5 +618,27 @@ class KinesisStreamsSourceEnumeratorTest {
                         InitialPosition.AT_TIMESTAMP,
                         "2023-04-13T09:18:00.0+01:00",
                         ShardIteratorType.AT_TIMESTAMP));
+    }
+
+    private static Stream<Arguments> provideInitialPositionForShardDiscovery() {
+        Instant currentTimestamp = Instant.now();
+
+        return Stream.of(
+                Arguments.of(
+                        currentTimestamp,
+                        InitialPosition.LATEST,
+                        "",
+                        ListShardsStartingPosition.fromTimestamp(currentTimestamp)),
+                Arguments.of(
+                        currentTimestamp,
+                        InitialPosition.TRIM_HORIZON,
+                        "",
+                        ListShardsStartingPosition.fromStart(),
+                        Arguments.of(
+                                currentTimestamp,
+                                InitialPosition.AT_TIMESTAMP,
+                                "1719776523",
+                                ListShardsStartingPosition.fromTimestamp(
+                                        Instant.ofEpochSecond(1719776523)))));
     }
 }

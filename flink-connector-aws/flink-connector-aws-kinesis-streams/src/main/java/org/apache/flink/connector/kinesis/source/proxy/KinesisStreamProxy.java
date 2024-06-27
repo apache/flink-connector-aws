@@ -21,8 +21,12 @@ package org.apache.flink.connector.kinesis.source.proxy;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.connector.kinesis.source.split.StartingPosition;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.http.SdkHttpClient;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
+import software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryRequest;
+import software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryResponse;
 import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsRequest;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
@@ -30,8 +34,7 @@ import software.amazon.awssdk.services.kinesis.model.GetShardIteratorRequest;
 import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
 import software.amazon.awssdk.services.kinesis.model.ListShardsResponse;
 import software.amazon.awssdk.services.kinesis.model.Shard;
-
-import javax.annotation.Nullable;
+import software.amazon.awssdk.services.kinesis.model.StreamDescriptionSummary;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -43,6 +46,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /** Implementation of the {@link StreamProxy} for Kinesis data streams. */
 @Internal
 public class KinesisStreamProxy implements StreamProxy {
+    private static final Logger LOG = LoggerFactory.getLogger(KinesisStreamProxy.class);
 
     private final KinesisClient kinesisClient;
     private final SdkHttpClient httpClient;
@@ -55,7 +59,15 @@ public class KinesisStreamProxy implements StreamProxy {
     }
 
     @Override
-    public List<Shard> listShards(String streamArn, @Nullable String lastSeenShardId) {
+    public StreamDescriptionSummary getStreamDescriptionSummary(String streamArn) {
+        DescribeStreamSummaryResponse response =
+                kinesisClient.describeStreamSummary(
+                        DescribeStreamSummaryRequest.builder().streamARN(streamArn).build());
+        return response.streamDescriptionSummary();
+    }
+
+    @Override
+    public List<Shard> listShards(String streamArn, ListShardsStartingPosition startingPosition) {
         List<Shard> shards = new ArrayList<>();
 
         ListShardsResponse listShardsResponse;
@@ -65,8 +77,10 @@ public class KinesisStreamProxy implements StreamProxy {
                     kinesisClient.listShards(
                             ListShardsRequest.builder()
                                     .streamARN(streamArn)
-                                    .exclusiveStartShardId(
-                                            nextToken == null ? lastSeenShardId : null)
+                                    .shardFilter(
+                                            nextToken == null
+                                                    ? startingPosition.getShardFilter()
+                                                    : null)
                                     .nextToken(nextToken)
                                     .build());
 
@@ -120,7 +134,7 @@ public class KinesisStreamProxy implements StreamProxy {
                                     (Instant) startingPosition.getStartingMarker());
                 } else {
                     throw new IllegalArgumentException(
-                            "Invalid object given for GetShardIteratorRequest() when ShardIteratorType is AT_TIMESTAMP. Must be a Date object.");
+                            "Invalid object given for GetShardIteratorRequest() when ShardIteratorType is AT_TIMESTAMP. Must be a Instant object.");
                 }
                 break;
             case AT_SEQUENCE_NUMBER:

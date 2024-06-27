@@ -19,6 +19,7 @@
 package org.apache.flink.connector.kinesis.source.enumerator;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 
 import javax.annotation.Nullable;
 
@@ -27,15 +28,18 @@ import java.util.List;
 /**
  * State for the {@link KinesisStreamsSourceEnumerator}. This class is stored in state, so any
  * changes need to be backwards compatible
+ *
+ * @deprecated This class is preserved to test state compatibility only.
  */
 @Internal
-public class KinesisStreamsSourceEnumeratorState {
-    private final List<KinesisShardSplitWithAssignmentStatus> knownSplits;
+@Deprecated
+public class KinesisStreamsSourceEnumeratorStateV0 {
+    private final List<KinesisShardSplit> unassignedSplits;
     @Nullable private final String lastSeenShardId;
 
-    public KinesisStreamsSourceEnumeratorState(
-            List<KinesisShardSplitWithAssignmentStatus> knownSplits, String lastSeenShardId) {
-        this.knownSplits = knownSplits;
+    public KinesisStreamsSourceEnumeratorStateV0(
+            List<KinesisShardSplit> unassignedSplits, String lastSeenShardId) {
+        this.unassignedSplits = unassignedSplits;
         this.lastSeenShardId = lastSeenShardId;
     }
 
@@ -43,7 +47,7 @@ public class KinesisStreamsSourceEnumeratorState {
         return lastSeenShardId;
     }
 
-    public List<KinesisShardSplitWithAssignmentStatus> getKnownSplits() {
-        return knownSplits;
+    public List<KinesisShardSplit> getKnownSplits() {
+        return unassignedSplits;
     }
 }
