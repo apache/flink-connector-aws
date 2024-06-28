@@ -320,11 +320,34 @@ public class ConsumerConfigConstants extends AWSConfigConstants {
     public static final String EFO_HTTP_CLIENT_READ_TIMEOUT_MILLIS =
             "flink.stream.efo.http-client.read-timeout";
 
+    /**
+     * Flag to configure whether {@link #STREAM_INITIAL_POSITION} should be considered for new
+     * streams, when the app is already consuming from other streams.
+     */
+    public static final String APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS =
+            "flink.stream.initpos-for-new-streams";
+
+    /**
+     * Property that can be used to ignore the restore state for a particular stream and instead use
+     * the initial position. This is useful to reset a specific stream to consume from TRIM_HORIZON
+     * or LATEST if needed. Values must be passed in a comma separated list.
+     *
+     * <p>If a stream is in this list, it will use initial position regardless of the value of the
+     * {@link #APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS} property.
+     */
+    public static final String STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO =
+            "flink.stream.initpos-streams";
+
     // ------------------------------------------------------------------------
     //  Default values for consumer configuration
     // ------------------------------------------------------------------------
 
     public static final String DEFAULT_STREAM_INITIAL_POSITION = InitialPosition.LATEST.toString();
+
+    /** False for now so that we preserve old behaviour. TODO switch to true in the next major */
+    public static final boolean DEFAULT_APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS = false;
+
+    public static final String DEFAULT_STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO = "";
 
     public static final String DEFAULT_STREAM_TIMESTAMP_DATE_FORMAT =
             "yyyy-MM-dd'T'HH:mm:ss.SSSXXX";

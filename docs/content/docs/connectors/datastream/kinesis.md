@@ -217,6 +217,31 @@ properties by providing a value for `ConsumerConfigConstants.STREAM_INITIAL_TIME
     If `ConsumerConfigConstants.STREAM_TIMESTAMP_DATE_FORMAT` is not defined then the default pattern will be `yyyy-MM-dd'T'HH:mm:ss.SSSXXX`
     (for example, timestamp value is `2016-04-04` and pattern is `yyyy-MM-dd` given by user or timestamp value is `2016-04-04T19:58:46.480-00:00` without given a pattern).
 
+### Configuring starting position for new streams
+
+By default, the Flink Kinesis Consumer handles new streams the same way it handles a new shard for an existing stream, and it starts consuming from the earliest record (same behaviour as TRIM_HORIZON).
+
+This is usually not what you want for new streams, where it makes more sense to respect what is defined in `ConsumerConfigConstants.STREAM_INITIAL_POSITION`.
+This behaviour can now be enabled by setting the `ConsumerConfigConstants.APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS` flag to true.
+
+### Resetting specific streams to the starting position
+
+One of the features of the Flink Kinesis Consumer is that it keeps track of the offset that the application is at for each shard, so that if the application is restarted we can start consuming from that offset
+when restoring from snapshot. 
+
+This is the ideal behaviour most of the time, but what if you want to jump to `LATEST` or go back to `TRIM_HORIZON` for a stream that is already being tracked by the Flink Kinesis Consumer? 
+
+You can now do this via the `ConsumerConfigConstants.STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO` property, which expects a comma separated list of strings referring to the names of the Kinesis Streams to reset.
+
+For example, if you configure your application with
+```
+consumerConfig.put(ConsumerConfigConstants.STREAM_INITIAL_POSITION, "LATEST");
+consumerConfig.put(ConsumerConfigConstants.STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO, "streamA, streamB");
+```
+then `streamA` and `streamB` would start consuming from LATEST, even if they are already being tracked by the application.
+
+Note that you would need to reset this property afterwards, otherwise the Flink Kinesis Consumer will always be resetting those streams to LATEST.
+
 ### Fault Tolerance for Exactly-Once User-Defined State Update Semantics
 
 With Flink's checkpointing enabled, the Flink Kinesis Consumer will consume records from shards in Kinesis streams and
