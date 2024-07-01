@@ -24,7 +24,8 @@ import org.apache.flink.util.Preconditions;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.time.Instant;
+import java.util.Optional;
 
 import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.STREAM_INITIAL_TIMESTAMP;
 import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.STREAM_TIMESTAMP_DATE_FORMAT;
@@ -42,20 +43,25 @@ public class KinesisStreamsSourceConfigUtil {
      * configuration.
      *
      * @param sourceConfig the configuration to parse timestamp from
-     * @return the timestamp
+     * @return {@link Optional} containing the initial timestamp if configured, an empty {@link
+     *     Optional} otherwise
      */
-    public static Date parseStreamTimestampStartingPosition(final Configuration sourceConfig) {
+    public static Optional<Instant> parseStreamTimestampStartingPosition(
+            final Configuration sourceConfig) {
         Preconditions.checkNotNull(sourceConfig);
         String timestamp = sourceConfig.get(STREAM_INITIAL_TIMESTAMP);
+        if (timestamp == null || timestamp.isEmpty()) {
+            return Optional.empty();
+        }
 
         try {
             String format = sourceConfig.get(STREAM_TIMESTAMP_DATE_FORMAT);
             SimpleDateFormat customDateFormat = new SimpleDateFormat(format);
-            return customDateFormat.parse(timestamp);
+            return Optional.of(customDateFormat.parse(timestamp).toInstant());
         } catch (IllegalArgumentException | NullPointerException exception) {
             throw new IllegalArgumentException(exception);
         } catch (ParseException exception) {
-            return new Date((long) (Double.parseDouble(timestamp) * 1000));
+            return Optional.of(Instant.ofEpochMilli((long) (Double.parseDouble(timestamp) * 1000)));
         }
     }
 }

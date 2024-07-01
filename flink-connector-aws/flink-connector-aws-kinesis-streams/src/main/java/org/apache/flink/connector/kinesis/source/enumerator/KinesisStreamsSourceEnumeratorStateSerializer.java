@@ -29,15 +29,15 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 
 /** Used to serialize and deserialize the {@link KinesisStreamsSourceEnumeratorState}. */
 @Internal
 public class KinesisStreamsSourceEnumeratorStateSerializer
         implements SimpleVersionedSerializer<KinesisStreamsSourceEnumeratorState> {
 
-    private static final int CURRENT_VERSION = 0;
+    private static final int CURRENT_VERSION = 1;
 
     private final KinesisShardSplitSerializer splitSerializer;
 
@@ -64,13 +64,14 @@ public class KinesisStreamsSourceEnumeratorStateSerializer
                 out.writeUTF(kinesisStreamsSourceEnumeratorState.getLastSeenShardId());
             }
 
-            out.writeInt(kinesisStreamsSourceEnumeratorState.getUnassignedSplits().size());
+            out.writeInt(kinesisStreamsSourceEnumeratorState.getSplits().size());
             out.writeInt(splitSerializer.getVersion());
-            for (KinesisShardSplit split :
-                    kinesisStreamsSourceEnumeratorState.getUnassignedSplits()) {
-                byte[] serializedSplit = splitSerializer.serialize(split);
+            for (KinesisShardSplitWithAssignmentStatus split :
+                    kinesisStreamsSourceEnumeratorState.getSplits()) {
+                byte[] serializedSplit = splitSerializer.serialize(split.split());
                 out.writeInt(serializedSplit.length);
                 out.write(serializedSplit);
+                out.writeInt(split.assignmentStatus().getStatusCode());
             }
 
             out.flush();
@@ -109,13 +110,22 @@ public class KinesisStreamsSourceEnumeratorStateSerializer
                                 + ". Serializer version is "
                                 + splitSerializer.getVersion());
             }
-            Set<KinesisShardSplit> unassignedSplits = new HashSet<>(numUnassignedSplits);
+            List<KinesisShardSplitWithAssignmentStatus> unassignedSplits =
+                    new ArrayList<>(numUnassignedSplits);
             for (int i = 0; i < numUnassignedSplits; i++) {
                 int serializedLength = in.readInt();
                 byte[] serializedSplit = new byte[serializedLength];
                 if (in.read(serializedSplit) != -1) {
+                    KinesisShardSplit deserializedSplit =
+                            splitSerializer.deserialize(splitSerializerVersion, serializedSplit);
+                    SplitAssignmentStatus assignmentStatus = SplitAssignmentStatus.UNASSIGNED;
+                    if (version == CURRENT_VERSION) {
+                        assignmentStatus = SplitAssignmentStatus.fromStatusCode(in.readInt());
+                    }
                     unassignedSplits.add(
-                            splitSerializer.deserialize(splitSerializerVersion, serializedSplit));
+                            new KinesisShardSplitWithAssignmentStatus(
+                                    deserializedSplit, assignmentStatus));
+
                 } else {
                     throw new IOException(
                             "Unexpectedly reading more bytes than is present in stream.");

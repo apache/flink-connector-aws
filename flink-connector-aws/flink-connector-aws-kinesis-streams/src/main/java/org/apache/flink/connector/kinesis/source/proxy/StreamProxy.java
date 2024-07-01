@@ -23,8 +23,7 @@ import org.apache.flink.connector.kinesis.source.split.StartingPosition;
 
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.awssdk.services.kinesis.model.Shard;
-
-import javax.annotation.Nullable;
+import software.amazon.awssdk.services.kinesis.model.StreamDescriptionSummary;
 
 import java.io.Closeable;
 import java.util.List;
@@ -32,16 +31,23 @@ import java.util.List;
 /** Interface for a StreamProxy to interact with Streams service in a given region. */
 @Internal
 public interface StreamProxy extends Closeable {
+    /**
+     * Obtains stream metadata.
+     *
+     * @param streamArn the ARN of the stream
+     * @return stream information.
+     */
+    StreamDescriptionSummary getStreamDescriptionSummary(String streamArn);
 
     /**
      * Obtains the shards associated with a given stream.
      *
      * @param streamArn the ARN of the stream
-     * @param lastSeenShardId the last seen shard Id. Used for reducing the number of results
-     *     returned.
+     * @param startingPosition starting position for shard discovery request. Used to skip already
+     *     discovered/not used shards
      * @return shard list
      */
-    List<Shard> listShards(String streamArn, @Nullable String lastSeenShardId);
+    List<Shard> listShards(String streamArn, ListShardsStartingPosition startingPosition);
 
     /**
      * Retrieves records from the stream.

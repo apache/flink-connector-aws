@@ -23,7 +23,7 @@ import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.Test;
 
 import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.time.Instant;
 
 import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.STREAM_INITIAL_TIMESTAMP;
 import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.STREAM_TIMESTAMP_DATE_FORMAT;
@@ -35,8 +35,10 @@ class KinesisStreamsSourceConfigUtilTest {
     @Test
     void testParseStreamTimestampUsingDefaultFormat() throws Exception {
         String timestamp = "2023-04-13T09:18:00.0+01:00";
-        Date expectedTimestamp =
-                new SimpleDateFormat(STREAM_TIMESTAMP_DATE_FORMAT.defaultValue()).parse(timestamp);
+        Instant expectedTimestamp =
+                new SimpleDateFormat(STREAM_TIMESTAMP_DATE_FORMAT.defaultValue())
+                        .parse(timestamp)
+                        .toInstant();
 
         Configuration sourceConfig = new Configuration();
         sourceConfig.set(STREAM_INITIAL_TIMESTAMP, timestamp);
@@ -44,14 +46,14 @@ class KinesisStreamsSourceConfigUtilTest {
         assertThat(
                         KinesisStreamsSourceConfigUtil.parseStreamTimestampStartingPosition(
                                 sourceConfig))
-                .isEqualTo(expectedTimestamp);
+                .contains(expectedTimestamp);
     }
 
     @Test
     void testParseStreamTimestampUsingCustomFormat() throws Exception {
         String format = "yyyy-MM-dd'T'HH:mm";
         String timestamp = "2023-04-13T09:23";
-        Date expectedTimestamp = new SimpleDateFormat(format).parse(timestamp);
+        Instant expectedTimestamp = new SimpleDateFormat(format).parse(timestamp).toInstant();
 
         Configuration sourceConfig = new Configuration();
         sourceConfig.set(STREAM_INITIAL_TIMESTAMP, timestamp);
@@ -60,21 +62,31 @@ class KinesisStreamsSourceConfigUtilTest {
         assertThat(
                         KinesisStreamsSourceConfigUtil.parseStreamTimestampStartingPosition(
                                 sourceConfig))
-                .isEqualTo(expectedTimestamp);
+                .contains(expectedTimestamp);
     }
 
     @Test
     void testParseStreamTimestampEpoch() {
-        long epoch = 1681910583L;
-        Date expectedTimestamp = new Date(epoch * 1000);
+        long epochMillis = 1681910583745L;
+        Instant expectedTimestamp = Instant.ofEpochMilli(epochMillis);
 
         Configuration sourceConfig = new Configuration();
-        sourceConfig.set(STREAM_INITIAL_TIMESTAMP, String.valueOf(epoch));
+        sourceConfig.set(STREAM_INITIAL_TIMESTAMP, String.valueOf(epochMillis / 1000.0));
 
         assertThat(
                         KinesisStreamsSourceConfigUtil.parseStreamTimestampStartingPosition(
                                 sourceConfig))
-                .isEqualTo(expectedTimestamp);
+                .contains(expectedTimestamp);
+    }
+
+    @Test
+    void testParseStreamTimestampTimestampNotSpecified() {
+        Configuration sourceConfig = new Configuration();
+
+        assertThat(
+                        KinesisStreamsSourceConfigUtil.parseStreamTimestampStartingPosition(
+                                sourceConfig))
+                .isEmpty();
     }
 
     @Test
@@ -85,17 +97,6 @@ class KinesisStreamsSourceConfigUtilTest {
         sourceConfig.set(STREAM_INITIAL_TIMESTAMP, badTimestamp);
 
         assertThatExceptionOfType(NumberFormatException.class)
-                .isThrownBy(
-                        () ->
-                                KinesisStreamsSourceConfigUtil.parseStreamTimestampStartingPosition(
-                                        sourceConfig));
-    }
-
-    @Test
-    void testParseStreamTimestampTimestampNotSpecified() {
-        Configuration sourceConfig = new Configuration();
-
-        assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(
                         () ->
                                 KinesisStreamsSourceConfigUtil.parseStreamTimestampStartingPosition(
