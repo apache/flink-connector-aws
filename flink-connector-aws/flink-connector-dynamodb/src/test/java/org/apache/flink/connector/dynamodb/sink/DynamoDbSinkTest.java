@@ -41,23 +41,19 @@ public class DynamoDbSinkTest {
 
     @Test
     public void testSuccessfullyCreateWithMinimalConfiguration() {
-        DynamoDbSink.<Map<String, AttributeValue>>builder()
-                .setElementConverter(new TestDynamoDbElementConverter())
-                .setTableName("test_table")
-                .build();
+        DynamoDbSink.<Map<String, AttributeValue>>builder().setTableName("test_table").build();
     }
 
     @Test
-    public void testElementConverterRequired() {
-        assertThatExceptionOfType(NullPointerException.class)
-                .isThrownBy(
-                        () ->
-                                DynamoDbSink.builder()
-                                        .setTableName("test_table")
-                                        .setFailOnError(true)
-                                        .build())
-                .withMessageContaining(
-                        "ElementConverter must be not null when initializing the AsyncSinkBase.");
+    public void testElementConverterUsesDefaultConverterIfNotSet() {
+        DynamoDbSink<String> sink =
+                DynamoDbSink.<String>builder()
+                        .setTableName("test_table")
+                        .setFailOnError(true)
+                        .build();
+        assertThat(sink)
+                .extracting("elementConverter")
+                .isInstanceOf(DefaultDynamoDbElementConverter.class);
     }
 
     @Test

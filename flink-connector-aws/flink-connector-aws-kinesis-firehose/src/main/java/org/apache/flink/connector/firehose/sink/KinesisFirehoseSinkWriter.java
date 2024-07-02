@@ -220,9 +220,8 @@ class KinesisFirehoseSinkWriter<InputT> extends AsyncSinkWriter<InputT, Record> 
         }
 
         LOG.warn(
-                "KDF Sink failed to write and will retry {} entries to KDF first request was {}",
+                "KDF Sink failed to write and will retry {} entries to KDF",
                 requestEntries.size(),
-                requestEntries.get(0).toString(),
                 err);
         requestResult.accept(requestEntries);
     }
@@ -238,10 +237,8 @@ class KinesisFirehoseSinkWriter<InputT> extends AsyncSinkWriter<InputT, Record> 
             return;
         }
 
-        LOG.debug(
-                "KDF Sink failed to write and will retry {} entries to KDF first request was {}",
-                requestEntries.size(),
-                requestEntries.get(0).toString());
+        LOG.warn(
+                "KDF Sink failed to write and will retry {} entries to KDF", requestEntries.size());
         List<Record> failedRequestEntries = new ArrayList<>(response.failedPutCount());
         List<PutRecordBatchResponseEntry> records = response.requestResponses();
 

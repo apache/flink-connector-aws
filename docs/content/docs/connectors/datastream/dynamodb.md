@@ -133,7 +133,10 @@ Flink's DynamoDB sink is created by using the static builder `DynamoDBSink.<Inpu
 ## Element Converter
 
 An element converter is used to convert from a record in the DataStream to a DynamoDbWriteRequest which the sink will write to the destination DynamoDB table. The DynamoDB sink allows the user to supply a custom element converter, or use the provided
-`DynamoDbBeanElementConverter` when you are working with `@DynamoDbBean` objects. For more information on supported 
+`DefaultDynamoDbElementConverter` which extracts item schema from element class, this requires the element class to be of composite type (i.e. Pojo, Tuple or Row). In case TypeInformation of the elements is present the schema is eagerly constructed by using `DynamoDbTypeInformedElementConverter` as in `new DynamoDbTypeInformedElementConverter(TypeInformation.of(MyPojo.class))`.
+
+
+Alternatively when you are working with `@DynamoDbBean` objects you can use `DynamoDbBeanElementConverter`. For more information on supported 
 annotations see [here](https://docs.aws.amazon.com/sdk-for-java/latest/developer-guide/examples-dynamodb-enhanced.html#dynamodb-enhanced-mapper-tableschema).
 
 A sample application using a custom `ElementConverter` can be found [here](https://github.com/apache/flink-connector-aws/blob/main/flink-connector-aws/flink-connector-dynamodb/src/test/java/org/apache/flink/connector/dynamodb/sink/examples/SinkIntoDynamoDb.java). A sample application using the `DynamoDbBeanElementConverter` can be found [here](https://github.com/apache/flink-connector-aws/blob/main/flink-connector-aws/flink-connector-dynamodb/src/test/java/org/apache/flink/connector/dynamodb/sink/examples/SinkDynamoDbBeanIntoDynamoDb.java).

@@ -20,34 +20,53 @@ package org.apache.flink.connector.kinesis.source.reader;
 
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsAddition;
-import org.apache.flink.connector.kinesis.source.proxy.StreamProxy;
+import org.apache.flink.connector.kinesis.source.metrics.KinesisShardMetrics;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.connector.kinesis.source.util.KinesisStreamProxyProvider.TestKinesisStreamProxy;
 import org.apache.flink.connector.kinesis.source.util.TestUtil;
+import org.apache.flink.metrics.testutils.MetricListener;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.kinesis.model.Record;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.flink.connector.kinesis.source.util.KinesisStreamProxyProvider.getTestStreamProxy;
-import static org.apache.flink.connector.kinesis.source.util.TestUtil.generateShardId;
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.getTestRecord;
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.getTestSplit;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatNoException;
 import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
 
 class PollingKinesisShardSplitReaderTest {
+    private PollingKinesisShardSplitReader splitReader;
+    private TestKinesisStreamProxy testStreamProxy;
+    private MetricListener metricListener;
+    private Map<String, KinesisShardMetrics> shardMetricGroupMap;
+    private static final String TEST_SHARD_ID = TestUtil.generateShardId(1);
+
+    @BeforeEach
+    public void init() {
+        testStreamProxy = getTestStreamProxy();
+        metricListener = new MetricListener();
+        shardMetricGroupMap = new ConcurrentHashMap<>();
+
+        shardMetricGroupMap.put(
+                TEST_SHARD_ID,
+                new KinesisShardMetrics(
+                        TestUtil.getTestSplit(TEST_SHARD_ID), metricListener.getMetricGroup()));
+        splitReader = new PollingKinesisShardSplitReader(testStreamProxy, shardMetricGroupMap);
+    }
+
     @Test
     void testNoAssignedSplitsHandledGracefully() throws Exception {
-        StreamProxy testStreamProxy = getTestStreamProxy();
-        PollingKinesisShardSplitReader splitReader =
-                new PollingKinesisShardSplitReader(testStreamProxy);
-
         RecordsWithSplitIds<Record> retrievedRecords = splitReader.fetch();
 
         assertThat(retrievedRecords.nextRecordFromSplit()).isNull();
@@ -57,15 +76,10 @@ class PollingKinesisShardSplitReaderTest {
 
     @Test
     void testAssignedSplitHasNoRecordsHandledGracefully() throws Exception {
-        TestKinesisStreamProxy testStreamProxy = getTestStreamProxy();
-        PollingKinesisShardSplitReader splitReader =
-                new PollingKinesisShardSplitReader(testStreamProxy);
-
         // Given assigned split with no records
-        String shardId = generateShardId(1);
-        testStreamProxy.addShards(shardId);
+        testStreamProxy.addShards(TEST_SHARD_ID);
         splitReader.handleSplitsChanges(
-                new SplitsAddition<>(Collections.singletonList(getTestSplit(shardId))));
+                new SplitsAddition<>(Collections.singletonList(getTestSplit(TEST_SHARD_ID))));
 
         // When fetching records
         RecordsWithSplitIds<Record> retrievedRecords = splitReader.fetch();
@@ -78,24 +92,25 @@ class PollingKinesisShardSplitReaderTest {
 
     @Test
     void testSingleAssignedSplitAllConsumed() throws Exception {
-        TestKinesisStreamProxy testStreamProxy = getTestStreamProxy();
-        PollingKinesisShardSplitReader splitReader =
-                new PollingKinesisShardSplitReader(testStreamProxy);
-
         // Given assigned split with records
-        String shardId = generateShardId(1);
-        testStreamProxy.addShards(shardId);
+        testStreamProxy.addShards(TEST_SHARD_ID);
         List<Record> expectedRecords =
                 Stream.of(getTestRecord("data-1"), getTestRecord("data-2"), getTestRecord("data-3"))
                         .collect(Collectors.toList());
         testStreamProxy.addRecords(
-                TestUtil.STREAM_ARN, shardId, Collections.singletonList(expectedRecords.get(0)));
+                TestUtil.STREAM_ARN,
+                TEST_SHARD_ID,
+                Collections.singletonList(expectedRecords.get(0)));
         testStreamProxy.addRecords(
-                TestUtil.STREAM_ARN, shardId, Collections.singletonList(expectedRecords.get(1)));
+                TestUtil.STREAM_ARN,
+                TEST_SHARD_ID,
+                Collections.singletonList(expectedRecords.get(1)));
         testStreamProxy.addRecords(
-                TestUtil.STREAM_ARN, shardId, Collections.singletonList(expectedRecords.get(2)));
+                TestUtil.STREAM_ARN,
+                TEST_SHARD_ID,
+                Collections.singletonList(expectedRecords.get(2)));
         splitReader.handleSplitsChanges(
-                new SplitsAddition<>(Collections.singletonList(getTestSplit(shardId))));
+                new SplitsAddition<>(Collections.singletonList(getTestSplit(TEST_SHARD_ID))));
 
         // When fetching records
         List<Record> records = new ArrayList<>();
@@ -109,24 +124,25 @@ class PollingKinesisShardSplitReaderTest {
 
     @Test
     void testMultipleAssignedSplitsAllConsumed() throws Exception {
-        TestKinesisStreamProxy testStreamProxy = getTestStreamProxy();
-        PollingKinesisShardSplitReader splitReader =
-                new PollingKinesisShardSplitReader(testStreamProxy);
-
         // Given assigned split with records
-        String shardId = generateShardId(1);
-        testStreamProxy.addShards(shardId);
+        testStreamProxy.addShards(TEST_SHARD_ID);
         List<Record> expectedRecords =
                 Stream.of(getTestRecord("data-1"), getTestRecord("data-2"), getTestRecord("data-3"))
                         .collect(Collectors.toList());
         testStreamProxy.addRecords(
-                TestUtil.STREAM_ARN, shardId, Collections.singletonList(expectedRecords.get(0)));
+                TestUtil.STREAM_ARN,
+                TEST_SHARD_ID,
+                Collections.singletonList(expectedRecords.get(0)));
         testStreamProxy.addRecords(
-                TestUtil.STREAM_ARN, shardId, Collections.singletonList(expectedRecords.get(1)));
+                TestUtil.STREAM_ARN,
+                TEST_SHARD_ID,
+                Collections.singletonList(expectedRecords.get(1)));
         testStreamProxy.addRecords(
-                TestUtil.STREAM_ARN, shardId, Collections.singletonList(expectedRecords.get(2)));
+                TestUtil.STREAM_ARN,
+                TEST_SHARD_ID,
+                Collections.singletonList(expectedRecords.get(2)));
         splitReader.handleSplitsChanges(
-                new SplitsAddition<>(Collections.singletonList(getTestSplit(shardId))));
+                new SplitsAddition<>(Collections.singletonList(getTestSplit(TEST_SHARD_ID))));
 
         // When records are fetched
         List<Record> fetchedRecords = new ArrayList<>();
@@ -141,15 +157,10 @@ class PollingKinesisShardSplitReaderTest {
 
     @Test
     void testHandleEmptyCompletedShard() throws Exception {
-        TestKinesisStreamProxy testStreamProxy = getTestStreamProxy();
-        PollingKinesisShardSplitReader splitReader =
-                new PollingKinesisShardSplitReader(testStreamProxy);
-
         // Given assigned split with no records, and the shard is complete
-        String shardId = generateShardId(1);
-        testStreamProxy.addShards(shardId);
-        testStreamProxy.addRecords(TestUtil.STREAM_ARN, shardId, Collections.emptyList());
-        KinesisShardSplit split = getTestSplit(shardId);
+        testStreamProxy.addShards(TEST_SHARD_ID);
+        testStreamProxy.addRecords(TestUtil.STREAM_ARN, TEST_SHARD_ID, Collections.emptyList());
+        KinesisShardSplit split = getTestSplit(TEST_SHARD_ID);
         splitReader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
         testStreamProxy.setShouldCompleteNextShard(true);
 
@@ -164,18 +175,13 @@ class PollingKinesisShardSplitReaderTest {
 
     @Test
     void testFinishedSplitsReturned() throws Exception {
-        TestKinesisStreamProxy testStreamProxy = getTestStreamProxy();
-        PollingKinesisShardSplitReader splitReader =
-                new PollingKinesisShardSplitReader(testStreamProxy);
-
         // Given assigned split with records from completed shard
-        String shardId = generateShardId(1);
-        testStreamProxy.addShards(shardId);
+        testStreamProxy.addShards(TEST_SHARD_ID);
         List<Record> expectedRecords =
                 Stream.of(getTestRecord("data-1"), getTestRecord("data-2"), getTestRecord("data-3"))
                         .collect(Collectors.toList());
-        testStreamProxy.addRecords(TestUtil.STREAM_ARN, shardId, expectedRecords);
-        KinesisShardSplit split = getTestSplit(shardId);
+        testStreamProxy.addRecords(TestUtil.STREAM_ARN, TEST_SHARD_ID, expectedRecords);
+        KinesisShardSplit split = getTestSplit(TEST_SHARD_ID);
         splitReader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
 
         // When fetching records
@@ -197,21 +203,28 @@ class PollingKinesisShardSplitReaderTest {
 
     @Test
     void testWakeUpIsNoOp() {
-        TestKinesisStreamProxy testStreamProxy = getTestStreamProxy();
-        PollingKinesisShardSplitReader splitReader =
-                new PollingKinesisShardSplitReader(testStreamProxy);
-
         assertThatNoException().isThrownBy(splitReader::wakeUp);
     }
 
     @Test
     void testCloseClosesStreamProxy() {
-        TestKinesisStreamProxy testStreamProxy = getTestStreamProxy();
-        PollingKinesisShardSplitReader splitReader =
-                new PollingKinesisShardSplitReader(testStreamProxy);
-
         assertThatNoException().isThrownBy(splitReader::close);
         assertThat(testStreamProxy.isClosed()).isTrue();
+    }
+
+    @Test
+    void testFetchUpdatesTheMillisBehindLatestMetric() throws IOException {
+        KinesisShardSplit split = getTestSplit();
+        shardMetricGroupMap.put(
+                split.getShardId(),
+                new KinesisShardMetrics(split, metricListener.getMetricGroup()));
+        TestUtil.assertMillisBehindLatest(split, -1L, metricListener);
+
+        splitReader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
+
+        splitReader.fetch();
+        TestUtil.assertMillisBehindLatest(
+                split, TestUtil.MILLIS_BEHIND_LATEST_TEST_VALUE, metricListener);
     }
 
     private List<Record> readAllRecords(RecordsWithSplitIds<Record> recordsWithSplitIds) {
