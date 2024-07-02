@@ -66,6 +66,7 @@ under the License.
             <version>${project.version}</version>
         </dependency>
 
+
         <!-- Flink Connector DynamoDB Dependencies -->
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
@@ -74,6 +75,16 @@ under the License.
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>dynamodb-enhanced</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
         </dependency>
 
         <!-- Table ecosystem -->
