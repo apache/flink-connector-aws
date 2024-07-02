@@ -44,6 +44,10 @@ class SqsSinkException extends RuntimeException {
             super(ERROR_MESSAGE);
         }
 
+        public SqsFailFastSinkException(final String errorMessage) {
+            super(errorMessage);
+        }
+
         public SqsFailFastSinkException(final Throwable cause) {
             super(ERROR_MESSAGE, cause);
         }

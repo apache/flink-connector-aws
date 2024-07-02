@@ -182,32 +182,36 @@ class SqsSinkWriter<InputT> extends AsyncSinkWriter<InputT, SendMessageBatchRequ
             List<SendMessageBatchRequestEntry> requestEntries,
             Consumer<List<SendMessageBatchRequestEntry>> requestResult) {
 
-        if (response.failed() != null) {
-            LOG.warn(
-                    "handlePartiallyFailedRequest: SQS Sink failed to write and will retry {} entries to SQS",
-                    response.failed().size());
-            numRecordsOutErrorsCounter.inc(response.failed().size());
-        }
+        LOG.warn(
+                "handlePartiallyFailedRequest: SQS Sink failed to write and will retry {} entries to SQS",
+                response.failed().size());
+        numRecordsOutErrorsCounter.inc(response.failed().size());
 
         if (failOnError) {
             getFatalExceptionCons().accept(new SqsSinkException.SqsFailFastSinkException());
             return;
         }
 
-        if (response.failed() != null) {
-            final List<SendMessageBatchRequestEntry> failedRequestEntries =
-                    new ArrayList<>(response.failed().size());
+        final List<SendMessageBatchRequestEntry> failedRequestEntries =
+                new ArrayList<>(response.failed().size());
 
-            for (final BatchResultErrorEntry failedEntry : response.failed()) {
-                final Optional<SendMessageBatchRequestEntry> retryEntry =
-                        getFailedRecord(requestEntries, failedEntry.id());
-                if (retryEntry.isPresent()) {
-                    failedRequestEntries.add(retryEntry.get());
-                }
+        for (final BatchResultErrorEntry failedEntry : response.failed()) {
+            final Optional<SendMessageBatchRequestEntry> retryEntry =
+                    getFailedRecord(requestEntries, failedEntry.id());
+            if (retryEntry.isPresent()) {
+                failedRequestEntries.add(retryEntry.get());
+            } else {
+                LOG.error(
+                        "handlePartiallyFailedRequest: SQS Sink failed to retry unsuccessful SQS publish request due to missing requestId");
+                getFatalExceptionCons()
+                        .accept(
+                                new SqsSinkException.SqsFailFastSinkException(
+                                        "SQS Sink failed to retry unsuccessful SQS publish request due to missing requestId"));
+                return;
             }
-
-            requestResult.accept(failedRequestEntries);
         }
+
+        requestResult.accept(failedRequestEntries);
     }
 
     private Optional<SendMessageBatchRequestEntry> getFailedRecord(
