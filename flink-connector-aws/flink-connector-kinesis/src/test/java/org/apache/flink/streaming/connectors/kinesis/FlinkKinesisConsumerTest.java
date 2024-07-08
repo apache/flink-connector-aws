@@ -43,6 +43,7 @@ import org.apache.flink.streaming.api.operators.collect.utils.MockFunctionSnapsh
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.connectors.kinesis.config.ConsumerConfigConstants;
+import org.apache.flink.streaming.connectors.kinesis.config.ConsumerConfigConstants.InitialPosition;
 import org.apache.flink.streaming.connectors.kinesis.internals.KinesisDataFetcher;
 import org.apache.flink.streaming.connectors.kinesis.model.KinesisStreamShard;
 import org.apache.flink.streaming.connectors.kinesis.model.KinesisStreamShardState;
@@ -97,6 +98,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static org.apache.flink.streaming.connectors.kinesis.config.ConsumerConfigConstants.APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS;
+import static org.apache.flink.streaming.connectors.kinesis.config.ConsumerConfigConstants.STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -1334,18 +1337,122 @@ public class FlinkKinesisConsumerTest extends TestLogger {
         }
     }
 
-
-
     /* ===========================================================================
-     Tests for FLINK-35299 - TODO: Rename and move where appropriate
+     Tests for FLINK-35299
      The setup for these tests will always be the same:
-     - stream A with discovered shards 0 and 1
-     - stream B with discovered shard 0
+     - stream A with state for shards 0 and 1
+     - stream B with state for shard 0
 
-     Then a few things will be discovered:
-     - stream C with shards 0 and 1
+     Then new shards will be discovered:
      - new shard (1) for stream B
+     - new shard (0) for stream C - since stream C is not in state yet, it qualifies as a "new stream".
      ==============================================================================*/
+
+    /**
+     * Tests FLINK-35299 with the default config values:
+     * - IF there is no state at all, all new streams/shards should start from INITIAL POSITION.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testFLINK35299DefaultsWhenThereIsNoState() throws Exception {
+        Properties config = TestUtils.getStandardProperties();
+
+        List<Tuple2<StreamShardMetadata, SequenceNumber>> existingState = null;
+
+        List<StreamShardHandle> shardsToSubscribe = new ArrayList<>();
+        StreamShardHandle streamShardA0 = getStreamShard("stream-A", 0);
+        StreamShardHandle streamShardA1 = getStreamShard("stream-A", 1);
+        StreamShardHandle streamShardB0 = getStreamShard("stream-B", 0);
+        StreamShardHandle streamShardB1 = getStreamShard("stream-B", 1);
+        StreamShardHandle streamShardC0 = getStreamShard("stream-C", 0);
+        shardsToSubscribe.add(streamShardA0);
+        shardsToSubscribe.add(streamShardA1);
+        shardsToSubscribe.add(streamShardB0);
+        shardsToSubscribe.add(streamShardB1); // new shard for existing stream
+        shardsToSubscribe.add(streamShardC0); // new stream
+
+        Map<StreamShardHandle, SequenceNumber> expectedResults = new HashMap<>();
+        SequenceNumber defaultInitialPositionSeqNumber = getSequenceNumber(InitialPosition.valueOf(ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION));
+        expectedResults.put(streamShardA0, defaultInitialPositionSeqNumber);
+        expectedResults.put(streamShardA1, defaultInitialPositionSeqNumber);
+        expectedResults.put(streamShardB0, defaultInitialPositionSeqNumber);
+        expectedResults.put(streamShardB1, defaultInitialPositionSeqNumber);
+        expectedResults.put(streamShardC0, defaultInitialPositionSeqNumber);
+
+        runAndValidate(config, existingState, shardsToSubscribe, expectedResults);
+    }
+
+    /**
+     * Tests FLINK-35299 with the {@link ConsumerConfigConstants#APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS}
+     * flag is set to true.
+     * - IF there is no state at all, all new streams/shards should start from INITIAL POSITION.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testFLINK35299ApplyStreamInitialPositionForNewStreamsWhenThereIsNoState() throws Exception {
+        Properties config = TestUtils.getStandardProperties();
+        config.setProperty(APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS, "true");
+
+        List<Tuple2<StreamShardMetadata, SequenceNumber>> existingState = null;
+
+        List<StreamShardHandle> shardsToSubscribe = new ArrayList<>();
+        StreamShardHandle streamShardA0 = getStreamShard("stream-A", 0);
+        StreamShardHandle streamShardA1 = getStreamShard("stream-A", 1);
+        StreamShardHandle streamShardB0 = getStreamShard("stream-B", 0);
+        StreamShardHandle streamShardB1 = getStreamShard("stream-B", 1);
+        StreamShardHandle streamShardC0 = getStreamShard("stream-C", 0);
+        shardsToSubscribe.add(streamShardA0);
+        shardsToSubscribe.add(streamShardA1);
+        shardsToSubscribe.add(streamShardB0);
+        shardsToSubscribe.add(streamShardB1); // new shard for existing stream
+        shardsToSubscribe.add(streamShardC0); // new stream
+
+        Map<StreamShardHandle, SequenceNumber> expectedResults = new HashMap<>();
+        SequenceNumber defaultInitialPositionSeqNumber = getSequenceNumber(InitialPosition.valueOf(ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION));
+        expectedResults.put(streamShardA0, defaultInitialPositionSeqNumber);
+        expectedResults.put(streamShardA1, defaultInitialPositionSeqNumber);
+        expectedResults.put(streamShardB0, defaultInitialPositionSeqNumber);
+        expectedResults.put(streamShardB1, defaultInitialPositionSeqNumber);
+        expectedResults.put(streamShardC0, defaultInitialPositionSeqNumber);
+
+        runAndValidate(config, existingState, shardsToSubscribe, expectedResults);
+    }
+
+    /**
+     * Tests FLINK-35299 with the {@link ConsumerConfigConstants#STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO}
+     * list contains some values.
+     * - IF there is no state at all, all new streams/shards should start from INITIAL POSITION.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testFLINK35299StreamsToApplyStreamInitialPositionToWhenThereIsNoState() throws Exception {
+        Properties config = TestUtils.getStandardProperties();
+        config.setProperty(STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO, "stream-A");
+
+        List<Tuple2<StreamShardMetadata, SequenceNumber>> existingState = null;
+
+        List<StreamShardHandle> shardsToSubscribe = new ArrayList<>();
+        StreamShardHandle streamShardA0 = getStreamShard("stream-A", 0);
+        StreamShardHandle streamShardA1 = getStreamShard("stream-A", 1);
+        StreamShardHandle streamShardB0 = getStreamShard("stream-B", 0);
+        StreamShardHandle streamShardB1 = getStreamShard("stream-B", 1);
+        StreamShardHandle streamShardC0 = getStreamShard("stream-C", 0);
+        shardsToSubscribe.add(streamShardA0);
+        shardsToSubscribe.add(streamShardA1);
+        shardsToSubscribe.add(streamShardB0);
+        shardsToSubscribe.add(streamShardB1); // new shard for existing stream
+        shardsToSubscribe.add(streamShardC0); // new stream
+
+        Map<StreamShardHandle, SequenceNumber> expectedResults = new HashMap<>();
+        SequenceNumber defaultInitialPositionSeqNumber = getSequenceNumber(InitialPosition.valueOf(ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION));
+        expectedResults.put(streamShardA0, defaultInitialPositionSeqNumber);
+        expectedResults.put(streamShardA1, defaultInitialPositionSeqNumber);
+        expectedResults.put(streamShardB0, defaultInitialPositionSeqNumber);
+        expectedResults.put(streamShardB1, defaultInitialPositionSeqNumber);
+        expectedResults.put(streamShardC0, defaultInitialPositionSeqNumber);
+
+        runAndValidate(config, existingState, shardsToSubscribe, expectedResults);
+    }
 
     /**
      * Tests the default values of the properties introduced in FLINK-35299:
@@ -1353,11 +1460,10 @@ public class FlinkKinesisConsumerTest extends TestLogger {
      *      - new streams should start from EARLIEST
      *      - new shards for existing streams start from EARLIEST
      *      - existing shards should continue from the state value
-     * - IF there is no state at all, new streams should start from INITIAL POSITION.
      */
     @Test
     @SuppressWarnings("unchecked")
-    public void testDefaultsWhenThereIsState() throws Exception {
+    public void testFLINK35299DefaultsWhenThereIsState() throws Exception {
         Properties config = TestUtils.getStandardProperties();
 
         List<Tuple2<StreamShardMetadata, SequenceNumber>> existingState = new ArrayList<>();
@@ -1378,11 +1484,125 @@ public class FlinkKinesisConsumerTest extends TestLogger {
         shardsToSubscribe.add(streamShardC0); // new stream
 
         Map<StreamShardHandle, SequenceNumber> expectedResults = new HashMap<>();
-        expectedResults.put(streamShardA0, new SequenceNumber("A0"));
-        expectedResults.put(streamShardA1, new SequenceNumber("A1"));
-        expectedResults.put(streamShardB0, new SequenceNumber("B0"));
-        expectedResults.put(streamShardB1, new SequenceNumber("EARLIEST_SEQUENCE_NUM"));
-        expectedResults.put(streamShardC0, new SequenceNumber("EARLIEST_SEQUENCE_NUM"));
+        expectedResults.put(streamShardA0, getSequenceNumber("A0"));
+        expectedResults.put(streamShardA1, getSequenceNumber("A1"));
+        expectedResults.put(streamShardB0, getSequenceNumber("B0"));
+        expectedResults.put(streamShardB1, getSequenceNumber(InitialPosition.TRIM_HORIZON));
+        expectedResults.put(streamShardC0, getSequenceNumber(InitialPosition.TRIM_HORIZON));
+
+        runAndValidate(config, existingState, shardsToSubscribe, expectedResults);
+    }
+
+    /**
+     * Tests FLINK-35299 when the {@link ConsumerConfigConstants#APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS}
+     * flag is set to true. In this case any NEW streams should start from the initial position configured and
+     * everything else should stay as it was.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testFLINK35299ApplyStreamInitialPositionForNewStreamsSetToTrue() throws Exception {
+        Properties config = TestUtils.getStandardProperties();
+        config.setProperty(APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS, "true");
+
+        List<Tuple2<StreamShardMetadata, SequenceNumber>> existingState = new ArrayList<>();
+        existingState.add(createShardState("stream-A", 0, "A0"));
+        existingState.add(createShardState("stream-A", 1, "A1"));
+        existingState.add(createShardState("stream-B", 0, "B0"));
+
+        List<StreamShardHandle> shardsToSubscribe = new ArrayList<>();
+        StreamShardHandle streamShardA0 = getStreamShard("stream-A", 0);
+        StreamShardHandle streamShardA1 = getStreamShard("stream-A", 1);
+        StreamShardHandle streamShardB0 = getStreamShard("stream-B", 0);
+        StreamShardHandle streamShardB1 = getStreamShard("stream-B", 1);
+        StreamShardHandle streamShardC0 = getStreamShard("stream-C", 0);
+        shardsToSubscribe.add(streamShardA0);
+        shardsToSubscribe.add(streamShardA1);
+        shardsToSubscribe.add(streamShardB0);
+        shardsToSubscribe.add(streamShardB1); // new shard for existing stream
+        shardsToSubscribe.add(streamShardC0); // new stream
+
+        Map<StreamShardHandle, SequenceNumber> expectedResults = new HashMap<>();
+        expectedResults.put(streamShardA0, getSequenceNumber("A0"));
+        expectedResults.put(streamShardA1, getSequenceNumber("A1"));
+        expectedResults.put(streamShardB0, getSequenceNumber("B0"));
+        expectedResults.put(streamShardB1, getSequenceNumber(InitialPosition.TRIM_HORIZON));
+        expectedResults.put(streamShardC0, getSequenceNumber(InitialPosition.valueOf(ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION)));
+
+        runAndValidate(config, existingState, shardsToSubscribe, expectedResults);
+    }
+
+    /**
+     * Tests FLINK-35299 when the {@link ConsumerConfigConstants#STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO}
+     * flag is set to a non-null list. In this case the stream used in that list should use the initial position
+     * from the config instead of using the state value. Everything else should behave as before.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testFLINK35299StreamsToApplyStreamInitialPositionTo() throws Exception {
+        Properties config = TestUtils.getStandardProperties();
+        config.setProperty(STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO, "stream-A");
+
+        List<Tuple2<StreamShardMetadata, SequenceNumber>> existingState = new ArrayList<>();
+        existingState.add(createShardState("stream-A", 0, "A0"));
+        existingState.add(createShardState("stream-A", 1, "A1"));
+        existingState.add(createShardState("stream-B", 0, "B0"));
+
+        List<StreamShardHandle> shardsToSubscribe = new ArrayList<>();
+        StreamShardHandle streamShardA0 = getStreamShard("stream-A", 0);
+        StreamShardHandle streamShardA1 = getStreamShard("stream-A", 1);
+        StreamShardHandle streamShardB0 = getStreamShard("stream-B", 0);
+        StreamShardHandle streamShardB1 = getStreamShard("stream-B", 1);
+        StreamShardHandle streamShardC0 = getStreamShard("stream-C", 0);
+        shardsToSubscribe.add(streamShardA0);
+        shardsToSubscribe.add(streamShardA1);
+        shardsToSubscribe.add(streamShardB0);
+        shardsToSubscribe.add(streamShardB1); // new shard for existing stream
+        shardsToSubscribe.add(streamShardC0); // new stream
+
+        Map<StreamShardHandle, SequenceNumber> expectedResults = new HashMap<>();
+        expectedResults.put(streamShardA0, getSequenceNumber(InitialPosition.valueOf(ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION)));
+        expectedResults.put(streamShardA1, getSequenceNumber(InitialPosition.valueOf(ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION)));
+        expectedResults.put(streamShardB0, getSequenceNumber("B0"));
+        expectedResults.put(streamShardB1, getSequenceNumber(InitialPosition.TRIM_HORIZON));
+        expectedResults.put(streamShardC0, getSequenceNumber(InitialPosition.TRIM_HORIZON));
+
+        runAndValidate(config, existingState, shardsToSubscribe, expectedResults);
+    }
+
+    /**
+     * Tests FLINK-35299 when the {@link ConsumerConfigConstants#APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS} flag
+     * is set to true and the {@link ConsumerConfigConstants#STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO}
+     * list is set to a non-null value.
+     */
+    @SuppressWarnings("unchecked")
+    public void testFLINK35299BothNewPropertiesBeingUsed() throws Exception {
+        Properties config = TestUtils.getStandardProperties();
+        config.setProperty(APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS, "true");
+        config.setProperty(STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO, "stream-B");
+
+        List<Tuple2<StreamShardMetadata, SequenceNumber>> existingState = new ArrayList<>();
+        existingState.add(createShardState("stream-A", 0, "A0"));
+        existingState.add(createShardState("stream-A", 1, "A1"));
+        existingState.add(createShardState("stream-B", 0, "B0"));
+
+        List<StreamShardHandle> shardsToSubscribe = new ArrayList<>();
+        StreamShardHandle streamShardA0 = getStreamShard("stream-A", 0);
+        StreamShardHandle streamShardA1 = getStreamShard("stream-A", 1);
+        StreamShardHandle streamShardB0 = getStreamShard("stream-B", 0);
+        StreamShardHandle streamShardB1 = getStreamShard("stream-B", 1);
+        StreamShardHandle streamShardC0 = getStreamShard("stream-C", 0);
+        shardsToSubscribe.add(streamShardA0);
+        shardsToSubscribe.add(streamShardA1);
+        shardsToSubscribe.add(streamShardB0);
+        shardsToSubscribe.add(streamShardB1); // new shard for existing stream
+        shardsToSubscribe.add(streamShardC0); // new stream
+
+        Map<StreamShardHandle, SequenceNumber> expectedResults = new HashMap<>();
+        expectedResults.put(streamShardA0, getSequenceNumber("A0"));
+        expectedResults.put(streamShardA1, getSequenceNumber("A1"));
+        expectedResults.put(streamShardB0, getSequenceNumber(InitialPosition.valueOf(ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION)));
+        expectedResults.put(streamShardB1, getSequenceNumber(InitialPosition.TRIM_HORIZON));
+        expectedResults.put(streamShardC0, getSequenceNumber(InitialPosition.valueOf(ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION)));
 
         runAndValidate(config, existingState, shardsToSubscribe, expectedResults);
     }
@@ -1394,7 +1614,9 @@ public class FlinkKinesisConsumerTest extends TestLogger {
         KinesisDataFetcher mockedFetcher = mockKinesisDataFetcher();
 
         TestingListState<Tuple2<StreamShardMetadata, SequenceNumber>> listState = new TestingListState<>();
-        listState.addAll(existingState);
+        if (existingState != null) {
+            listState.addAll(existingState);
+        }
         when(mockedFetcher.discoverNewShardsToSubscribe()).thenReturn(shardsToSubscribe);
 
         List<String> streamsToConsume = shardsToSubscribe.stream().map(StreamShardHandle::getStreamName).distinct().collect(Collectors.toList());
@@ -1428,6 +1650,14 @@ public class FlinkKinesisConsumerTest extends TestLogger {
             SequenceNumber expectedSequenceNumber = expectedResults.get(getStreamShard(streamShardMetadata));
             assertThat(sequenceNumber).isEqualTo(expectedSequenceNumber);
         }
+    }
+
+    private static SequenceNumber getSequenceNumber(String seqNumber) {
+        return new SequenceNumber(seqNumber);
+    }
+
+    private static SequenceNumber getSequenceNumber(InitialPosition initialPosition) {
+        return initialPosition.toSentinelSequenceNumber().get();
     }
 
     private static void verifyRegisterNewSubscribedShard(KinesisDataFetcher mockedFetcher, StreamShardHandle streamShardHandle, SequenceNumber sequenceNumber) {

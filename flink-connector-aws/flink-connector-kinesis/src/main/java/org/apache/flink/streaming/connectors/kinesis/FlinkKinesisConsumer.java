@@ -355,7 +355,7 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
                             KinesisDataFetcher.convertToStreamShardMetadata(shard));
             String stream = shard.getStreamName();
 
-            if (sequenceNumsToRestore == null || streamsToForceInitialPositionIn.contains(stream)) {
+            if (sequenceNumsToRestore == null || sequenceNumsToRestore.isEmpty() || streamsToForceInitialPositionIn.contains(stream)) {
                 // we're starting fresh (either for the whole consumer or for this stream);
                 // use the configured start position as initial state
                 registerFromInitialPosition(fetcher, shard, kinesisStreamShard);
