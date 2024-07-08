@@ -347,7 +347,7 @@ public class ConsumerConfigConstants extends AWSConfigConstants {
 
     public static final String DEFAULT_STREAM_INITIAL_POSITION = InitialPosition.LATEST.toString();
 
-    /** False for now so that we preserve old behaviour. TODO switch to true in the next major */
+    /** False for now so that we preserve old behaviour. TODO switch to true in the next major? If so update the javadoc. */
     public static final boolean DEFAULT_APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS = false;
 
     public static final String DEFAULT_STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO = "";
