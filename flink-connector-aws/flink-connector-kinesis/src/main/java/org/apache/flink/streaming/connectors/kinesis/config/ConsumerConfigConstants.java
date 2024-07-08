@@ -350,8 +350,6 @@ public class ConsumerConfigConstants extends AWSConfigConstants {
     /** False for now so that we preserve old behaviour. TODO switch to true in the next major? If so update the javadoc. */
     public static final boolean DEFAULT_APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS = false;
 
-    public static final String DEFAULT_STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO = "";
-
     public static final String DEFAULT_STREAM_TIMESTAMP_DATE_FORMAT =
             "yyyy-MM-dd'T'HH:mm:ss.SSSXXX";
 

@@ -70,6 +70,7 @@ import org.apache.flink.util.TestLogger;
 import com.amazonaws.services.kinesis.model.HashKeyRange;
 import com.amazonaws.services.kinesis.model.SequenceNumberRange;
 import com.amazonaws.services.kinesis.model.Shard;
+import org.jetbrains.annotations.NotNull;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.MockedStatic;
@@ -95,6 +96,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -1331,5 +1333,118 @@ public class FlinkKinesisConsumerTest extends TestLogger {
         static void assertGlobalWatermark(long expected) {
             assertThat(WATERMARK.get()).isEqualTo(expected);
         }
+    }
+
+
+
+    /* ===========================================================================
+     Tests for FLINK-35299 - TODO: Rename and move where appropriate
+     The setup for these tests will always be the same:
+     - stream A with discovered shards 0 and 1
+     - stream B with discovered shard 0
+
+     Then a few things will be discovered:
+     - stream C with shards 0 and 1
+     - new shard (1) for stream B
+     ==============================================================================*/
+
+    /**
+     * Tests the default values of the properties introduced in FLINK-35299:
+     * - IF there is some state already
+     *      - new streams should start from EARLIEST
+     *      - new shards for existing streams start from EARLIEST
+     *      - existing shards should continue from the state value
+     * - IF there is no state at all, new streams should start from INITIAL POSITION.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testDefaultsWhenThereIsState() throws Exception {
+        Properties config = TestUtils.getStandardProperties();
+        KinesisDataFetcher mockedFetcher = mockKinesisDataFetcher();
+
+        List<Tuple2<StreamShardMetadata, SequenceNumber>> existingState = new ArrayList<>();
+        existingState.add(createShardState("stream-A", 0, "A0"));
+        existingState.add(createShardState("stream-A", 1, "A1"));
+        existingState.add(createShardState("stream-B", 0, "B0"));
+
+        List<StreamShardHandle> shardsToSubscribe = new ArrayList<>();
+        StreamShardHandle streamShardA0 = getStreamShard("stream-A", 0);
+        StreamShardHandle streamShardA1 = getStreamShard("stream-A", 1);
+        StreamShardHandle streamShardB0 = getStreamShard("stream-B", 0);
+        StreamShardHandle streamShardB1 = getStreamShard("stream-B", 1);
+        StreamShardHandle streamShardC0 = getStreamShard("stream-C", 0);
+        shardsToSubscribe.add(streamShardA0);
+        shardsToSubscribe.add(streamShardA1);
+        shardsToSubscribe.add(streamShardB0);
+        shardsToSubscribe.add(streamShardB1); // new shard for existing stream
+        shardsToSubscribe.add(streamShardC0); // new stream
+
+        Map<StreamShardHandle, SequenceNumber> expectedResults = new HashMap<>();
+        expectedResults.put(streamShardA0, new SequenceNumber("A0"));
+        expectedResults.put(streamShardA1, new SequenceNumber("A1"));
+        expectedResults.put(streamShardB0, new SequenceNumber("B0"));
+        expectedResults.put(streamShardB1, new SequenceNumber("EARLIEST_SEQUENCE_NUM"));
+        expectedResults.put(streamShardC0, new SequenceNumber("EARLIEST_SEQUENCE_NUM"));
+
+        runAndValidate(existingState, mockedFetcher, shardsToSubscribe, config, expectedResults);
+    }
+
+    private void runAndValidate(List<Tuple2<StreamShardMetadata, SequenceNumber>> existingState, KinesisDataFetcher mockedFetcher, List<StreamShardHandle> shardsToSubscribe, Properties config, Map<StreamShardHandle, SequenceNumber> expectedResults) throws Exception {
+        TestingListState<Tuple2<StreamShardMetadata, SequenceNumber>> listState = new TestingListState<>();
+        listState.addAll(existingState);
+        when(mockedFetcher.discoverNewShardsToSubscribe()).thenReturn(shardsToSubscribe);
+
+        List<String> streamsToConsume = shardsToSubscribe.stream().map(StreamShardHandle::getStreamName).distinct().collect(Collectors.toList());
+        FlinkKinesisConsumer<String> consumer = new FlinkKinesisConsumer<>(streamsToConsume, new KinesisDeserializationSchemaWrapper<>(new SimpleStringSchema()), config);
+        RuntimeContext context = new MockStreamingRuntimeContext(true, 2, 0);
+        consumer.setRuntimeContext(context);
+
+        OperatorStateStore operatorStateStore = mock(OperatorStateStore.class);
+        when(operatorStateStore.getUnionListState(any(ListStateDescriptor.class))).thenReturn(listState);
+
+        StateInitializationContext initializationContext = mock(StateInitializationContext.class);
+        when(initializationContext.getOperatorStateStore()).thenReturn(operatorStateStore);
+        when(initializationContext.isRestored()).thenReturn(true);
+
+        consumer.initializeState(initializationContext);
+
+        consumer.open(new Configuration());
+        consumer.run(Mockito.mock(SourceFunction.SourceContext.class));
+
+        // check interactions with fetched
+        expectedResults.forEach((streamShardHandle, sequenceNumber) -> verifyRegisterNewSubscribedShard(mockedFetcher, streamShardHandle, sequenceNumber));
+
+        // arbitrary checkpoint to validate new state
+        consumer.snapshotState(new StateSnapshotContextSynchronousImpl(123, 123));
+        assertThat(listState.isClearCalled()).isTrue();
+        List<Tuple2<StreamShardMetadata, SequenceNumber>> list = listState.getList();
+        for (Tuple2<StreamShardMetadata, SequenceNumber> entry : list) {
+            StreamShardMetadata streamShardMetadata = entry.f0;
+            SequenceNumber sequenceNumber = entry.f1;
+
+            SequenceNumber expectedSequenceNumber = expectedResults.get(getStreamShard(streamShardMetadata));
+            assertThat(sequenceNumber).isEqualTo(expectedSequenceNumber);
+        }
+    }
+
+    private static void verifyRegisterNewSubscribedShard(KinesisDataFetcher mockedFetcher, StreamShardHandle streamShardHandle, SequenceNumber sequenceNumber) {
+        Mockito.verify(mockedFetcher).registerNewSubscribedShardState(
+                new KinesisStreamShardState(
+                        KinesisDataFetcher.convertToStreamShardMetadata(streamShardHandle),
+                        streamShardHandle,
+                        sequenceNumber)
+        );
+    }
+
+    private StreamShardHandle getStreamShard(StreamShardMetadata streamShardMetadata) {
+        return getStreamShard(streamShardMetadata.getStreamName(), streamShardMetadata.getShardId());
+    }
+
+    private static StreamShardHandle getStreamShard(String streamName, int shardId) {
+        return getStreamShard(streamName, KinesisShardIdGenerator.generateFromShardOrder(shardId));
+    }
+
+    private static StreamShardHandle getStreamShard(String streamName, String shardId) {
+        return new StreamShardHandle(streamName, new Shard().withShardId(shardId));
     }
 }
