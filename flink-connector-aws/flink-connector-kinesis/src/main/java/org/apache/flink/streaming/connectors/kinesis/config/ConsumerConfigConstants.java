@@ -322,7 +322,11 @@ public class ConsumerConfigConstants extends AWSConfigConstants {
 
     /**
      * Flag to configure whether {@link #STREAM_INITIAL_POSITION} should be considered for new
-     * streams, when the app is already consuming from other streams.
+     * streams, when the app is already consuming from other streams. If set to true, then any
+     * stream that doesn't have any shard tracked by state yet will use the initial position.
+     * If false (default), it is assumed that we should consume from the beginning, which is
+     * appropriate when you want to ensure no data is lost if the stream is already being used
+     * by the data producers.
      */
     public static final String APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS =
             "flink.stream.initpos-for-new-streams";
