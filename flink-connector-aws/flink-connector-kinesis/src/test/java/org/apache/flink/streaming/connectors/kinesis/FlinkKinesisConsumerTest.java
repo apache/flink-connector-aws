@@ -1570,6 +1570,44 @@ public class FlinkKinesisConsumerTest extends TestLogger {
     }
 
     /**
+     * Tests FLINK-35299 when the {@link ConsumerConfigConstants#STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO}
+     * flag contains streams that are not tracked yet.
+     * This is an edge case of {@link #testFLINK35299StreamsToApplyStreamInitialPositionTo()}.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testFLINK35299StreamsToApplyStreamInitialPositionToForANewStream() throws Exception {
+        Properties config = TestUtils.getStandardProperties();
+        config.setProperty(STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO, "stream-C");
+
+        List<Tuple2<StreamShardMetadata, SequenceNumber>> existingState = new ArrayList<>();
+        existingState.add(createShardState("stream-A", 0, "A0"));
+        existingState.add(createShardState("stream-A", 1, "A1"));
+        existingState.add(createShardState("stream-B", 0, "B0"));
+
+        List<StreamShardHandle> shardsToSubscribe = new ArrayList<>();
+        StreamShardHandle streamShardA0 = getStreamShard("stream-A", 0);
+        StreamShardHandle streamShardA1 = getStreamShard("stream-A", 1);
+        StreamShardHandle streamShardB0 = getStreamShard("stream-B", 0);
+        StreamShardHandle streamShardB1 = getStreamShard("stream-B", 1);
+        StreamShardHandle streamShardC0 = getStreamShard("stream-C", 0);
+        shardsToSubscribe.add(streamShardA0);
+        shardsToSubscribe.add(streamShardA1);
+        shardsToSubscribe.add(streamShardB0);
+        shardsToSubscribe.add(streamShardB1); // new shard for existing stream
+        shardsToSubscribe.add(streamShardC0); // new stream
+
+        Map<StreamShardHandle, SequenceNumber> expectedResults = new HashMap<>();
+        expectedResults.put(streamShardA0, getSequenceNumber("A0"));
+        expectedResults.put(streamShardA1, getSequenceNumber("A1"));
+        expectedResults.put(streamShardB0, getSequenceNumber("B0"));
+        expectedResults.put(streamShardB1, getSequenceNumber(InitialPosition.TRIM_HORIZON));
+        expectedResults.put(streamShardC0, getSequenceNumber(InitialPosition.valueOf(ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION)));
+
+        runAndValidate(config, existingState, shardsToSubscribe, expectedResults);
+    }
+
+    /**
      * Tests FLINK-35299 when the {@link ConsumerConfigConstants#APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS} flag
      * is set to true and the {@link ConsumerConfigConstants#STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO}
      * list is set to a non-null value.

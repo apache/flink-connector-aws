@@ -221,8 +221,13 @@ properties by providing a value for `ConsumerConfigConstants.STREAM_INITIAL_TIME
 
 By default, the Flink Kinesis Consumer handles new streams the same way it handles a new shard for an existing stream, and it starts consuming from the earliest record (same behaviour as TRIM_HORIZON).
 
-This is usually not what you want for new streams, where it makes more sense to respect what is defined in `ConsumerConfigConstants.STREAM_INITIAL_POSITION`.
-This behaviour can now be enabled by setting the `ConsumerConfigConstants.APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS` flag to true.
+This behaviour is fine if you're consuming from a stream that you don't want to lose any data from, but if you're consuming from a stream with a large retention and where it is fine to start consuming from "now",
+or more generally started from that is defined in `ConsumerConfigConstants.STREAM_INITIAL_POSITION`, this was not possible before. 
+
+This behaviour can now be enabled by setting the `ConsumerConfigConstants.APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS` flag to true, which will make ALL new streams "reset" to consume from the initial position
+instead of starting from the beginning. 
+
+If you just want to force a particular new stream to start consuming from the defined `ConsumerConfigConstants.STREAM_INITIAL_POSITION`, you can use the `ConsumerConfigConstants.STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO` property (described below) instead.
 
 ### Resetting specific streams to the starting position
 
@@ -240,7 +245,9 @@ consumerConfig.put(ConsumerConfigConstants.STREAMS_TO_APPLY_STREAM_INITIAL_POSIT
 ```
 then `streamA` and `streamB` would start consuming from LATEST, even if they are already being tracked by the application.
 
-Note that you would need to reset this property afterwards, otherwise the Flink Kinesis Consumer will always be resetting those streams to LATEST.
+{{< hint warning >}}
+Note that you need to remove this property after the value is reset and a savepoint is taken, otherwise the Flink Kinesis Consumer will always be resetting those streams to the configured initial position.
+{{< /hint >}}
 
 ### Fault Tolerance for Exactly-Once User-Defined State Update Semantics
 
