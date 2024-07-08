@@ -330,9 +330,8 @@ public class ConsumerConfigConstants extends AWSConfigConstants {
     /**
      * Property that can be used to ignore the restore state for a particular stream and instead use
      * the initial position. This is useful to reset a specific stream to consume from TRIM_HORIZON
-     * or LATEST if needed. Values must be passed in a comma separated list.
-     *
-     * <p>If a stream is in this list, it will use initial position regardless of the value of the
+     * or LATEST if needed. Values must be passed in a comma separated list. If a stream is in this list,
+     * it will use initial position regardless of the value of the
      * {@link #APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS} property.
      */
     public static final String STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO =
