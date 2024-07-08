@@ -70,7 +70,6 @@ import org.apache.flink.util.TestLogger;
 import com.amazonaws.services.kinesis.model.HashKeyRange;
 import com.amazonaws.services.kinesis.model.SequenceNumberRange;
 import com.amazonaws.services.kinesis.model.Shard;
-import org.jetbrains.annotations.NotNull;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.MockedStatic;
@@ -1360,7 +1359,6 @@ public class FlinkKinesisConsumerTest extends TestLogger {
     @SuppressWarnings("unchecked")
     public void testDefaultsWhenThereIsState() throws Exception {
         Properties config = TestUtils.getStandardProperties();
-        KinesisDataFetcher mockedFetcher = mockKinesisDataFetcher();
 
         List<Tuple2<StreamShardMetadata, SequenceNumber>> existingState = new ArrayList<>();
         existingState.add(createShardState("stream-A", 0, "A0"));
@@ -1386,10 +1384,15 @@ public class FlinkKinesisConsumerTest extends TestLogger {
         expectedResults.put(streamShardB1, new SequenceNumber("EARLIEST_SEQUENCE_NUM"));
         expectedResults.put(streamShardC0, new SequenceNumber("EARLIEST_SEQUENCE_NUM"));
 
-        runAndValidate(existingState, mockedFetcher, shardsToSubscribe, config, expectedResults);
+        runAndValidate(config, existingState, shardsToSubscribe, expectedResults);
     }
 
-    private void runAndValidate(List<Tuple2<StreamShardMetadata, SequenceNumber>> existingState, KinesisDataFetcher mockedFetcher, List<StreamShardHandle> shardsToSubscribe, Properties config, Map<StreamShardHandle, SequenceNumber> expectedResults) throws Exception {
+    private void runAndValidate(Properties config,
+                                List<Tuple2<StreamShardMetadata, SequenceNumber>> existingState,
+                                List<StreamShardHandle> shardsToSubscribe,
+                                Map<StreamShardHandle, SequenceNumber> expectedResults) throws Exception {
+        KinesisDataFetcher mockedFetcher = mockKinesisDataFetcher();
+
         TestingListState<Tuple2<StreamShardMetadata, SequenceNumber>> listState = new TestingListState<>();
         listState.addAll(existingState);
         when(mockedFetcher.discoverNewShardsToSubscribe()).thenReturn(shardsToSubscribe);
