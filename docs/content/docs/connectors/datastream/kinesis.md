@@ -229,7 +229,7 @@ instead of starting from the beginning.
 
 If you just want to force a particular new stream to start consuming from the defined `ConsumerConfigConstants.STREAM_INITIAL_POSITION`, you can use the `ConsumerConfigConstants.STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO` property (described below) instead.
 
-### Resetting specific streams to the starting position
+### Resetting specific streams to the configured initial position
 
 One of the features of the Flink Kinesis Consumer is that it keeps track of the offset that the application is at for each shard, so that if the application is restarted we can start consuming from that offset
 when restoring from snapshot. 
