@@ -1338,19 +1338,19 @@ public class FlinkKinesisConsumerTest extends TestLogger {
     }
 
     /* ===========================================================================
-     Tests for FLINK-35299
-     The setup for these tests will always be the same:
-     - stream A with state for shards 0 and 1
-     - stream B with state for shard 0
+    Tests for FLINK-35299
+    The setup for these tests will always be the same:
+    - stream A with state for shards 0 and 1
+    - stream B with state for shard 0
 
-     Then new shards will be discovered:
-     - new shard (1) for stream B
-     - new shard (0) for stream C - since stream C is not in state yet, it qualifies as a "new stream".
-     ==============================================================================*/
+    Then new shards will be discovered:
+    - new shard (1) for stream B
+    - new shard (0) for stream C - since stream C is not in state yet, it qualifies as a "new stream".
+    ==============================================================================*/
 
     /**
-     * Tests FLINK-35299 with the default config values:
-     * - IF there is no state at all, all new streams/shards should start from INITIAL POSITION.
+     * Tests FLINK-35299 with the default config values: - IF there is no state at all, all new
+     * streams/shards should start from INITIAL POSITION.
      */
     @Test
     @SuppressWarnings("unchecked")
@@ -1372,7 +1372,10 @@ public class FlinkKinesisConsumerTest extends TestLogger {
         shardsToSubscribe.add(streamShardC0); // new stream
 
         Map<StreamShardHandle, SequenceNumber> expectedResults = new HashMap<>();
-        SequenceNumber defaultInitialPositionSeqNumber = getSequenceNumber(InitialPosition.valueOf(ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION));
+        SequenceNumber defaultInitialPositionSeqNumber =
+                getSequenceNumber(
+                        InitialPosition.valueOf(
+                                ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION));
         expectedResults.put(streamShardA0, defaultInitialPositionSeqNumber);
         expectedResults.put(streamShardA1, defaultInitialPositionSeqNumber);
         expectedResults.put(streamShardB0, defaultInitialPositionSeqNumber);
@@ -1383,13 +1386,14 @@ public class FlinkKinesisConsumerTest extends TestLogger {
     }
 
     /**
-     * Tests FLINK-35299 with the {@link ConsumerConfigConstants#APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS}
-     * flag is set to true.
-     * - IF there is no state at all, all new streams/shards should start from INITIAL POSITION.
+     * Tests FLINK-35299 with the {@link
+     * ConsumerConfigConstants#APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS} flag is set to true. -
+     * IF there is no state at all, all new streams/shards should start from INITIAL POSITION.
      */
     @Test
     @SuppressWarnings("unchecked")
-    public void testFLINK35299ApplyStreamInitialPositionForNewStreamsWhenThereIsNoState() throws Exception {
+    public void testFLINK35299ApplyStreamInitialPositionForNewStreamsWhenThereIsNoState()
+            throws Exception {
         Properties config = TestUtils.getStandardProperties();
         config.setProperty(APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS, "true");
 
@@ -1408,7 +1412,10 @@ public class FlinkKinesisConsumerTest extends TestLogger {
         shardsToSubscribe.add(streamShardC0); // new stream
 
         Map<StreamShardHandle, SequenceNumber> expectedResults = new HashMap<>();
-        SequenceNumber defaultInitialPositionSeqNumber = getSequenceNumber(InitialPosition.valueOf(ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION));
+        SequenceNumber defaultInitialPositionSeqNumber =
+                getSequenceNumber(
+                        InitialPosition.valueOf(
+                                ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION));
         expectedResults.put(streamShardA0, defaultInitialPositionSeqNumber);
         expectedResults.put(streamShardA1, defaultInitialPositionSeqNumber);
         expectedResults.put(streamShardB0, defaultInitialPositionSeqNumber);
@@ -1419,13 +1426,15 @@ public class FlinkKinesisConsumerTest extends TestLogger {
     }
 
     /**
-     * Tests FLINK-35299 with the {@link ConsumerConfigConstants#STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO}
-     * list contains some values.
-     * - IF there is no state at all, all new streams/shards should start from INITIAL POSITION.
+     * Tests FLINK-35299 with the {@link
+     * ConsumerConfigConstants#STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO} list contains some
+     * values. - IF there is no state at all, all new streams/shards should start from INITIAL
+     * POSITION.
      */
     @Test
     @SuppressWarnings("unchecked")
-    public void testFLINK35299StreamsToApplyStreamInitialPositionToWhenThereIsNoState() throws Exception {
+    public void testFLINK35299StreamsToApplyStreamInitialPositionToWhenThereIsNoState()
+            throws Exception {
         Properties config = TestUtils.getStandardProperties();
         config.setProperty(STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO, "stream-A");
 
@@ -1444,7 +1453,10 @@ public class FlinkKinesisConsumerTest extends TestLogger {
         shardsToSubscribe.add(streamShardC0); // new stream
 
         Map<StreamShardHandle, SequenceNumber> expectedResults = new HashMap<>();
-        SequenceNumber defaultInitialPositionSeqNumber = getSequenceNumber(InitialPosition.valueOf(ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION));
+        SequenceNumber defaultInitialPositionSeqNumber =
+                getSequenceNumber(
+                        InitialPosition.valueOf(
+                                ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION));
         expectedResults.put(streamShardA0, defaultInitialPositionSeqNumber);
         expectedResults.put(streamShardA1, defaultInitialPositionSeqNumber);
         expectedResults.put(streamShardB0, defaultInitialPositionSeqNumber);
@@ -1455,11 +1467,9 @@ public class FlinkKinesisConsumerTest extends TestLogger {
     }
 
     /**
-     * Tests the default values of the properties introduced in FLINK-35299:
-     * - IF there is some state already
-     *      - new streams should start from EARLIEST
-     *      - new shards for existing streams start from EARLIEST
-     *      - existing shards should continue from the state value
+     * Tests the default values of the properties introduced in FLINK-35299: - IF there is some
+     * state already - new streams should start from EARLIEST - new shards for existing streams
+     * start from EARLIEST - existing shards should continue from the state value
      */
     @Test
     @SuppressWarnings("unchecked")
@@ -1494,9 +1504,10 @@ public class FlinkKinesisConsumerTest extends TestLogger {
     }
 
     /**
-     * Tests FLINK-35299 when the {@link ConsumerConfigConstants#APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS}
-     * flag is set to true. In this case any NEW streams should start from the initial position configured and
-     * everything else should stay as it was.
+     * Tests FLINK-35299 when the {@link
+     * ConsumerConfigConstants#APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS} flag is set to true.
+     * In this case any NEW streams should start from the initial position configured and everything
+     * else should stay as it was.
      */
     @Test
     @SuppressWarnings("unchecked")
@@ -1526,15 +1537,20 @@ public class FlinkKinesisConsumerTest extends TestLogger {
         expectedResults.put(streamShardA1, getSequenceNumber("A1"));
         expectedResults.put(streamShardB0, getSequenceNumber("B0"));
         expectedResults.put(streamShardB1, getSequenceNumber(InitialPosition.TRIM_HORIZON));
-        expectedResults.put(streamShardC0, getSequenceNumber(InitialPosition.valueOf(ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION)));
+        expectedResults.put(
+                streamShardC0,
+                getSequenceNumber(
+                        InitialPosition.valueOf(
+                                ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION)));
 
         runAndValidate(config, existingState, shardsToSubscribe, expectedResults);
     }
 
     /**
-     * Tests FLINK-35299 when the {@link ConsumerConfigConstants#STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO}
-     * flag is set to a non-null list. In this case the stream used in that list should use the initial position
-     * from the config instead of using the state value. Everything else should behave as before.
+     * Tests FLINK-35299 when the {@link
+     * ConsumerConfigConstants#STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO} flag is set to a
+     * non-null list. In this case the stream used in that list should use the initial position from
+     * the config instead of using the state value. Everything else should behave as before.
      */
     @Test
     @SuppressWarnings("unchecked")
@@ -1560,8 +1576,16 @@ public class FlinkKinesisConsumerTest extends TestLogger {
         shardsToSubscribe.add(streamShardC0); // new stream
 
         Map<StreamShardHandle, SequenceNumber> expectedResults = new HashMap<>();
-        expectedResults.put(streamShardA0, getSequenceNumber(InitialPosition.valueOf(ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION)));
-        expectedResults.put(streamShardA1, getSequenceNumber(InitialPosition.valueOf(ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION)));
+        expectedResults.put(
+                streamShardA0,
+                getSequenceNumber(
+                        InitialPosition.valueOf(
+                                ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION)));
+        expectedResults.put(
+                streamShardA1,
+                getSequenceNumber(
+                        InitialPosition.valueOf(
+                                ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION)));
         expectedResults.put(streamShardB0, getSequenceNumber("B0"));
         expectedResults.put(streamShardB1, getSequenceNumber(InitialPosition.TRIM_HORIZON));
         expectedResults.put(streamShardC0, getSequenceNumber(InitialPosition.TRIM_HORIZON));
@@ -1570,13 +1594,15 @@ public class FlinkKinesisConsumerTest extends TestLogger {
     }
 
     /**
-     * Tests FLINK-35299 when the {@link ConsumerConfigConstants#STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO}
-     * flag contains streams that are not tracked yet.
-     * This is an edge case of {@link #testFLINK35299StreamsToApplyStreamInitialPositionTo()}.
+     * Tests FLINK-35299 when the {@link
+     * ConsumerConfigConstants#STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO} flag contains streams
+     * that are not tracked yet. This is an edge case of {@link
+     * #testFLINK35299StreamsToApplyStreamInitialPositionTo()}.
      */
     @Test
     @SuppressWarnings("unchecked")
-    public void testFLINK35299StreamsToApplyStreamInitialPositionToForANewStream() throws Exception {
+    public void testFLINK35299StreamsToApplyStreamInitialPositionToForANewStream()
+            throws Exception {
         Properties config = TestUtils.getStandardProperties();
         config.setProperty(STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO, "stream-C");
 
@@ -1602,15 +1628,20 @@ public class FlinkKinesisConsumerTest extends TestLogger {
         expectedResults.put(streamShardA1, getSequenceNumber("A1"));
         expectedResults.put(streamShardB0, getSequenceNumber("B0"));
         expectedResults.put(streamShardB1, getSequenceNumber(InitialPosition.TRIM_HORIZON));
-        expectedResults.put(streamShardC0, getSequenceNumber(InitialPosition.valueOf(ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION)));
+        expectedResults.put(
+                streamShardC0,
+                getSequenceNumber(
+                        InitialPosition.valueOf(
+                                ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION)));
 
         runAndValidate(config, existingState, shardsToSubscribe, expectedResults);
     }
 
     /**
-     * Tests FLINK-35299 when the {@link ConsumerConfigConstants#APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS} flag
-     * is set to true and the {@link ConsumerConfigConstants#STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO}
-     * list is set to a non-null value.
+     * Tests FLINK-35299 when the {@link
+     * ConsumerConfigConstants#APPLY_STREAM_INITIAL_POSITION_FOR_NEW_STREAMS} flag is set to true
+     * and the {@link ConsumerConfigConstants#STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO} list is
+     * set to a non-null value.
      */
     @SuppressWarnings("unchecked")
     public void testFLINK35299BothNewPropertiesBeingUsed() throws Exception {
@@ -1638,32 +1669,52 @@ public class FlinkKinesisConsumerTest extends TestLogger {
         Map<StreamShardHandle, SequenceNumber> expectedResults = new HashMap<>();
         expectedResults.put(streamShardA0, getSequenceNumber("A0"));
         expectedResults.put(streamShardA1, getSequenceNumber("A1"));
-        expectedResults.put(streamShardB0, getSequenceNumber(InitialPosition.valueOf(ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION)));
+        expectedResults.put(
+                streamShardB0,
+                getSequenceNumber(
+                        InitialPosition.valueOf(
+                                ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION)));
         expectedResults.put(streamShardB1, getSequenceNumber(InitialPosition.TRIM_HORIZON));
-        expectedResults.put(streamShardC0, getSequenceNumber(InitialPosition.valueOf(ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION)));
+        expectedResults.put(
+                streamShardC0,
+                getSequenceNumber(
+                        InitialPosition.valueOf(
+                                ConsumerConfigConstants.DEFAULT_STREAM_INITIAL_POSITION)));
 
         runAndValidate(config, existingState, shardsToSubscribe, expectedResults);
     }
 
-    private void runAndValidate(Properties config,
-                                List<Tuple2<StreamShardMetadata, SequenceNumber>> existingState,
-                                List<StreamShardHandle> shardsToSubscribe,
-                                Map<StreamShardHandle, SequenceNumber> expectedResults) throws Exception {
+    private void runAndValidate(
+            Properties config,
+            List<Tuple2<StreamShardMetadata, SequenceNumber>> existingState,
+            List<StreamShardHandle> shardsToSubscribe,
+            Map<StreamShardHandle, SequenceNumber> expectedResults)
+            throws Exception {
         KinesisDataFetcher mockedFetcher = mockKinesisDataFetcher();
 
-        TestingListState<Tuple2<StreamShardMetadata, SequenceNumber>> listState = new TestingListState<>();
+        TestingListState<Tuple2<StreamShardMetadata, SequenceNumber>> listState =
+                new TestingListState<>();
         if (existingState != null) {
             listState.addAll(existingState);
         }
         when(mockedFetcher.discoverNewShardsToSubscribe()).thenReturn(shardsToSubscribe);
 
-        List<String> streamsToConsume = shardsToSubscribe.stream().map(StreamShardHandle::getStreamName).distinct().collect(Collectors.toList());
-        FlinkKinesisConsumer<String> consumer = new FlinkKinesisConsumer<>(streamsToConsume, new KinesisDeserializationSchemaWrapper<>(new SimpleStringSchema()), config);
+        List<String> streamsToConsume =
+                shardsToSubscribe.stream()
+                        .map(StreamShardHandle::getStreamName)
+                        .distinct()
+                        .collect(Collectors.toList());
+        FlinkKinesisConsumer<String> consumer =
+                new FlinkKinesisConsumer<>(
+                        streamsToConsume,
+                        new KinesisDeserializationSchemaWrapper<>(new SimpleStringSchema()),
+                        config);
         RuntimeContext context = new MockStreamingRuntimeContext(true, 2, 0);
         consumer.setRuntimeContext(context);
 
         OperatorStateStore operatorStateStore = mock(OperatorStateStore.class);
-        when(operatorStateStore.getUnionListState(any(ListStateDescriptor.class))).thenReturn(listState);
+        when(operatorStateStore.getUnionListState(any(ListStateDescriptor.class)))
+                .thenReturn(listState);
 
         StateInitializationContext initializationContext = mock(StateInitializationContext.class);
         when(initializationContext.getOperatorStateStore()).thenReturn(operatorStateStore);
@@ -1675,7 +1726,10 @@ public class FlinkKinesisConsumerTest extends TestLogger {
         consumer.run(Mockito.mock(SourceFunction.SourceContext.class));
 
         // check interactions with fetched
-        expectedResults.forEach((streamShardHandle, sequenceNumber) -> verifyRegisterNewSubscribedShard(mockedFetcher, streamShardHandle, sequenceNumber));
+        expectedResults.forEach(
+                (streamShardHandle, sequenceNumber) ->
+                        verifyRegisterNewSubscribedShard(
+                                mockedFetcher, streamShardHandle, sequenceNumber));
 
         // arbitrary checkpoint to validate new state
         consumer.snapshotState(new StateSnapshotContextSynchronousImpl(123, 123));
@@ -1685,7 +1739,8 @@ public class FlinkKinesisConsumerTest extends TestLogger {
             StreamShardMetadata streamShardMetadata = entry.f0;
             SequenceNumber sequenceNumber = entry.f1;
 
-            SequenceNumber expectedSequenceNumber = expectedResults.get(getStreamShard(streamShardMetadata));
+            SequenceNumber expectedSequenceNumber =
+                    expectedResults.get(getStreamShard(streamShardMetadata));
             assertThat(sequenceNumber).isEqualTo(expectedSequenceNumber);
         }
     }
@@ -1698,17 +1753,21 @@ public class FlinkKinesisConsumerTest extends TestLogger {
         return initialPosition.toSentinelSequenceNumber().get();
     }
 
-    private static void verifyRegisterNewSubscribedShard(KinesisDataFetcher mockedFetcher, StreamShardHandle streamShardHandle, SequenceNumber sequenceNumber) {
-        Mockito.verify(mockedFetcher).registerNewSubscribedShardState(
-                new KinesisStreamShardState(
-                        KinesisDataFetcher.convertToStreamShardMetadata(streamShardHandle),
-                        streamShardHandle,
-                        sequenceNumber)
-        );
+    private static void verifyRegisterNewSubscribedShard(
+            KinesisDataFetcher mockedFetcher,
+            StreamShardHandle streamShardHandle,
+            SequenceNumber sequenceNumber) {
+        Mockito.verify(mockedFetcher)
+                .registerNewSubscribedShardState(
+                        new KinesisStreamShardState(
+                                KinesisDataFetcher.convertToStreamShardMetadata(streamShardHandle),
+                                streamShardHandle,
+                                sequenceNumber));
     }
 
     private StreamShardHandle getStreamShard(StreamShardMetadata streamShardMetadata) {
-        return getStreamShard(streamShardMetadata.getStreamName(), streamShardMetadata.getShardId());
+        return getStreamShard(
+                streamShardMetadata.getStreamName(), streamShardMetadata.getShardId());
     }
 
     private static StreamShardHandle getStreamShard(String streamName, int shardId) {

@@ -51,6 +51,7 @@ import org.apache.flink.streaming.connectors.kinesis.util.KinesisStateUtil;
 import org.apache.flink.streaming.connectors.kinesis.util.StreamConsumerRegistrarUtil;
 import org.apache.flink.streaming.connectors.kinesis.util.WatermarkTracker;
 import org.apache.flink.util.InstantiationUtil;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -120,9 +121,7 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
     //  Consumer properties
     // ------------------------------------------------------------------------
 
-    /**
-     * The names of the Kinesis streams that we will be consuming from.
-     */
+    /** The names of the Kinesis streams that we will be consuming from. */
     private final List<String> streams;
 
     /**
@@ -131,14 +130,10 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
      */
     private final Properties configProps;
 
-    /**
-     * User supplied deserialization schema to convert Kinesis byte messages to Flink objects.
-     */
+    /** User supplied deserialization schema to convert Kinesis byte messages to Flink objects. */
     private final KinesisDeserializationSchema<T> deserializer;
 
-    /**
-     * The function that determines which subtask a shard should be assigned to.
-     */
+    /** The function that determines which subtask a shard should be assigned to. */
     private KinesisShardAssigner shardAssigner =
             new DefaultShardAssignerFactory().getShardAssigner();
 
@@ -155,9 +150,7 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
      */
     private transient KinesisDataFetcher<T> fetcher;
 
-    /**
-     * The sequence numbers to restore to upon restore from failure.
-     */
+    /** The sequence numbers to restore to upon restore from failure. */
     private transient HashMap<StreamShardMetadata.EquivalenceWrapper, SequenceNumber>
             sequenceNumsToRestore;
 
@@ -183,9 +176,7 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
     //  State for Checkpoint
     // ------------------------------------------------------------------------
 
-    /**
-     * State name to access shard sequence number states; cannot be changed.
-     */
+    /** State name to access shard sequence number states; cannot be changed. */
     private static final String sequenceNumsStateStoreName = "Kinesis-Stream-Shard-State";
 
     private transient ListState<Tuple2<StreamShardMetadata, SequenceNumber>>
@@ -201,11 +192,11 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
      * <p>The AWS credentials to be used, AWS region of the Kinesis streams, initial position to
      * start streaming from are configured with a {@link Properties} instance.
      *
-     * @param stream       The single AWS Kinesis stream to read from.
+     * @param stream The single AWS Kinesis stream to read from.
      * @param deserializer The deserializer used to convert raw bytes of Kinesis records to Java
-     *                     objects (without key).
-     * @param configProps  The properties used to configure AWS credentials, AWS region, and initial
-     *                     starting position.
+     *     objects (without key).
+     * @param configProps The properties used to configure AWS credentials, AWS region, and initial
+     *     starting position.
      */
     public FlinkKinesisConsumer(
             String stream, DeserializationSchema<T> deserializer, Properties configProps) {
@@ -218,11 +209,11 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
      * <p>The AWS credentials to be used, AWS region of the Kinesis streams, initial position to
      * start streaming from are configured with a {@link Properties} instance.
      *
-     * @param stream       The single AWS Kinesis stream to read from.
+     * @param stream The single AWS Kinesis stream to read from.
      * @param deserializer The keyed deserializer used to convert raw bytes of Kinesis records to
-     *                     Java objects.
-     * @param configProps  The properties used to configure AWS credentials, AWS region, and initial
-     *                     starting position.
+     *     Java objects.
+     * @param configProps The properties used to configure AWS credentials, AWS region, and initial
+     *     starting position.
      */
     public FlinkKinesisConsumer(
             String stream, KinesisDeserializationSchema<T> deserializer, Properties configProps) {
@@ -235,11 +226,11 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
      * <p>The AWS credentials to be used, AWS region of the Kinesis streams, initial position to
      * start streaming from are configured with a {@link Properties} instance.
      *
-     * @param streams      The AWS Kinesis streams to read from.
+     * @param streams The AWS Kinesis streams to read from.
      * @param deserializer The keyed deserializer used to convert raw bytes of Kinesis records to
-     *                     Java objects.
-     * @param configProps  The properties used to configure AWS credentials, AWS region, and initial
-     *                     starting position.
+     *     Java objects.
+     * @param configProps The properties used to configure AWS credentials, AWS region, and initial
+     *     starting position.
      */
     public FlinkKinesisConsumer(
             List<String> streams,
@@ -355,7 +346,9 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
                             KinesisDataFetcher.convertToStreamShardMetadata(shard));
             String stream = shard.getStreamName();
 
-            if (sequenceNumsToRestore == null || sequenceNumsToRestore.isEmpty() || streamsToForceInitialPositionIn.contains(stream)) {
+            if (sequenceNumsToRestore == null
+                    || sequenceNumsToRestore.isEmpty()
+                    || streamsToForceInitialPositionIn.contains(stream)) {
                 // we're starting fresh (either for the whole consumer or for this stream);
                 // use the configured start position as initial state
                 registerFromInitialPosition(fetcher, shard, kinesisStreamShard);
@@ -408,7 +401,8 @@ public class FlinkKinesisConsumer<T> extends RichParallelSourceFunction<T>
 
     private Set<String> getStreamsToForceInitialPositionIn() {
         String streamsToForceInitialPositionInStr =
-                configProps.getProperty(ConsumerConfigConstants.STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO);
+                configProps.getProperty(
+                        ConsumerConfigConstants.STREAMS_TO_APPLY_STREAM_INITIAL_POSITION_TO);
 
         if (streamsToForceInitialPositionInStr == null) {
             return Collections.emptySet();
