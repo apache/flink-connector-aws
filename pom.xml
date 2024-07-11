@@ -54,7 +54,7 @@ under the License.
 
     <properties>
         <aws.sdkv1.version>1.12.439</aws.sdkv1.version>
-        <aws.sdkv2.version>2.20.144</aws.sdkv2.version>
+        <aws.sdkv2.version>2.26.19</aws.sdkv2.version>
         <netty.version>4.1.86.Final</netty.version>
         <flink.version>1.18.0</flink.version>
         <jackson-bom.version>2.14.3</jackson-bom.version>
