@@ -34,8 +34,10 @@ import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.util.ArrayDeque;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
 
@@ -55,6 +57,7 @@ public class PollingDynamoDbStreamsShardSplitReader
     private final StreamProxy dynamodbStreams;
 
     private final Deque<DynamoDbStreamsShardSplitState> assignedSplits = new ArrayDeque<>();
+    private final Set<String> pausedSplitIds = new HashSet<>();
 
     public PollingDynamoDbStreamsShardSplitReader(StreamProxy dynamodbStreamsProxy) {
         this.dynamodbStreams = dynamodbStreamsProxy;
@@ -64,6 +67,11 @@ public class PollingDynamoDbStreamsShardSplitReader
     public RecordsWithSplitIds<Record> fetch() throws IOException {
         DynamoDbStreamsShardSplitState splitState = assignedSplits.poll();
         if (splitState == null) {
+            return INCOMPLETE_SHARD_EMPTY_RECORDS;
+        }
+
+        if (pausedSplitIds.contains(splitState.getSplitId())) {
+            assignedSplits.add(splitState);
             return INCOMPLETE_SHARD_EMPTY_RECORDS;
         }
 
@@ -106,6 +114,14 @@ public class PollingDynamoDbStreamsShardSplitReader
         for (DynamoDbStreamsShardSplit split : splitsChanges.splits()) {
             assignedSplits.add(new DynamoDbStreamsShardSplitState(split));
         }
+    }
+
+    @Override
+    public void pauseOrResumeSplits(
+            Collection<DynamoDbStreamsShardSplit> splitsToPause,
+            Collection<DynamoDbStreamsShardSplit> splitsToResume) {
+        splitsToPause.forEach(split -> pausedSplitIds.add(split.splitId()));
+        splitsToResume.forEach(split -> pausedSplitIds.remove(split.splitId()));
     }
 
     @Override

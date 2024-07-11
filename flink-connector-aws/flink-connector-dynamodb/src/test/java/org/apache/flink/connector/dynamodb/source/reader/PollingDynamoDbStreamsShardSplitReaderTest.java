@@ -20,11 +20,11 @@ package org.apache.flink.connector.dynamodb.source.reader;
 
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsAddition;
-import org.apache.flink.connector.dynamodb.source.proxy.StreamProxy;
 import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplit;
 import org.apache.flink.connector.dynamodb.source.util.DynamoDbStreamsProxyProvider.TestDynamoDbStreamsProxy;
 import org.apache.flink.connector.dynamodb.source.util.TestUtil;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.dynamodb.model.Record;
 
@@ -43,12 +43,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatNoException;
 
 class PollingDynamoDbStreamsShardSplitReaderTest {
+    private PollingDynamoDbStreamsShardSplitReader splitReader;
+    private TestDynamoDbStreamsProxy testStreamProxy;
+
+    @BeforeEach
+    public void init() {
+        testStreamProxy = getTestStreamProxy();
+        splitReader = new PollingDynamoDbStreamsShardSplitReader(testStreamProxy);
+    }
+
     @Test
     void testNoAssignedSplitsHandledGracefully() throws Exception {
-        StreamProxy testStreamProxy = getTestStreamProxy();
-        PollingDynamoDbStreamsShardSplitReader splitReader =
-                new PollingDynamoDbStreamsShardSplitReader(testStreamProxy);
-
         RecordsWithSplitIds<Record> retrievedRecords = splitReader.fetch();
 
         assertThat(retrievedRecords.nextRecordFromSplit()).isNull();
@@ -58,10 +63,6 @@ class PollingDynamoDbStreamsShardSplitReaderTest {
 
     @Test
     void testAssignedSplitHasNoRecordsHandledGracefully() throws Exception {
-        TestDynamoDbStreamsProxy testStreamProxy = getTestStreamProxy();
-        PollingDynamoDbStreamsShardSplitReader splitReader =
-                new PollingDynamoDbStreamsShardSplitReader(testStreamProxy);
-
         // Given assigned split with no records
         String shardId = generateShardId(1);
         testStreamProxy.addShards(shardId);
@@ -79,10 +80,6 @@ class PollingDynamoDbStreamsShardSplitReaderTest {
 
     @Test
     void testSingleAssignedSplitAllConsumed() throws Exception {
-        TestDynamoDbStreamsProxy testStreamProxy = getTestStreamProxy();
-        PollingDynamoDbStreamsShardSplitReader splitReader =
-                new PollingDynamoDbStreamsShardSplitReader(testStreamProxy);
-
         // Given assigned split with records
         String shardId = generateShardId(1);
         testStreamProxy.addShards(shardId);
@@ -110,10 +107,6 @@ class PollingDynamoDbStreamsShardSplitReaderTest {
 
     @Test
     void testMultipleAssignedSplitsAllConsumed() throws Exception {
-        TestDynamoDbStreamsProxy testStreamProxy = getTestStreamProxy();
-        PollingDynamoDbStreamsShardSplitReader splitReader =
-                new PollingDynamoDbStreamsShardSplitReader(testStreamProxy);
-
         // Given assigned split with records
         String shardId = generateShardId(1);
         String shardId2 = generateShardId(2);
@@ -143,10 +136,6 @@ class PollingDynamoDbStreamsShardSplitReaderTest {
 
     @Test
     void testHandleEmptyCompletedShard() throws Exception {
-        TestDynamoDbStreamsProxy testStreamProxy = getTestStreamProxy();
-        PollingDynamoDbStreamsShardSplitReader splitReader =
-                new PollingDynamoDbStreamsShardSplitReader(testStreamProxy);
-
         // Given assigned split with no records, and the shard is complete
         String shardId = generateShardId(1);
         testStreamProxy.addShards(shardId);
@@ -166,10 +155,6 @@ class PollingDynamoDbStreamsShardSplitReaderTest {
 
     @Test
     void testFinishedSplitsReturned() throws Exception {
-        TestDynamoDbStreamsProxy testStreamProxy = getTestStreamProxy();
-        PollingDynamoDbStreamsShardSplitReader splitReader =
-                new PollingDynamoDbStreamsShardSplitReader(testStreamProxy);
-
         // Given assigned split with records from completed shard
         String shardId = generateShardId(1);
         testStreamProxy.addShards(shardId);
@@ -199,19 +184,109 @@ class PollingDynamoDbStreamsShardSplitReaderTest {
 
     @Test
     void testWakeUpIsNoOp() {
-        TestDynamoDbStreamsProxy testStreamProxy = getTestStreamProxy();
-        PollingDynamoDbStreamsShardSplitReader splitReader =
-                new PollingDynamoDbStreamsShardSplitReader(testStreamProxy);
-
         assertThatNoException().isThrownBy(splitReader::wakeUp);
     }
 
     @Test
-    void testCloseClosesStreamProxy() {
-        TestDynamoDbStreamsProxy testStreamProxy = getTestStreamProxy();
-        PollingDynamoDbStreamsShardSplitReader splitReader =
-                new PollingDynamoDbStreamsShardSplitReader(testStreamProxy);
+    void testPauseOrResumeSplits() throws Exception {
+        String splitId = generateShardId(1);
 
+        testStreamProxy.addShards(splitId);
+        DynamoDbStreamsShardSplit testSplit = getTestSplit(splitId);
+
+        List<Record> expectedRecords =
+                Stream.of(getTestRecord("data-1"), getTestRecord("data-2"))
+                        .collect(Collectors.toList());
+        testStreamProxy.addRecords(
+                TestUtil.STREAM_ARN, splitId, Collections.singletonList(expectedRecords.get(0)));
+        testStreamProxy.addRecords(
+                TestUtil.STREAM_ARN, splitId, Collections.singletonList(expectedRecords.get(1)));
+        splitReader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(testSplit)));
+
+        // read data from split
+        RecordsWithSplitIds<Record> records = splitReader.fetch();
+        assertThat(readAllRecords(records)).containsExactlyInAnyOrder(expectedRecords.get(0));
+
+        // pause split
+        splitReader.pauseOrResumeSplits(
+                Collections.singletonList(testSplit), Collections.emptyList());
+        records = splitReader.fetch();
+        // returns incomplete split with no records
+        assertThat(records.finishedSplits()).isEmpty();
+        assertThat(records.nextSplit()).isNull();
+        assertThat(records.nextRecordFromSplit()).isNull();
+
+        // resume split
+        splitReader.pauseOrResumeSplits(
+                Collections.emptyList(), Collections.singletonList(testSplit));
+        records = splitReader.fetch();
+        assertThat(readAllRecords(records)).containsExactlyInAnyOrder(expectedRecords.get(1));
+    }
+
+    @Test
+    void testPauseOrResumeSplitsOnlyPauseReadsFromSpecifiedSplits() throws Exception {
+        DynamoDbStreamsShardSplit testSplit1 = getTestSplit(generateShardId(1));
+        DynamoDbStreamsShardSplit testSplit2 = getTestSplit(generateShardId(2));
+        DynamoDbStreamsShardSplit testSplit3 = getTestSplit(generateShardId(3));
+
+        testStreamProxy.addShards(testSplit1.splitId(), testSplit2.splitId(), testSplit3.splitId());
+
+        List<Record> recordsFromSplit1 =
+                Arrays.asList(getTestRecord("split-1-data-1"), getTestRecord("split-1-data-2"));
+        List<Record> recordsFromSplit2 =
+                Arrays.asList(getTestRecord("split-2-data-1"), getTestRecord("split-2-data-2"));
+        List<Record> recordsFromSplit3 =
+                Arrays.asList(getTestRecord("split-3-data-1"), getTestRecord("split-3-data-2"));
+
+        recordsFromSplit1.forEach(
+                record ->
+                        testStreamProxy.addRecords(
+                                TestUtil.STREAM_ARN,
+                                testSplit1.getShardId(),
+                                Collections.singletonList(record)));
+        recordsFromSplit2.forEach(
+                record ->
+                        testStreamProxy.addRecords(
+                                TestUtil.STREAM_ARN,
+                                testSplit2.getShardId(),
+                                Collections.singletonList(record)));
+        recordsFromSplit3.forEach(
+                record ->
+                        testStreamProxy.addRecords(
+                                TestUtil.STREAM_ARN,
+                                testSplit3.getShardId(),
+                                Collections.singletonList(record)));
+
+        splitReader.handleSplitsChanges(
+                new SplitsAddition<>(Arrays.asList(testSplit1, testSplit2, testSplit3)));
+
+        // pause split 1 and split 3
+        splitReader.pauseOrResumeSplits(
+                Arrays.asList(testSplit1, testSplit3), Collections.emptyList());
+
+        // read data from splits and verify that only records from split 2 were fetched by reader
+        List<Record> fetchedRecords = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            RecordsWithSplitIds<Record> records = splitReader.fetch();
+            fetchedRecords.addAll(readAllRecords(records));
+        }
+        assertThat(fetchedRecords).containsExactly(recordsFromSplit2.toArray(new Record[0]));
+
+        // resume split 3
+        splitReader.pauseOrResumeSplits(
+                Collections.emptyList(), Collections.singletonList(testSplit3));
+
+        // read data from splits and verify that only records from split 3 had been read
+        fetchedRecords.clear();
+        for (int i = 0; i < 10; i++) {
+            RecordsWithSplitIds<Record> records = splitReader.fetch();
+            fetchedRecords.addAll(readAllRecords(records));
+        }
+        assertThat(fetchedRecords).containsExactly(recordsFromSplit3.toArray(new Record[0]));
+    }
+
+    @Test
+    void testCloseClosesStreamProxy() {
         assertThatNoException().isThrownBy(splitReader::close);
         assertThat(testStreamProxy.isClosed()).isTrue();
     }

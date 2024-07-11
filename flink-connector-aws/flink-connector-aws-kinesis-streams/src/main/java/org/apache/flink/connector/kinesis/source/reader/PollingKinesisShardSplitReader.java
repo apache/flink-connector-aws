@@ -38,8 +38,10 @@ import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.util.ArrayDeque;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
@@ -59,6 +61,8 @@ public class PollingKinesisShardSplitReader implements SplitReader<Record, Kines
 
     private final StreamProxy kinesis;
     private final Deque<KinesisShardSplitState> assignedSplits = new ArrayDeque<>();
+    private final Set<String> pausedSplitIds = new HashSet<>();
+
     private final Map<String, KinesisShardMetrics> shardMetricGroupMap;
 
     public PollingKinesisShardSplitReader(
@@ -71,6 +75,12 @@ public class PollingKinesisShardSplitReader implements SplitReader<Record, Kines
     public RecordsWithSplitIds<Record> fetch() throws IOException {
         KinesisShardSplitState splitState = assignedSplits.poll();
         if (splitState == null) {
+            return INCOMPLETE_SHARD_EMPTY_RECORDS;
+        }
+
+        // Skip reading from paused split
+        if (pausedSplitIds.contains(splitState.getSplitId())) {
+            assignedSplits.add(splitState);
             return INCOMPLETE_SHARD_EMPTY_RECORDS;
         }
 
@@ -125,6 +135,14 @@ public class PollingKinesisShardSplitReader implements SplitReader<Record, Kines
         for (KinesisShardSplit split : splitsChanges.splits()) {
             assignedSplits.add(new KinesisShardSplitState(split));
         }
+    }
+
+    @Override
+    public void pauseOrResumeSplits(
+            Collection<KinesisShardSplit> splitsToPause,
+            Collection<KinesisShardSplit> splitsToResume) {
+        splitsToPause.forEach(split -> pausedSplitIds.add(split.splitId()));
+        splitsToResume.forEach(split -> pausedSplitIds.remove(split.splitId()));
     }
 
     @Override
