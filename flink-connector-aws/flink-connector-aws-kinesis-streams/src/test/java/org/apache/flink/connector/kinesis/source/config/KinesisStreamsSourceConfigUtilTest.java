@@ -25,8 +25,8 @@ import org.junit.jupiter.api.Test;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
 
-import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.STREAM_INITIAL_TIMESTAMP;
-import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.STREAM_TIMESTAMP_DATE_FORMAT;
+import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.STREAM_INITIAL_TIMESTAMP;
+import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.STREAM_TIMESTAMP_DATE_FORMAT;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatExceptionOfType;
 

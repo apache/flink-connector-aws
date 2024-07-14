@@ -28,23 +28,37 @@ import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.core.client.config.SdkAdvancedClientOption;
 import software.amazon.awssdk.core.client.config.SdkClientConfiguration;
 import software.amazon.awssdk.core.client.config.SdkClientOption;
+import software.amazon.awssdk.http.SdkHttpClient;
+import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.retries.api.BackoffStrategy;
+import software.amazon.awssdk.retries.api.RetryStrategy;
+import software.amazon.awssdk.retries.internal.DefaultAdaptiveRetryStrategy;
+import software.amazon.awssdk.retries.internal.DefaultLegacyRetryStrategy;
+import software.amazon.awssdk.retries.internal.circuitbreaker.TokenBucketStore;
+import software.amazon.awssdk.retries.internal.ratelimiter.RateLimiterTokenBucketStore;
+import software.amazon.awssdk.services.kinesis.KinesisClient;
+import software.amazon.awssdk.services.kinesis.KinesisClientBuilder;
+import software.amazon.awssdk.utils.AttributeMap;
 
 import java.net.URI;
 import java.time.Duration;
+import java.util.Optional;
 import java.util.Properties;
 
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.AWS_ENDPOINT;
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.AWS_REGION;
 import static org.apache.flink.connector.aws.util.AWSClientUtil.formatFlinkUserAgentPrefix;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static software.amazon.awssdk.core.retry.RetryMode.LEGACY;
 
 /** Tests for {@link AWSClientUtil}. */
 class AWSClientUtilTest {
@@ -53,6 +67,131 @@ class AWSClientUtilTest {
             "Apache Flink %s (%s) *Destination* Connector";
     private static final String DEFAULT_USER_AGENT_PREFIX_FORMAT_V2 =
             "Apache Flink %s (%s) *Destination* Connector V2";
+
+    @Test
+    void testCreateKinesisSyncClientWithoutOverrideConfiguration() {
+        Properties properties = TestUtil.properties(AWS_REGION, "eu-west-2");
+        SdkHttpClient httpClient =
+                AWSGeneralUtil.createSyncHttpClient(
+                        AttributeMap.builder().build(), ApacheHttpClient.builder());
+        KinesisClientBuilder builder = KinesisClient.builder();
+
+        KinesisClient kinesisClient =
+                AWSClientUtil.createAwsSyncClient(
+                        properties,
+                        httpClient,
+                        builder,
+                        DEFAULT_USER_AGENT_PREFIX_FORMAT,
+                        formatFlinkUserAgentPrefix(
+                                DEFAULT_USER_AGENT_PREFIX_FORMAT
+                                        + AWSClientUtil.V2_USER_AGENT_SUFFIX));
+
+        ClientOverrideConfiguration resultOverrideConfiguration =
+                kinesisClient.serviceClientConfiguration().overrideConfiguration();
+        assertThat(resultOverrideConfiguration.retryStrategy().get())
+                .isInstanceOf(DefaultLegacyRetryStrategy.class);
+        assertThat(resultOverrideConfiguration.retryPolicy().get().retryMode()).isEqualTo(LEGACY);
+        assertThat(resultOverrideConfiguration.retryMode()).isEqualTo(Optional.empty());
+        assertThat(resultOverrideConfiguration.retryStrategyConfigurator())
+                .isEqualTo(Optional.empty());
+        assertThat(resultOverrideConfiguration.apiCallAttemptTimeout()).isEqualTo(Optional.empty());
+        assertThat(resultOverrideConfiguration.apiCallTimeout()).isEqualTo(Optional.empty());
+        assertThat(
+                        resultOverrideConfiguration
+                                .advancedOption(SdkAdvancedClientOption.USER_AGENT_PREFIX)
+                                .isPresent())
+                .isTrue();
+    }
+
+    @Test
+    void testCreateKinesisSyncClientWithEmptyOverrideConfiguration() {
+        Properties properties = TestUtil.properties(AWS_REGION, "eu-west-2");
+        SdkHttpClient httpClient =
+                AWSGeneralUtil.createSyncHttpClient(
+                        AttributeMap.builder().build(), ApacheHttpClient.builder());
+        ClientOverrideConfiguration.Builder clientOverrideConfigurationBuilder =
+                ClientOverrideConfiguration.builder();
+        KinesisClientBuilder builder = KinesisClient.builder();
+
+        KinesisClient kinesisClient =
+                AWSClientUtil.createAwsSyncClient(
+                        properties,
+                        httpClient,
+                        builder,
+                        clientOverrideConfigurationBuilder,
+                        DEFAULT_USER_AGENT_PREFIX_FORMAT,
+                        formatFlinkUserAgentPrefix(
+                                DEFAULT_USER_AGENT_PREFIX_FORMAT
+                                        + AWSClientUtil.V2_USER_AGENT_SUFFIX));
+
+        ClientOverrideConfiguration resultOverrideConfiguration =
+                kinesisClient.serviceClientConfiguration().overrideConfiguration();
+        assertThat(resultOverrideConfiguration.retryStrategy().get())
+                .isInstanceOf(DefaultLegacyRetryStrategy.class);
+        assertThat(resultOverrideConfiguration.retryPolicy().get().retryMode()).isEqualTo(LEGACY);
+        assertThat(resultOverrideConfiguration.retryMode()).isEqualTo(Optional.empty());
+        assertThat(resultOverrideConfiguration.retryStrategyConfigurator())
+                .isEqualTo(Optional.empty());
+        assertThat(resultOverrideConfiguration.apiCallAttemptTimeout()).isEqualTo(Optional.empty());
+        assertThat(resultOverrideConfiguration.apiCallTimeout()).isEqualTo(Optional.empty());
+        assertThat(
+                        resultOverrideConfiguration
+                                .advancedOption(SdkAdvancedClientOption.USER_AGENT_PREFIX)
+                                .isPresent())
+                .isTrue();
+    }
+
+    @Test
+    void testCreateKinesisSyncClientWithOverrideConfiguration() {
+        Properties properties = TestUtil.properties(AWS_REGION, "eu-west-2");
+        SdkHttpClient httpClient =
+                AWSGeneralUtil.createSyncHttpClient(
+                        AttributeMap.builder().build(), ApacheHttpClient.builder());
+        ClientOverrideConfiguration.Builder clientOverrideConfigurationBuilder =
+                ClientOverrideConfiguration.builder();
+
+        RetryStrategy overrideRetryStrategy =
+                DefaultAdaptiveRetryStrategy.builder()
+                        .maxAttempts(10)
+                        .backoffStrategy(BackoffStrategy.fixedDelay(Duration.ofMillis(500)))
+                        .throttlingBackoffStrategy(
+                                BackoffStrategy.fixedDelay(Duration.ofMillis(500)))
+                        .tokenBucketStore(TokenBucketStore.builder().build())
+                        .rateLimiterTokenBucketStore(RateLimiterTokenBucketStore.builder().build())
+                        .tokenBucketExceptionCost(5)
+                        .build();
+
+        clientOverrideConfigurationBuilder.retryStrategy(overrideRetryStrategy);
+
+        KinesisClientBuilder builder = KinesisClient.builder();
+
+        KinesisClient kinesisClient =
+                AWSClientUtil.createAwsSyncClient(
+                        properties,
+                        httpClient,
+                        builder,
+                        clientOverrideConfigurationBuilder,
+                        DEFAULT_USER_AGENT_PREFIX_FORMAT,
+                        formatFlinkUserAgentPrefix(
+                                DEFAULT_USER_AGENT_PREFIX_FORMAT
+                                        + AWSClientUtil.V2_USER_AGENT_SUFFIX));
+
+        ClientOverrideConfiguration resultOverrideConfiguration =
+                kinesisClient.serviceClientConfiguration().overrideConfiguration();
+        assertThat(resultOverrideConfiguration.retryStrategy())
+                .isEqualTo(Optional.of(overrideRetryStrategy));
+        assertThat(resultOverrideConfiguration.retryPolicy()).isEqualTo(Optional.empty());
+        assertThat(resultOverrideConfiguration.retryMode()).isEqualTo(Optional.empty());
+        assertThat(resultOverrideConfiguration.retryStrategyConfigurator())
+                .isEqualTo(Optional.empty());
+        assertThat(resultOverrideConfiguration.apiCallAttemptTimeout()).isEqualTo(Optional.empty());
+        assertThat(resultOverrideConfiguration.apiCallTimeout()).isEqualTo(Optional.empty());
+        assertThat(
+                        resultOverrideConfiguration
+                                .advancedOption(SdkAdvancedClientOption.USER_AGENT_PREFIX)
+                                .isPresent())
+                .isTrue();
+    }
 
     @Test
     void testCreateKinesisAsyncClient() {

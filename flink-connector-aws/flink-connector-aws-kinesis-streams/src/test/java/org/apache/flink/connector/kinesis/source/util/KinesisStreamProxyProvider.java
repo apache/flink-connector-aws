@@ -111,7 +111,10 @@ public class KinesisStreamProxyProvider {
 
         @Override
         public GetRecordsResponse getRecords(
-                String streamArn, String shardId, StartingPosition startingPosition) {
+                String streamArn,
+                String shardId,
+                StartingPosition startingPosition,
+                int maxRecordsToGet) {
             ShardHandle shardHandle = new ShardHandle(streamArn, shardId);
 
             if (getRecordsExceptionSupplier != null) {
@@ -121,6 +124,10 @@ public class KinesisStreamProxyProvider {
             List<Record> records = null;
             if (storedRecords.containsKey(shardHandle)) {
                 records = storedRecords.get(shardHandle).poll();
+
+                if (records != null) {
+                    records = records.stream().limit(maxRecordsToGet).collect(Collectors.toList());
+                }
             }
 
             return GetRecordsResponse.builder()

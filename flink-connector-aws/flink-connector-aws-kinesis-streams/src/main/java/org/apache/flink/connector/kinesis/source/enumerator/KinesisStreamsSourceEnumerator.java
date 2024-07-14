@@ -26,7 +26,7 @@ import org.apache.flink.api.connector.source.SplitEnumerator;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.api.connector.source.SplitsAssignment;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.InitialPosition;
+import org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.InitialPosition;
 import org.apache.flink.connector.kinesis.source.enumerator.tracker.SplitTracker;
 import org.apache.flink.connector.kinesis.source.event.SplitsFinishedEvent;
 import org.apache.flink.connector.kinesis.source.exception.KinesisStreamsSourceException;
@@ -56,8 +56,8 @@ import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.SHARD_DISCOVERY_INTERVAL_MILLIS;
-import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.STREAM_INITIAL_POSITION;
+import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.SHARD_DISCOVERY_INTERVAL;
+import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.STREAM_INITIAL_POSITION;
 import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigUtil.parseStreamTimestampStartingPosition;
 
 /**
@@ -111,7 +111,7 @@ public class KinesisStreamsSourceEnumerator
             context.callAsync(this::initialDiscoverSplits, this::processDiscoveredSplits);
         }
 
-        final long shardDiscoveryInterval = sourceConfig.get(SHARD_DISCOVERY_INTERVAL_MILLIS);
+        final long shardDiscoveryInterval = sourceConfig.get(SHARD_DISCOVERY_INTERVAL).toMillis();
         context.callAsync(
                 this::periodicallyDiscoverSplits,
                 this::processDiscoveredSplits,

@@ -27,10 +27,10 @@ import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.util.Optional;
 
-import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.STREAM_INITIAL_TIMESTAMP;
-import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.STREAM_TIMESTAMP_DATE_FORMAT;
+import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.STREAM_INITIAL_TIMESTAMP;
+import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.STREAM_TIMESTAMP_DATE_FORMAT;
 
-/** Utility functions to use with {@link KinesisStreamsSourceConfigConstants}. */
+/** Utility functions to use with {@link KinesisSourceConfigOptions}. */
 @Internal
 public class KinesisStreamsSourceConfigUtil {
 

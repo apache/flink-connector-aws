@@ -55,9 +55,13 @@ public interface StreamProxy extends Closeable {
      * @param streamArn the ARN of the stream
      * @param shardId the shard to subscribe from
      * @param startingPosition the starting position to read from
+     * @param maxRecordsToGet the maximum amount of records to retrieve for this batch
      * @return the response with records. Includes both the returned records and the subsequent
      *     shard iterator to use.
      */
     GetRecordsResponse getRecords(
-            String streamArn, String shardId, StartingPosition startingPosition);
+            String streamArn,
+            String shardId,
+            StartingPosition startingPosition,
+            int maxRecordsToGet);
 }
