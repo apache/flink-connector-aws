@@ -39,9 +39,13 @@ public final class DynamoDbStreamsShardSplit implements SourceSplit {
     private final String streamArn;
     private final String shardId;
     private final StartingPosition startingPosition;
+    private final String parentShardId;
 
     public DynamoDbStreamsShardSplit(
-            String streamArn, String shardId, StartingPosition startingPosition) {
+            String streamArn,
+            String shardId,
+            StartingPosition startingPosition,
+            String parentShardId) {
         checkNotNull(streamArn, "streamArn cannot be null");
         checkNotNull(shardId, "shardId cannot be null");
         checkNotNull(startingPosition, "startingPosition cannot be null");
@@ -49,6 +53,7 @@ public final class DynamoDbStreamsShardSplit implements SourceSplit {
         this.streamArn = streamArn;
         this.shardId = shardId;
         this.startingPosition = startingPosition;
+        this.parentShardId = parentShardId;
     }
 
     @Override
@@ -68,6 +73,10 @@ public final class DynamoDbStreamsShardSplit implements SourceSplit {
         return startingPosition;
     }
 
+    public String getParentShardId() {
+        return parentShardId;
+    }
+
     @Override
     public String toString() {
         return "DynamoDbStreamsShardSplit{"
@@ -79,6 +88,8 @@ public final class DynamoDbStreamsShardSplit implements SourceSplit {
                 + '\''
                 + ", startingPosition="
                 + startingPosition
+                + ", parentShardId=["
+                + parentShardId
                 + '}';
     }
 
@@ -93,11 +104,12 @@ public final class DynamoDbStreamsShardSplit implements SourceSplit {
         DynamoDbStreamsShardSplit that = (DynamoDbStreamsShardSplit) o;
         return Objects.equals(streamArn, that.streamArn)
                 && Objects.equals(shardId, that.shardId)
-                && Objects.equals(startingPosition, that.startingPosition);
+                && Objects.equals(startingPosition, that.startingPosition)
+                && Objects.equals(parentShardId, that.parentShardId);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(streamArn, shardId, startingPosition);
+        return Objects.hash(streamArn, shardId, startingPosition, parentShardId);
     }
 }

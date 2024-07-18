@@ -16,26 +16,17 @@
  * limitations under the License.
  */
 
-package org.apache.flink.connector.dynamodb.source.enumerator;
+package org.apache.flink.connector.dynamodb.source.metrics;
 
 import org.apache.flink.annotation.Internal;
 
-import java.util.List;
-
-/**
- * State for the {@link DynamoDbStreamsSourceEnumerator}. This class is stored in state, so any
- * changes need to be backwards compatible
- */
+/** A collection of consumer metric related constant names. */
 @Internal
-public class DynamoDbStreamsSourceEnumeratorState {
-    private final List<DynamoDBStreamsShardSplitWithAssignmentStatus> knownSplits;
-
-    public DynamoDbStreamsSourceEnumeratorState(
-            List<DynamoDBStreamsShardSplitWithAssignmentStatus> knownSplits) {
-        this.knownSplits = knownSplits;
-    }
-
-    public List<DynamoDBStreamsShardSplitWithAssignmentStatus> getKnownSplits() {
-        return knownSplits;
-    }
+public class MetricConstants {
+    public static final String DYNAMODB_STREAMS_SOURCE_METRIC_GROUP = "DynamoDbStreamsSource";
+    public static final String STREAM_METRIC_GROUP = "stream";
+    public static final String SHARD_METRIC_GROUP = "shardId";
+    public static final String REGION_METRIC_GROUP = "region";
+    public static final String ACCOUNT_ID_METRIC_GROUP = "accountId";
+    public static final String MILLIS_BEHIND_LATEST = "millisBehindLatest";
 }
