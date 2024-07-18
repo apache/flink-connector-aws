@@ -32,6 +32,7 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
@@ -57,16 +58,16 @@ public class DynamoDbStreamsProxyProvider {
         // List shards configuration
         private final List<Shard> shards = new ArrayList<>();
         private Supplier<Exception> listShardsExceptionSupplier;
-        private boolean shouldRespectLastSeenShardId = true;
         private String lastProvidedLastSeenShardId;
 
         // GetRecords configuration
+        private Supplier<RuntimeException> getRecordsExceptionSupplier;
         private final Map<ShardHandle, Deque<List<Record>>> storedRecords = new HashMap<>();
         private boolean shouldCompleteNextShard = false;
         private boolean closed = false;
 
         @Override
-        public List<Shard> listShards(String streamArn, @Nullable String lastSeenShardId) {
+        public ListShardsResult listShards(String streamArn, @Nullable String lastSeenShardId) {
             this.lastProvidedLastSeenShardId = lastSeenShardId;
 
             if (listShardsExceptionSupplier != null) {
@@ -77,21 +78,20 @@ public class DynamoDbStreamsProxyProvider {
                 }
             }
 
-            List<Shard> results = new ArrayList<>();
-            for (Shard shard : shards) {
-                if (shouldRespectLastSeenShardId && shard.shardId().equals(lastSeenShardId)) {
-                    results.clear();
-                    continue;
-                }
-                results.add(shard);
-            }
-            return results;
+            ListShardsResult listShardsResult = new ListShardsResult();
+            List<Shard> results = new ArrayList<>(shards);
+            listShardsResult.addShards(results);
+            return listShardsResult;
         }
 
         @Override
         public GetRecordsResponse getRecords(
                 String streamArn, String shardId, StartingPosition startingPosition) {
             ShardHandle shardHandle = new ShardHandle(streamArn, shardId);
+
+            if (getRecordsExceptionSupplier != null) {
+                throw getRecordsExceptionSupplier.get();
+            }
 
             List<Record> records = null;
             if (storedRecords.containsKey(shardHandle)) {
@@ -104,8 +104,9 @@ public class DynamoDbStreamsProxyProvider {
                     .build();
         }
 
-        public String getLastProvidedLastSeenShardId() {
-            return lastProvidedLastSeenShardId;
+        public void setGetRecordsExceptionSupplier(
+                Supplier<RuntimeException> getRecordsExceptionSupplier) {
+            this.getRecordsExceptionSupplier = getRecordsExceptionSupplier;
         }
 
         public void addShards(String... shardIds) {
@@ -114,12 +115,12 @@ public class DynamoDbStreamsProxyProvider {
             }
         }
 
-        public void setListShardsExceptionSupplier(Supplier<Exception> exceptionSupplier) {
-            listShardsExceptionSupplier = exceptionSupplier;
+        public void addShards(Shard... shardList) {
+            shards.addAll(Arrays.asList(shardList));
         }
 
-        public void setShouldRespectLastSeenShardId(boolean shouldRespectLastSeenShardId) {
-            this.shouldRespectLastSeenShardId = shouldRespectLastSeenShardId;
+        public void setListShardsExceptionSupplier(Supplier<Exception> exceptionSupplier) {
+            listShardsExceptionSupplier = exceptionSupplier;
         }
 
         public void addRecords(String streamArn, String shardId, List<Record> records) {

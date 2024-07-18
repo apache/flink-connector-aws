@@ -20,9 +20,11 @@ package org.apache.flink.connector.dynamodb.source.reader;
 
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsAddition;
+import org.apache.flink.connector.dynamodb.source.metrics.DynamoDbStreamsShardMetrics;
 import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplit;
 import org.apache.flink.connector.dynamodb.source.util.DynamoDbStreamsProxyProvider.TestDynamoDbStreamsProxy;
 import org.apache.flink.connector.dynamodb.source.util.TestUtil;
+import org.apache.flink.metrics.testutils.MetricListener;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,6 +34,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -45,11 +49,22 @@ import static org.assertj.core.api.AssertionsForClassTypes.assertThatNoException
 class PollingDynamoDbStreamsShardSplitReaderTest {
     private PollingDynamoDbStreamsShardSplitReader splitReader;
     private TestDynamoDbStreamsProxy testStreamProxy;
+    private MetricListener metricListener;
+    private Map<String, DynamoDbStreamsShardMetrics> shardMetricGroupMap;
+    private static final String TEST_SHARD_ID = TestUtil.generateShardId(1);
 
     @BeforeEach
     public void init() {
         testStreamProxy = getTestStreamProxy();
-        splitReader = new PollingDynamoDbStreamsShardSplitReader(testStreamProxy);
+        metricListener = new MetricListener();
+        shardMetricGroupMap = new ConcurrentHashMap<>();
+
+        shardMetricGroupMap.put(
+                TEST_SHARD_ID,
+                new DynamoDbStreamsShardMetrics(
+                        TestUtil.getTestSplit(TEST_SHARD_ID), metricListener.getMetricGroup()));
+        splitReader =
+                new PollingDynamoDbStreamsShardSplitReader(testStreamProxy, shardMetricGroupMap);
     }
 
     @Test
@@ -64,10 +79,9 @@ class PollingDynamoDbStreamsShardSplitReaderTest {
     @Test
     void testAssignedSplitHasNoRecordsHandledGracefully() throws Exception {
         // Given assigned split with no records
-        String shardId = generateShardId(1);
-        testStreamProxy.addShards(shardId);
+        testStreamProxy.addShards(TEST_SHARD_ID);
         splitReader.handleSplitsChanges(
-                new SplitsAddition<>(Collections.singletonList(getTestSplit(shardId))));
+                new SplitsAddition<>(Collections.singletonList(getTestSplit(TEST_SHARD_ID))));
 
         // When fetching records
         RecordsWithSplitIds<Record> retrievedRecords = splitReader.fetch();
@@ -81,19 +95,24 @@ class PollingDynamoDbStreamsShardSplitReaderTest {
     @Test
     void testSingleAssignedSplitAllConsumed() throws Exception {
         // Given assigned split with records
-        String shardId = generateShardId(1);
-        testStreamProxy.addShards(shardId);
+        testStreamProxy.addShards(TEST_SHARD_ID);
         List<Record> expectedRecords =
                 Stream.of(getTestRecord("data-1"), getTestRecord("data-2"), getTestRecord("data-3"))
                         .collect(Collectors.toList());
         testStreamProxy.addRecords(
-                TestUtil.STREAM_ARN, shardId, Collections.singletonList(expectedRecords.get(0)));
+                TestUtil.STREAM_ARN,
+                TEST_SHARD_ID,
+                Collections.singletonList(expectedRecords.get(0)));
         testStreamProxy.addRecords(
-                TestUtil.STREAM_ARN, shardId, Collections.singletonList(expectedRecords.get(1)));
+                TestUtil.STREAM_ARN,
+                TEST_SHARD_ID,
+                Collections.singletonList(expectedRecords.get(1)));
         testStreamProxy.addRecords(
-                TestUtil.STREAM_ARN, shardId, Collections.singletonList(expectedRecords.get(2)));
+                TestUtil.STREAM_ARN,
+                TEST_SHARD_ID,
+                Collections.singletonList(expectedRecords.get(2)));
         splitReader.handleSplitsChanges(
-                new SplitsAddition<>(Collections.singletonList(getTestSplit(shardId))));
+                new SplitsAddition<>(Collections.singletonList(getTestSplit(TEST_SHARD_ID))));
 
         // When fetching records
         List<Record> records = new ArrayList<>();
@@ -110,6 +129,16 @@ class PollingDynamoDbStreamsShardSplitReaderTest {
         // Given assigned split with records
         String shardId = generateShardId(1);
         String shardId2 = generateShardId(2);
+
+        shardMetricGroupMap.put(
+                shardId,
+                new DynamoDbStreamsShardMetrics(
+                        getTestSplit(shardId), metricListener.getMetricGroup()));
+        shardMetricGroupMap.put(
+                shardId2,
+                new DynamoDbStreamsShardMetrics(
+                        getTestSplit(shardId2), metricListener.getMetricGroup()));
+
         testStreamProxy.addShards(shardId, shardId2);
         List<Record> expectedRecords =
                 Stream.of(getTestRecord("data-1"), getTestRecord("data-2"), getTestRecord("data-3"))
@@ -228,6 +257,16 @@ class PollingDynamoDbStreamsShardSplitReaderTest {
         DynamoDbStreamsShardSplit testSplit1 = getTestSplit(generateShardId(1));
         DynamoDbStreamsShardSplit testSplit2 = getTestSplit(generateShardId(2));
         DynamoDbStreamsShardSplit testSplit3 = getTestSplit(generateShardId(3));
+
+        shardMetricGroupMap.put(
+                testSplit1.splitId(),
+                new DynamoDbStreamsShardMetrics(testSplit1, metricListener.getMetricGroup()));
+        shardMetricGroupMap.put(
+                testSplit2.splitId(),
+                new DynamoDbStreamsShardMetrics(testSplit2, metricListener.getMetricGroup()));
+        shardMetricGroupMap.put(
+                testSplit3.splitId(),
+                new DynamoDbStreamsShardMetrics(testSplit3, metricListener.getMetricGroup()));
 
         testStreamProxy.addShards(testSplit1.splitId(), testSplit2.splitId(), testSplit3.splitId());
 

@@ -38,6 +38,7 @@ import org.apache.flink.connector.dynamodb.source.enumerator.DynamoDbStreamsShar
 import org.apache.flink.connector.dynamodb.source.enumerator.DynamoDbStreamsSourceEnumerator;
 import org.apache.flink.connector.dynamodb.source.enumerator.DynamoDbStreamsSourceEnumeratorState;
 import org.apache.flink.connector.dynamodb.source.enumerator.DynamoDbStreamsSourceEnumeratorStateSerializer;
+import org.apache.flink.connector.dynamodb.source.metrics.DynamoDbStreamsShardMetrics;
 import org.apache.flink.connector.dynamodb.source.proxy.DynamoDbStreamsProxy;
 import org.apache.flink.connector.dynamodb.source.reader.DynamoDbStreamsRecordEmitter;
 import org.apache.flink.connector.dynamodb.source.reader.DynamoDbStreamsSourceReader;
@@ -50,14 +51,26 @@ import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.UserCodeClassLoader;
 
+import software.amazon.awssdk.awscore.exception.AwsServiceException;
+import software.amazon.awssdk.awscore.internal.AwsErrorCode;
+import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.http.SdkHttpClient;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
+import software.amazon.awssdk.retries.AdaptiveRetryStrategy;
+import software.amazon.awssdk.retries.api.BackoffStrategy;
 import software.amazon.awssdk.services.dynamodb.model.Record;
 import software.amazon.awssdk.services.dynamodb.streams.DynamoDbStreamsClient;
 import software.amazon.awssdk.utils.AttributeMap;
 
+import java.time.Duration;
+import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
+
+import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.DYNAMODB_STREAMS_EXPONENTIAL_BACKOFF_MAX_DELAY;
+import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.DYNAMODB_STREAMS_EXPONENTIAL_BACKOFF_MIN_DELAY;
+import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.DYNAMODB_STREAMS_RETRY_COUNT;
 
 /**
  * The {@link DynamoDbStreamsSource} is an exactly-once parallel streaming data source that
@@ -125,12 +138,15 @@ public class DynamoDbStreamsSource<T>
 
         FutureCompletingBlockingQueue<RecordsWithSplitIds<Record>> elementsQueue =
                 new FutureCompletingBlockingQueue<>();
+
+        Map<String, DynamoDbStreamsShardMetrics> shardMetricGroupMap = new ConcurrentHashMap<>();
+
         // We create a new stream proxy for each split reader since they have their own independent
         // lifecycle.
         Supplier<PollingDynamoDbStreamsShardSplitReader> splitReaderSupplier =
                 () ->
                         new PollingDynamoDbStreamsShardSplitReader(
-                                createDynamoDbStreamsProxy(sourceConfig));
+                                createDynamoDbStreamsProxy(sourceConfig), shardMetricGroupMap);
         DynamoDbStreamsRecordEmitter<T> recordEmitter =
                 new DynamoDbStreamsRecordEmitter<>(deserializationSchema);
 
@@ -139,7 +155,8 @@ public class DynamoDbStreamsSource<T>
                 new SingleThreadFetcherManager<>(elementsQueue, splitReaderSupplier::get),
                 recordEmitter,
                 sourceConfig,
-                readerContext);
+                readerContext,
+                shardMetricGroupMap);
     }
 
     @Override
@@ -192,11 +209,50 @@ public class DynamoDbStreamsSource<T>
         consumerConfig.addAllToProperties(dynamoDbStreamsClientProperties);
 
         AWSGeneralUtil.validateAwsCredentials(dynamoDbStreamsClientProperties);
+        int maxDescribeStreamCallAttempts = sourceConfig.get(DYNAMODB_STREAMS_RETRY_COUNT);
+        Duration minDescribeStreamDelay =
+                sourceConfig.get(DYNAMODB_STREAMS_EXPONENTIAL_BACKOFF_MIN_DELAY);
+        Duration maxDescribeStreamDelay =
+                sourceConfig.get(DYNAMODB_STREAMS_EXPONENTIAL_BACKOFF_MAX_DELAY);
+        BackoffStrategy backoffStrategy =
+                BackoffStrategy.exponentialDelay(minDescribeStreamDelay, maxDescribeStreamDelay);
+        AdaptiveRetryStrategy adaptiveRetryStrategy =
+                AdaptiveRetryStrategy.builder()
+                        .maxAttempts(maxDescribeStreamCallAttempts)
+                        .backoffStrategy(backoffStrategy)
+                        .throttlingBackoffStrategy(backoffStrategy)
+                        .retryOnException(
+                                throwable -> {
+                                    if (throwable instanceof AwsServiceException) {
+                                        AwsServiceException exception =
+                                                (AwsServiceException) throwable;
+                                        return (AwsErrorCode.RETRYABLE_ERROR_CODES.contains(
+                                                        exception.awsErrorDetails().errorCode()))
+                                                || (AwsErrorCode.THROTTLING_ERROR_CODES.contains(
+                                                        exception.awsErrorDetails().errorCode()));
+                                    }
+                                    return false;
+                                })
+                        .treatAsThrottling(
+                                throwable -> {
+                                    if (throwable instanceof AwsServiceException) {
+                                        AwsServiceException exception =
+                                                (AwsServiceException) throwable;
+                                        return AwsErrorCode.THROTTLING_ERROR_CODES.contains(
+                                                exception.awsErrorDetails().errorCode());
+                                    }
+                                    return false;
+                                })
+                        .build();
         DynamoDbStreamsClient dynamoDbStreamsClient =
                 AWSClientUtil.createAwsSyncClient(
                         dynamoDbStreamsClientProperties,
                         httpClient,
-                        DynamoDbStreamsClient.builder(),
+                        DynamoDbStreamsClient.builder()
+                                .overrideConfiguration(
+                                        ClientOverrideConfiguration.builder()
+                                                .retryStrategy(adaptiveRetryStrategy)
+                                                .build()),
                         DynamodbStreamsSourceConfigConstants
                                 .BASE_DDB_STREAMS_USER_AGENT_PREFIX_FORMAT,
                         DynamodbStreamsSourceConfigConstants.DDB_STREAMS_CLIENT_USER_AGENT_PREFIX);

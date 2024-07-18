@@ -26,11 +26,17 @@ import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.SingleThreadMultiplexSourceReaderBase;
 import org.apache.flink.connector.base.source.reader.fetcher.SingleThreadFetcherManager;
 import org.apache.flink.connector.base.source.reader.synchronization.FutureCompletingBlockingQueue;
+import org.apache.flink.connector.dynamodb.source.enumerator.event.SplitsFinishedEvent;
+import org.apache.flink.connector.dynamodb.source.metrics.DynamoDbStreamsShardMetrics;
 import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplit;
 import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplitState;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.dynamodb.model.Record;
 
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -43,18 +49,25 @@ public class DynamoDbStreamsSourceReader<T>
         extends SingleThreadMultiplexSourceReaderBase<
                 Record, T, DynamoDbStreamsShardSplit, DynamoDbStreamsShardSplitState> {
 
+    private static final Logger LOG = LoggerFactory.getLogger(DynamoDbStreamsSourceReader.class);
+    private final Map<String, DynamoDbStreamsShardMetrics> shardMetricGroupMap;
+
     public DynamoDbStreamsSourceReader(
             FutureCompletingBlockingQueue<RecordsWithSplitIds<Record>> elementsQueue,
             SingleThreadFetcherManager<Record, DynamoDbStreamsShardSplit> splitFetcherManager,
             RecordEmitter<Record, T, DynamoDbStreamsShardSplitState> recordEmitter,
             Configuration config,
-            SourceReaderContext context) {
+            SourceReaderContext context,
+            Map<String, DynamoDbStreamsShardMetrics> shardMetricGroupMap) {
         super(elementsQueue, splitFetcherManager, recordEmitter, config, context);
+        this.shardMetricGroupMap = shardMetricGroupMap;
     }
 
     @Override
     protected void onSplitFinished(Map<String, DynamoDbStreamsShardSplitState> finishedSplitIds) {
-        // no-op. We don't need to do anything on finished split now
+        context.sendSourceEventToCoordinator(
+                new SplitsFinishedEvent(new HashSet<>(finishedSplitIds.keySet())));
+        finishedSplitIds.keySet().forEach(this::unregisterShardMetricGroup);
     }
 
     @Override
@@ -66,5 +79,39 @@ public class DynamoDbStreamsSourceReader<T>
     protected DynamoDbStreamsShardSplit toSplitType(
             String splitId, DynamoDbStreamsShardSplitState splitState) {
         return splitState.getDynamoDbStreamsShardSplit();
+    }
+
+    @Override
+    public void addSplits(List<DynamoDbStreamsShardSplit> splits) {
+        splits.forEach(this::registerShardMetricGroup);
+        super.addSplits(splits);
+    }
+
+    @Override
+    public void close() throws Exception {
+        super.close();
+        this.shardMetricGroupMap.keySet().forEach(this::unregisterShardMetricGroup);
+    }
+
+    private void registerShardMetricGroup(DynamoDbStreamsShardSplit split) {
+        if (!this.shardMetricGroupMap.containsKey(split.splitId())) {
+            this.shardMetricGroupMap.put(
+                    split.splitId(), new DynamoDbStreamsShardMetrics(split, context.metricGroup()));
+        } else {
+            LOG.warn(
+                    "Metric group for shard with id {} has already been registered.",
+                    split.splitId());
+        }
+    }
+
+    private void unregisterShardMetricGroup(String shardId) {
+        DynamoDbStreamsShardMetrics removed = this.shardMetricGroupMap.remove(shardId);
+        if (removed != null) {
+            removed.unregister();
+        } else {
+            LOG.warn(
+                    "Shard metric group unregister failed. Metric group for {} does not exist.",
+                    shardId);
+        }
     }
 }

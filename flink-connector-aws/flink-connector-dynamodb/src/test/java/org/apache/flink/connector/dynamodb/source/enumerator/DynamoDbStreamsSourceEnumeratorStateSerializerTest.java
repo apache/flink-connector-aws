@@ -18,20 +18,21 @@
 
 package org.apache.flink.connector.dynamodb.source.enumerator;
 
-import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplit;
 import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplitSerializer;
+import org.apache.flink.connector.dynamodb.source.util.TestUtil;
 import org.apache.flink.core.io.VersionMismatchException;
 
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.util.Set;
+import java.util.List;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.copyOf;
 import static org.apache.flink.connector.dynamodb.source.util.TestUtil.generateShardId;
-import static org.apache.flink.connector.dynamodb.source.util.TestUtil.getTestSplit;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatExceptionOfType;
 
@@ -39,12 +40,13 @@ class DynamoDbStreamsSourceEnumeratorStateSerializerTest {
 
     @Test
     void testSerializeAndDeserializeEverythingSpecified() throws Exception {
-        Set<DynamoDbStreamsShardSplit> unassignedSplits =
-                Stream.of(getTestSplit(generateShardId(1)), getTestSplit(generateShardId(2)))
-                        .collect(Collectors.toSet());
-        String lastSeenShardId = "shardId-000000000002";
+        List<DynamoDBStreamsShardSplitWithAssignmentStatus> splitsToStore =
+                getSplits(
+                        IntStream.rangeClosed(0, 3),
+                        IntStream.rangeClosed(4, 10),
+                        IntStream.rangeClosed(11, 15));
         DynamoDbStreamsSourceEnumeratorState initialState =
-                new DynamoDbStreamsSourceEnumeratorState(unassignedSplits, lastSeenShardId);
+                new DynamoDbStreamsSourceEnumeratorState(splitsToStore);
 
         DynamoDbStreamsShardSplitSerializer splitSerializer =
                 new DynamoDbStreamsShardSplitSerializer();
@@ -60,13 +62,15 @@ class DynamoDbStreamsSourceEnumeratorStateSerializerTest {
 
     @Test
     void testDeserializeWithWrongVersionStateSerializer() throws Exception {
-        Set<DynamoDbStreamsShardSplit> unassignedSplits =
-                Stream.of(getTestSplit(generateShardId(1)), getTestSplit(generateShardId(2)))
-                        .collect(Collectors.toSet());
-        String lastSeenShardId = "shardId-000000000002";
-        DynamoDbStreamsSourceEnumeratorState initialState =
-                new DynamoDbStreamsSourceEnumeratorState(unassignedSplits, lastSeenShardId);
+        List<DynamoDBStreamsShardSplitWithAssignmentStatus> splitsToStore =
+                getSplits(
+                        IntStream.rangeClosed(0, 3),
+                        IntStream.rangeClosed(4, 10),
+                        IntStream.rangeClosed(11, 15));
+        String lastSeenShardId = generateShardId(15);
 
+        DynamoDbStreamsSourceEnumeratorState initialState =
+                new DynamoDbStreamsSourceEnumeratorState(splitsToStore);
         DynamoDbStreamsShardSplitSerializer splitSerializer =
                 new DynamoDbStreamsShardSplitSerializer();
         DynamoDbStreamsSourceEnumeratorStateSerializer serializer =
@@ -89,12 +93,13 @@ class DynamoDbStreamsSourceEnumeratorStateSerializerTest {
 
     @Test
     void testDeserializeWithWrongVersionSplitSerializer() throws Exception {
-        Set<DynamoDbStreamsShardSplit> unassignedSplits =
-                Stream.of(getTestSplit(generateShardId(1)), getTestSplit(generateShardId(2)))
-                        .collect(Collectors.toSet());
-        String lastSeenShardId = "shardId-000000000002";
+        List<DynamoDBStreamsShardSplitWithAssignmentStatus> splitsToStore =
+                getSplits(
+                        IntStream.rangeClosed(0, 3),
+                        IntStream.rangeClosed(4, 10),
+                        IntStream.rangeClosed(11, 15));
         DynamoDbStreamsSourceEnumeratorState initialState =
-                new DynamoDbStreamsSourceEnumeratorState(unassignedSplits, lastSeenShardId);
+                new DynamoDbStreamsSourceEnumeratorState(splitsToStore);
 
         DynamoDbStreamsShardSplitSerializer splitSerializer =
                 new DynamoDbStreamsShardSplitSerializer();
@@ -117,15 +122,13 @@ class DynamoDbStreamsSourceEnumeratorStateSerializerTest {
 
     @Test
     void testSerializeWithTrailingBytes() throws Exception {
-        Set<String> completedShardIds =
-                Stream.of("shardId-000000000001", "shardId-000000000002", "shardId-000000000003")
-                        .collect(Collectors.toSet());
-        Set<DynamoDbStreamsShardSplit> unassignedSplits =
-                Stream.of(getTestSplit(generateShardId(1)), getTestSplit(generateShardId(2)))
-                        .collect(Collectors.toSet());
-        String lastSeenShardId = "shardId-000000000002";
+        List<DynamoDBStreamsShardSplitWithAssignmentStatus> splitsToStore =
+                getSplits(
+                        IntStream.rangeClosed(0, 3),
+                        IntStream.rangeClosed(4, 10),
+                        IntStream.rangeClosed(11, 15));
         DynamoDbStreamsSourceEnumeratorState initialState =
-                new DynamoDbStreamsSourceEnumeratorState(unassignedSplits, lastSeenShardId);
+                new DynamoDbStreamsSourceEnumeratorState(splitsToStore);
 
         DynamoDbStreamsShardSplitSerializer splitSerializer =
                 new DynamoDbStreamsShardSplitSerializer();
@@ -139,6 +142,39 @@ class DynamoDbStreamsSourceEnumeratorStateSerializerTest {
                 .isThrownBy(
                         () -> serializer.deserialize(serializer.getVersion(), extraBytesSerialized))
                 .withMessageContaining("Unexpected trailing bytes when deserializing.");
+    }
+
+    private List<DynamoDBStreamsShardSplitWithAssignmentStatus> getSplits(
+            IntStream finishedShardIdRange,
+            IntStream assignedShardIdRange,
+            IntStream unassignedShardIdRange) {
+        Stream<DynamoDBStreamsShardSplitWithAssignmentStatus> finishedSplits =
+                finishedShardIdRange
+                        .mapToObj(TestUtil::generateShardId)
+                        .map(TestUtil::getTestSplit)
+                        .map(
+                                split ->
+                                        new DynamoDBStreamsShardSplitWithAssignmentStatus(
+                                                split, SplitAssignmentStatus.FINISHED));
+        Stream<DynamoDBStreamsShardSplitWithAssignmentStatus> assignedSplits =
+                assignedShardIdRange
+                        .mapToObj(TestUtil::generateShardId)
+                        .map(TestUtil::getTestSplit)
+                        .map(
+                                split ->
+                                        new DynamoDBStreamsShardSplitWithAssignmentStatus(
+                                                split, SplitAssignmentStatus.ASSIGNED));
+        Stream<DynamoDBStreamsShardSplitWithAssignmentStatus> unassignedSplits =
+                unassignedShardIdRange
+                        .mapToObj(TestUtil::generateShardId)
+                        .map(TestUtil::getTestSplit)
+                        .map(
+                                split ->
+                                        new DynamoDBStreamsShardSplitWithAssignmentStatus(
+                                                split, SplitAssignmentStatus.UNASSIGNED));
+        return Stream.of(finishedSplits, assignedSplits, unassignedSplits)
+                .flatMap(Function.identity())
+                .collect(Collectors.toList());
     }
 
     private static class WrongVersionStateSerializer

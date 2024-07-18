@@ -20,19 +20,17 @@ package org.apache.flink.connector.dynamodb.source.proxy;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.connector.dynamodb.source.split.StartingPosition;
+import org.apache.flink.connector.dynamodb.source.util.ListShardsResult;
 
 import software.amazon.awssdk.services.dynamodb.model.GetRecordsResponse;
-import software.amazon.awssdk.services.dynamodb.model.Shard;
 
 import javax.annotation.Nullable;
 
 import java.io.Closeable;
-import java.util.List;
 
 /** Interface for a StreamProxy to interact with Streams service in a given region. */
 @Internal
 public interface StreamProxy extends Closeable {
-
     /**
      * Obtains the shards associated with a given stream.
      *
@@ -41,7 +39,7 @@ public interface StreamProxy extends Closeable {
      *     returned.
      * @return shard list
      */
-    List<Shard> listShards(String streamArn, @Nullable String lastSeenShardId);
+    ListShardsResult listShards(String streamArn, @Nullable String lastSeenShardId);
 
     /**
      * Retrieves records from the stream.
