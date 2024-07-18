@@ -25,9 +25,13 @@ import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSpli
 import org.apache.flink.connector.dynamodb.source.split.StartingPosition;
 
 import software.amazon.awssdk.services.dynamodb.model.Record;
+import software.amazon.awssdk.services.dynamodb.model.SequenceNumberRange;
+import software.amazon.awssdk.services.dynamodb.model.Shard;
 import software.amazon.awssdk.services.dynamodb.model.StreamRecord;
 
 import java.time.Instant;
+import java.util.Collections;
+import java.util.Set;
 
 /** Utilities class for testing DynamoDbStreams Source. */
 public class TestUtil {
@@ -39,6 +43,32 @@ public class TestUtil {
 
     public static String generateShardId(int shardId) {
         return String.format("shardId-%012d", shardId);
+    }
+
+    public static Shard generateShard(
+            int shardId, String startSN, String endSN, String parentShardId) {
+        return Shard.builder()
+                .shardId(generateShardId(shardId))
+                .parentShardId(parentShardId)
+                .sequenceNumberRange(
+                        SequenceNumberRange.builder()
+                                .startingSequenceNumber(startSN)
+                                .endingSequenceNumber(endSN)
+                                .build())
+                .build();
+    }
+
+    public static Shard generateShard(
+            String shardId, String startSN, String endSN, String parentShardId) {
+        return Shard.builder()
+                .shardId(shardId)
+                .parentShardId(parentShardId)
+                .sequenceNumberRange(
+                        SequenceNumberRange.builder()
+                                .startingSequenceNumber(startSN)
+                                .endingSequenceNumber(endSN)
+                                .build())
+                .build();
     }
 
     public static DynamoDbStreamsShardSplitState getTestSplitState() {
@@ -59,11 +89,19 @@ public class TestUtil {
     }
 
     public static DynamoDbStreamsShardSplit getTestSplit(String streamArn, String shardId) {
-        return new DynamoDbStreamsShardSplit(streamArn, shardId, StartingPosition.fromStart());
+        return new DynamoDbStreamsShardSplit(
+                streamArn, shardId, StartingPosition.fromStart(), Collections.emptySet());
     }
 
     public static DynamoDbStreamsShardSplit getTestSplit(StartingPosition startingPosition) {
-        return new DynamoDbStreamsShardSplit(STREAM_ARN, SHARD_ID, startingPosition);
+        return new DynamoDbStreamsShardSplit(
+                STREAM_ARN, SHARD_ID, startingPosition, Collections.emptySet());
+    }
+
+    public static DynamoDbStreamsShardSplit getTestSplit(
+            String shardId, Set<String> parentShardIds) {
+        return new DynamoDbStreamsShardSplit(
+                STREAM_ARN, shardId, StartingPosition.fromStart(), parentShardIds);
     }
 
     public static ReaderInfo getTestReaderInfo(final int subtaskId) {

@@ -22,6 +22,8 @@ import org.apache.flink.annotation.Experimental;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
 
+import java.time.Duration;
+
 /** Constants to be used with the DynamodbStreamsSource. */
 @Experimental
 public class DynamodbStreamsSourceConfigConstants {
@@ -40,8 +42,38 @@ public class DynamodbStreamsSourceConfigConstants {
     public static final ConfigOption<Long> SHARD_DISCOVERY_INTERVAL_MILLIS =
             ConfigOptions.key("flink.shard.discovery.intervalmillis")
                     .longType()
-                    .defaultValue(10000L)
+                    .defaultValue(60000L)
                     .withDescription("The interval between each attempt to discover new shards.");
+
+    public static final ConfigOption<Integer> DESCRIBE_STREAM_INCONSISTENCY_RESOLUTION_RETRY_COUNT =
+            ConfigOptions.key("flink.describestream.inconsistencyresolution.retries")
+                    .intType()
+                    .defaultValue(5)
+                    .withDescription(
+                            "The number of times to retry build shard lineage if describestream returns inconsistent response");
+
+    public static final ConfigOption<Integer> DESCRIBE_STREAM_RETRY_CALL_COUNT =
+            ConfigOptions.key("flink.describestream.numretries")
+                    .intType()
+                    .defaultValue(5)
+                    .withDescription(
+                            "The number of times to retry describestream call if it returns a retriable exception");
+
+    public static final ConfigOption<Integer> DESCRIBE_STREAM_EXPONENTIAL_DELAY_MIN =
+            ConfigOptions.key("flink.describestream.backoff.mindelay")
+                    .intType()
+                    .defaultValue(100)
+                    .withDescription(
+                            "The minimum delay for exponential backoff for describestream");
+
+    public static final ConfigOption<Integer> DESCRIBE_STREAM_EXPONENTIAL_DELAY_MAX =
+            ConfigOptions.key("flink.describestream.backoff.maxdelay")
+                    .intType()
+                    .defaultValue(1000)
+                    .withDescription(
+                            "The maximum delay for exponential backoff for describestream");
+
+    public static final Duration MIN_DDB_STREAMS_SHARD_RETENTION = Duration.ofHours(6);
 
     public static final String BASE_DDB_STREAMS_USER_AGENT_PREFIX_FORMAT =
             "Apache Flink %s (%s) DynamoDb Streams Connector";

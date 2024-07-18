@@ -27,6 +27,7 @@ import org.apache.flink.connector.dynamodb.source.util.TestUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.dynamodb.model.Record;
+import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -221,6 +222,27 @@ class PollingDynamoDbStreamsShardSplitReaderTest {
                 Collections.emptyList(), Collections.singletonList(testSplit));
         records = splitReader.fetch();
         assertThat(readAllRecords(records)).containsExactlyInAnyOrder(expectedRecords.get(1));
+    }
+
+    @Test
+    void testSplitWithExpiredShardHandledAsCompleted() throws Exception {
+        // Given assigned split with expired shard
+        DynamoDbStreamsShardSplit testSplit = getTestSplit();
+        testStreamProxy.addShards(testSplit.getShardId());
+        testStreamProxy.setGetRecordsExceptionSupplier(
+                () ->
+                        ResourceNotFoundException.builder()
+                                .message("Shard " + testSplit.getShardId() + " does not exist")
+                                .build());
+        splitReader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(testSplit)));
+
+        // When fetching records
+        RecordsWithSplitIds<Record> retrievedRecords = splitReader.fetch();
+
+        // Then retrieve no records and mark split as complete
+        assertThat(retrievedRecords.nextRecordFromSplit()).isNull();
+        assertThat(retrievedRecords.nextSplit()).isNull();
+        assertThat(retrievedRecords.finishedSplits()).containsExactly(testSplit.splitId());
     }
 
     @Test

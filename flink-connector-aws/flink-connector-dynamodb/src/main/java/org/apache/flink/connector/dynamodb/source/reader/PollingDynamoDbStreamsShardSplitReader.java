@@ -29,6 +29,7 @@ import org.apache.flink.connector.dynamodb.source.split.StartingPosition;
 
 import software.amazon.awssdk.services.dynamodb.model.GetRecordsResponse;
 import software.amazon.awssdk.services.dynamodb.model.Record;
+import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
 
 import javax.annotation.Nullable;
 
@@ -75,11 +76,17 @@ public class PollingDynamoDbStreamsShardSplitReader
             return INCOMPLETE_SHARD_EMPTY_RECORDS;
         }
 
-        GetRecordsResponse getRecordsResponse =
-                dynamodbStreams.getRecords(
-                        splitState.getStreamArn(),
-                        splitState.getShardId(),
-                        splitState.getNextStartingPosition());
+        GetRecordsResponse getRecordsResponse;
+        try {
+            getRecordsResponse =
+                    dynamodbStreams.getRecords(
+                            splitState.getStreamArn(),
+                            splitState.getShardId(),
+                            splitState.getNextStartingPosition());
+        } catch (ResourceNotFoundException e) {
+            return new DynamoDbStreamRecordsWithSplitIds(
+                    Collections.emptyIterator(), splitState.getSplitId(), true);
+        }
         boolean isComplete = getRecordsResponse.nextShardIterator() == null;
 
         if (hasNoRecords(getRecordsResponse)) {
@@ -100,7 +107,9 @@ public class PollingDynamoDbStreamsShardSplitReader
                                 .dynamodb()
                                 .sequenceNumber()));
 
-        assignedSplits.add(splitState);
+        if (!isComplete) {
+            assignedSplits.add(splitState);
+        }
         return new DynamoDbStreamRecordsWithSplitIds(
                 getRecordsResponse.records().iterator(), splitState.getSplitId(), isComplete);
     }

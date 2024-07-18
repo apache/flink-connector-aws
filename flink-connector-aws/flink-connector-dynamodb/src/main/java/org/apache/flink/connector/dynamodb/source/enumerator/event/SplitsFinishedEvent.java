@@ -16,26 +16,32 @@
  * limitations under the License.
  */
 
-package org.apache.flink.connector.dynamodb.source.enumerator;
+package org.apache.flink.connector.dynamodb.source.enumerator.event;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.api.connector.source.SourceEvent;
 
-import java.util.List;
+import java.util.Set;
 
-/**
- * State for the {@link DynamoDbStreamsSourceEnumerator}. This class is stored in state, so any
- * changes need to be backwards compatible
- */
+/** Source event used by source reader to communicate that splits are finished to enumerator. */
 @Internal
-public class DynamoDbStreamsSourceEnumeratorState {
-    private final List<DynamoDBStreamsShardSplitWithAssignmentStatus> knownSplits;
+public class SplitsFinishedEvent implements SourceEvent {
+    private static final long serialVersionUID = 1;
+    private final Set<String> finishedSplitIds;
 
-    public DynamoDbStreamsSourceEnumeratorState(
-            List<DynamoDBStreamsShardSplitWithAssignmentStatus> knownSplits) {
-        this.knownSplits = knownSplits;
+    public SplitsFinishedEvent(Set<String> finishedSplitIds) {
+        this.finishedSplitIds = finishedSplitIds;
     }
 
-    public List<DynamoDBStreamsShardSplitWithAssignmentStatus> getKnownSplits() {
-        return knownSplits;
+    public Set<String> getFinishedSplitIds() {
+        return finishedSplitIds;
+    }
+
+    @Override
+    public String toString() {
+        return "SplitsFinishedEvent{"
+                + "finishedSplitIds=["
+                + String.join(",", finishedSplitIds)
+                + "]}";
     }
 }

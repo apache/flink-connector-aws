@@ -26,6 +26,7 @@ import org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceCo
 import org.apache.flink.connector.dynamodb.source.enumerator.assigner.ShardAssignerFactory;
 import org.apache.flink.connector.dynamodb.source.proxy.StreamProxy;
 import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplit;
+import org.apache.flink.connector.dynamodb.source.split.StartingPosition;
 import org.apache.flink.connector.dynamodb.source.util.DynamoDbStreamsProxyProvider;
 import org.apache.flink.connector.dynamodb.source.util.TestUtil;
 import org.apache.flink.util.FlinkRuntimeException;
@@ -35,16 +36,17 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
+import software.amazon.awssdk.services.dynamodb.model.Shard;
 import software.amazon.awssdk.services.dynamodb.model.ShardIteratorType;
 
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Stream;
 
 import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.STREAM_INITIAL_POSITION;
 import static org.apache.flink.connector.dynamodb.source.util.DynamoDbStreamsProxyProvider.getTestStreamProxy;
+import static org.apache.flink.connector.dynamodb.source.util.TestUtil.generateShard;
 import static org.apache.flink.connector.dynamodb.source.util.TestUtil.generateShardId;
 import static org.apache.flink.connector.dynamodb.source.util.TestUtil.getTestSplit;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatExceptionOfType;
@@ -61,7 +63,6 @@ class DynamoDbStreamsSourceEnumeratorTest {
     @MethodSource("provideInitialPositions")
     void testStartWithoutStateDiscoversAndAssignsShards(
             DynamodbStreamsSourceConfigConstants.InitialPosition initialPosition,
-            String initialTimestamp,
             ShardIteratorType expectedShardIteratorType)
             throws Throwable {
         try (MockSplitEnumeratorContext<DynamoDbStreamsShardSplit> context =
@@ -90,6 +91,13 @@ class DynamoDbStreamsSourceEnumeratorTest {
             final int subtaskId = 1;
             context.registerReader(TestUtil.getTestReaderInfo(subtaskId));
             enumerator.addReader(subtaskId);
+            Shard[] shards =
+                    new Shard[] {
+                        generateShard(0, "1200", null, null),
+                        generateShard(1, "1300", null, null),
+                        generateShard(2, "2000", null, null),
+                        generateShard(3, "2100", null, null)
+                    };
             String[] shardIds =
                     new String[] {
                         generateShardId(0),
@@ -97,7 +105,7 @@ class DynamoDbStreamsSourceEnumeratorTest {
                         generateShardId(2),
                         generateShardId(3)
                     };
-            streamProxy.addShards(shardIds);
+            streamProxy.addShards(shards);
             // When first discovery runs
             context.runNextOneTimeCallable();
             SplitsAssignment<DynamoDbStreamsShardSplit> initialSplitAssignment =
@@ -107,7 +115,7 @@ class DynamoDbStreamsSourceEnumeratorTest {
             assertThat(
                             initialSplitAssignment.assignment().get(subtaskId).stream()
                                     .map(DynamoDbStreamsShardSplit::getShardId))
-                    .containsExactly(shardIds);
+                    .containsExactlyInAnyOrder(shardIds);
             assertThat(
                             initialSplitAssignment.assignment().get(subtaskId).stream()
                                     .map(DynamoDbStreamsShardSplit::getStartingPosition))
@@ -123,27 +131,6 @@ class DynamoDbStreamsSourceEnumeratorTest {
             SplitsAssignment<DynamoDbStreamsShardSplit> noUpdateSplitAssignment =
                     context.getSplitsAssignmentSequence().get(1);
             assertThat(noUpdateSplitAssignment.assignment()).isEmpty();
-
-            // Given resharding occurs
-            String[] additionalShards = new String[] {generateShardId(4), generateShardId(5)};
-            streamProxy.addShards(additionalShards);
-            // When periodic discovery runs
-            context.runPeriodicCallable(0);
-            // Then only additional shards are assigned to read from TRIM_HORIZON
-            SplitsAssignment<DynamoDbStreamsShardSplit> afterReshardingSplitAssignment =
-                    context.getSplitsAssignmentSequence().get(2);
-            assertThat(afterReshardingSplitAssignment.assignment()).containsOnlyKeys(subtaskId);
-            assertThat(
-                            afterReshardingSplitAssignment.assignment().get(subtaskId).stream()
-                                    .map(DynamoDbStreamsShardSplit::getShardId))
-                    .containsExactly(additionalShards);
-            assertThat(
-                            afterReshardingSplitAssignment.assignment().get(subtaskId).stream()
-                                    .map(DynamoDbStreamsShardSplit::getStartingPosition))
-                    .allSatisfy(
-                            s ->
-                                    assertThat(s.getShardIteratorType())
-                                            .isEqualTo(ShardIteratorType.TRIM_HORIZON));
         }
     }
 
@@ -151,19 +138,24 @@ class DynamoDbStreamsSourceEnumeratorTest {
     @MethodSource("provideInitialPositions")
     void testStartWithStateDoesNotAssignCompletedShards(
             DynamodbStreamsSourceConfigConstants.InitialPosition initialPosition,
-            String initialTimestamp,
-            ShardIteratorType expectedShardIteratorType)
+            ShardIteratorType shardIteratorType)
             throws Throwable {
         try (MockSplitEnumeratorContext<DynamoDbStreamsShardSplit> context =
                 new MockSplitEnumeratorContext<>(NUM_SUBTASKS)) {
             DynamoDbStreamsProxyProvider.TestDynamoDbStreamsProxy streamProxy =
                     getTestStreamProxy();
-            final String completedShard = generateShardId(0);
-            final String lastSeenShard = generateShardId(1);
-            final Set<String> completedShardIds = Collections.singleton(completedShard);
+            final Shard completedShard = generateShard(0, "1000", "2000", null);
 
             DynamoDbStreamsSourceEnumeratorState state =
-                    new DynamoDbStreamsSourceEnumeratorState(Collections.emptySet(), lastSeenShard);
+                    new DynamoDbStreamsSourceEnumeratorState(
+                            Collections.singletonList(
+                                    new DynamoDBStreamsShardSplitWithAssignmentStatus(
+                                            new DynamoDbStreamsShardSplit(
+                                                    STREAM_ARN,
+                                                    completedShard.shardId(),
+                                                    StartingPosition.fromStart(),
+                                                    Collections.emptySet()),
+                                            SplitAssignmentStatus.FINISHED)));
 
             final Configuration sourceConfig = new Configuration();
             sourceConfig.set(STREAM_INITIAL_POSITION, initialPosition);
@@ -179,19 +171,20 @@ class DynamoDbStreamsSourceEnumeratorTest {
                             state);
             // When enumerator starts
             enumerator.start();
-            // Then no initial discovery is scheduled, but a periodic discovery is scheduled
-            assertThat(context.getOneTimeCallables()).isEmpty();
             assertThat(context.getPeriodicCallables()).hasSize(1);
 
             // Given there is one registered reader, with 4 shards in stream
             final int subtaskId = 1;
             context.registerReader(TestUtil.getTestReaderInfo(subtaskId));
             enumerator.addReader(subtaskId);
-            String[] shardIds =
-                    new String[] {
-                        completedShard, lastSeenShard, generateShardId(2), generateShardId(3)
+            Shard[] shards =
+                    new Shard[] {
+                        completedShard,
+                        generateShard(1, "2100", null, completedShard.shardId()),
+                        generateShard(2, "2200", null, null),
+                        generateShard(3, "3000", null, null)
                     };
-            streamProxy.addShards(shardIds);
+            streamProxy.addShards(shards);
             // When first periodic discovery of shards
             context.runPeriodicCallable(0);
             // Then newer shards will be discovered and read from TRIM_HORIZON, independent of
@@ -202,69 +195,18 @@ class DynamoDbStreamsSourceEnumeratorTest {
             assertThat(
                             firstUpdateSplitAssignment.assignment().get(subtaskId).stream()
                                     .map(DynamoDbStreamsShardSplit::getShardId))
-                    .containsExactly(generateShardId(2), generateShardId(3));
+                    .containsExactlyInAnyOrder(
+                            generateShardId(2), generateShardId(3), generateShardId(1));
             assertThat(
                             firstUpdateSplitAssignment.assignment().get(subtaskId).stream()
                                     .map(DynamoDbStreamsShardSplit::getStartingPosition))
                     .allSatisfy(
-                            s ->
-                                    assertThat(s.getShardIteratorType())
-                                            .isEqualTo(ShardIteratorType.TRIM_HORIZON));
+                            s -> assertThat(s.getShardIteratorType()).isEqualTo(shardIteratorType));
         }
     }
 
     @Test
-    void testReturnedSplitsWillBeReassigned() throws Throwable {
-        try (MockSplitEnumeratorContext<DynamoDbStreamsShardSplit> context =
-                new MockSplitEnumeratorContext<>(NUM_SUBTASKS)) {
-            DynamoDbStreamsProxyProvider.TestDynamoDbStreamsProxy streamProxy =
-                    getTestStreamProxy();
-            DynamoDbStreamsSourceEnumerator enumerator =
-                    getSimpleEnumeratorWithNoState(context, streamProxy);
-
-            // Given enumerator is initialised with one registered reader, with 4 shards in stream
-            final int subtaskId = 1;
-            context.registerReader(TestUtil.getTestReaderInfo(subtaskId));
-            enumerator.addReader(subtaskId);
-            String[] shardIds =
-                    new String[] {
-                        generateShardId(0),
-                        generateShardId(1),
-                        generateShardId(2),
-                        generateShardId(3)
-                    };
-            streamProxy.addShards(shardIds);
-
-            // When first discovery runs
-            context.runNextOneTimeCallable();
-            SplitsAssignment<DynamoDbStreamsShardSplit> initialSplitAssignment =
-                    context.getSplitsAssignmentSequence().get(0);
-
-            // Then all 4 shards discovered on startup
-            assertThat(initialSplitAssignment.assignment()).containsOnlyKeys(subtaskId);
-            assertThat(
-                            initialSplitAssignment.assignment().get(subtaskId).stream()
-                                    .map(DynamoDbStreamsShardSplit::getShardId))
-                    .containsExactly(shardIds);
-
-            // Given one shard split is returned
-            DynamoDbStreamsShardSplit returnedSplit =
-                    initialSplitAssignment.assignment().get(subtaskId).get(0);
-            enumerator.addSplitsBack(Collections.singletonList(returnedSplit), subtaskId);
-
-            // When first periodic discovery runs
-            context.runPeriodicCallable(0);
-            // Then returned split will be assigned
-            SplitsAssignment<DynamoDbStreamsShardSplit> firstReturnedSplitAssignment =
-                    context.getSplitsAssignmentSequence().get(1);
-            assertThat(firstReturnedSplitAssignment.assignment()).containsOnlyKeys(subtaskId);
-            assertThat(firstReturnedSplitAssignment.assignment().get(subtaskId))
-                    .containsExactly(returnedSplit);
-        }
-    }
-
-    @Test
-    void testAddSplitsBackWithoutSplitIsNoOp() throws Throwable {
+    void testAddSplitsBackThrowsException() throws Throwable {
         try (MockSplitEnumeratorContext<DynamoDbStreamsShardSplit> context =
                 new MockSplitEnumeratorContext<>(NUM_SUBTASKS)) {
             DynamoDbStreamsProxyProvider.TestDynamoDbStreamsProxy streamProxy =
@@ -276,54 +218,8 @@ class DynamoDbStreamsSourceEnumeratorTest {
             // Given enumerator has no assigned splits
             // When we add splits back
             // Then handled gracefully with no exception thrown
-            assertThatNoException().isThrownBy(() -> enumerator.addSplitsBack(splits, 1));
-        }
-    }
-
-    @Test
-    void testAddSplitsBackAssignsUnassignedSplits() throws Throwable {
-        try (MockSplitEnumeratorContext<DynamoDbStreamsShardSplit> context =
-                new MockSplitEnumeratorContext<>(NUM_SUBTASKS)) {
-            DynamoDbStreamsProxyProvider.TestDynamoDbStreamsProxy streamProxy =
-                    getTestStreamProxy();
-            DynamoDbStreamsSourceEnumerator enumerator =
-                    getSimpleEnumeratorWithNoState(context, streamProxy);
-
-            // Given enumerator has assigned splits
-            final int subtaskId = 1;
-            context.registerReader(TestUtil.getTestReaderInfo(subtaskId));
-            enumerator.addReader(subtaskId);
-            String[] shardIds =
-                    new String[] {
-                        generateShardId(0),
-                        generateShardId(1),
-                        generateShardId(2),
-                        generateShardId(3)
-                    };
-            streamProxy.addShards(shardIds);
-            context.runNextOneTimeCallable();
-
-            // Ensure that there are splits assigned
-            SplitsAssignment<DynamoDbStreamsShardSplit> initialSplitAssignment =
-                    context.getSplitsAssignmentSequence().get(0);
-            assertThat(initialSplitAssignment.assignment()).containsOnlyKeys(subtaskId);
-            assertThat(
-                            initialSplitAssignment.assignment().get(subtaskId).stream()
-                                    .map(DynamoDbStreamsShardSplit::getShardId))
-                    .containsExactly(shardIds);
-
-            // When we add splits back
-            DynamoDbStreamsShardSplit returnedSplit =
-                    initialSplitAssignment.assignment().get(subtaskId).get(0);
-            enumerator.addSplitsBack(Collections.singletonList(returnedSplit), 1);
-
-            // Then splits are reassigned
-            assertThat(context.getSplitsAssignmentSequence()).hasSizeGreaterThan(1);
-            SplitsAssignment<DynamoDbStreamsShardSplit> secondSplitAssignment =
-                    context.getSplitsAssignmentSequence().get(1);
-            assertThat(secondSplitAssignment.assignment()).containsOnlyKeys(subtaskId);
-            assertThat(secondSplitAssignment.assignment().get(subtaskId))
-                    .containsExactly(returnedSplit);
+            assertThatExceptionOfType(UnsupportedOperationException.class)
+                    .isThrownBy(() -> enumerator.addSplitsBack(splits, 1));
         }
     }
 
@@ -395,6 +291,13 @@ class DynamoDbStreamsSourceEnumeratorTest {
             final int subtaskId = 1;
             context.registerReader(TestUtil.getTestReaderInfo(subtaskId));
             enumerator.addReader(subtaskId);
+            Shard[] shards =
+                    new Shard[] {
+                        generateShard(0, "1200", null, null),
+                        generateShard(1, "1300", null, null),
+                        generateShard(2, "2000", null, null),
+                        generateShard(3, "2100", null, null)
+                    };
             String[] shardIds =
                     new String[] {
                         generateShardId(0),
@@ -402,7 +305,7 @@ class DynamoDbStreamsSourceEnumeratorTest {
                         generateShardId(2),
                         generateShardId(3)
                     };
-            streamProxy.addShards(shardIds);
+            streamProxy.addShards(shards);
 
             // When first discovery runs
             context.runNextOneTimeCallable();
@@ -414,7 +317,7 @@ class DynamoDbStreamsSourceEnumeratorTest {
             assertThat(
                             initialSplitAssignment.assignment().get(subtaskId).stream()
                                     .map(DynamoDbStreamsShardSplit::getShardId))
-                    .containsExactly(shardIds);
+                    .containsExactlyInAnyOrder(shardIds);
 
             // Given ListShards doesn't respect lastSeenShardId, and returns already assigned shards
             streamProxy.setShouldRespectLastSeenShardId(false);
@@ -446,6 +349,13 @@ class DynamoDbStreamsSourceEnumeratorTest {
             enumerator.start();
 
             // Given enumerator is initialised without a reader
+            Shard[] shards =
+                    new Shard[] {
+                        generateShard(0, "1200", null, null),
+                        generateShard(1, "1300", null, null),
+                        generateShard(2, "2000", null, null),
+                        generateShard(3, "2100", null, null)
+                    };
             String[] shardIds =
                     new String[] {
                         generateShardId(0),
@@ -453,7 +363,7 @@ class DynamoDbStreamsSourceEnumeratorTest {
                         generateShardId(2),
                         generateShardId(3)
                     };
-            streamProxy.addShards(shardIds);
+            streamProxy.addShards(shards);
 
             // When first discovery runs
             context.runNextOneTimeCallable();
@@ -508,6 +418,13 @@ class DynamoDbStreamsSourceEnumeratorTest {
             final int subtaskId = 1;
             context.registerReader(TestUtil.getTestReaderInfo(subtaskId));
             enumerator.addReader(subtaskId);
+            Shard[] shards =
+                    new Shard[] {
+                        generateShard(0, "1200", null, null),
+                        generateShard(1, "1300", null, null),
+                        generateShard(2, "2000", null, null),
+                        generateShard(3, "2100", null, null)
+                    };
             String[] shardIds =
                     new String[] {
                         generateShardId(0),
@@ -515,7 +432,7 @@ class DynamoDbStreamsSourceEnumeratorTest {
                         generateShardId(2),
                         generateShardId(3)
                     };
-            streamProxy.addShards(shardIds);
+            streamProxy.addShards(shards);
 
             // When first discovery runs
             context.runNextOneTimeCallable();
@@ -549,62 +466,6 @@ class DynamoDbStreamsSourceEnumeratorTest {
                             s ->
                                     assertThat(s.getShardIteratorType())
                                             .isEqualTo(ShardIteratorType.LATEST));
-        }
-    }
-
-    @Test
-    void testRestoreFromStateRemembersLastSeenShardId() throws Throwable {
-        try (MockSplitEnumeratorContext<DynamoDbStreamsShardSplit> context =
-                        new MockSplitEnumeratorContext<>(NUM_SUBTASKS);
-                MockSplitEnumeratorContext<DynamoDbStreamsShardSplit> restoredContext =
-                        new MockSplitEnumeratorContext<>(NUM_SUBTASKS)) {
-            DynamoDbStreamsProxyProvider.TestDynamoDbStreamsProxy streamProxy =
-                    getTestStreamProxy();
-            final Configuration sourceConfig = new Configuration();
-            DynamoDbStreamsSourceEnumerator enumerator =
-                    new DynamoDbStreamsSourceEnumerator(
-                            context,
-                            STREAM_ARN,
-                            sourceConfig,
-                            streamProxy,
-                            ShardAssignerFactory.uniformShardAssigner(),
-                            null);
-            enumerator.start();
-
-            // Given enumerator is initialised with one registered reader, with 4 shards in stream
-            final int subtaskId = 1;
-            context.registerReader(TestUtil.getTestReaderInfo(subtaskId));
-            enumerator.addReader(subtaskId);
-            String[] shardIds =
-                    new String[] {
-                        generateShardId(0),
-                        generateShardId(1),
-                        generateShardId(2),
-                        generateShardId(3)
-                    };
-            streamProxy.addShards(shardIds);
-            // Given enumerator has run discovery
-            context.runNextOneTimeCallable();
-
-            // When restored from state
-            DynamoDbStreamsSourceEnumeratorState snapshottedState = enumerator.snapshotState(1);
-            DynamoDbStreamsSourceEnumerator restoredEnumerator =
-                    new DynamoDbStreamsSourceEnumerator(
-                            restoredContext,
-                            STREAM_ARN,
-                            sourceConfig,
-                            streamProxy,
-                            ShardAssignerFactory.uniformShardAssigner(),
-                            snapshottedState);
-            restoredEnumerator.start();
-            // Given enumerator is initialised with one registered reader, with 4 shards in stream
-            restoredContext.registerReader(TestUtil.getTestReaderInfo(subtaskId));
-            restoredEnumerator.addReader(subtaskId);
-            restoredContext.runPeriodicCallable(0);
-
-            // Then ListShards receives a ListShards call with the lastSeenShardId
-            assertThat(streamProxy.getLastProvidedLastSeenShardId())
-                    .isEqualTo(shardIds[shardIds.length - 1]);
         }
     }
 
@@ -673,11 +534,9 @@ class DynamoDbStreamsSourceEnumeratorTest {
         return Stream.of(
                 Arguments.of(
                         DynamodbStreamsSourceConfigConstants.InitialPosition.LATEST,
-                        "",
                         ShardIteratorType.LATEST),
                 Arguments.of(
                         DynamodbStreamsSourceConfigConstants.InitialPosition.TRIM_HORIZON,
-                        "",
                         ShardIteratorType.TRIM_HORIZON));
     }
 }
