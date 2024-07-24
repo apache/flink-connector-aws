@@ -302,6 +302,46 @@ WITH (
 );
 ```
 
+## Specifying Primary Key For Deletes
+
+The DynamoDB sink supports Delete requests to DynamoDB, but AWS requires that a Dynamo Delete request contain **only** the key field(s), or else the Delete request will fail with `DynamoDbException: The provided key element does not match the schema`.
+Thus, if a Changelog stream being is being written to DynamoDB that contains DELETEs, you must specify the `PRIMARY KEY` on the table.
+This `PRIMARY KEY` specified for the Flink SQL Table must match the actual Primary Key of the DynamoDB table - so it must be either just the Partition Key, or in case of a composite primary key, it must be the Partition Key and Sort Key.
+
+Example For Partition Key as only Primary Key:
+```sql
+CREATE TABLE DynamoDbTable (
+  `user_id` BIGINT,
+  `item_id` BIGINT,
+  `category_id` BIGINT,
+  `behavior` STRING,
+  PRIMARY KEY (user_id) NOT ENFORCED
+) 
+WITH (
+  'connector' = 'dynamodb',
+  'table-name' = 'user_behavior',
+  'aws.region' = 'us-east-2'
+);
+```
+
+Example For Partition Key and Sort Key as Composite Primary Key:
+```sql
+CREATE TABLE DynamoDbTable (
+  `user_id` BIGINT,
+  `item_id` BIGINT,
+  `category_id` BIGINT,
+  `behavior` STRING,
+  PRIMARY KEY (user_id, item_id) NOT ENFORCED
+) 
+WITH (
+  'connector' = 'dynamodb',
+  'table-name' = 'user_behavior',
+  'aws.region' = 'us-east-2'
+);
+```
+
+Note that this Primary Key functionality, specified by `PRIMARY KEY`, can be used alongside the Sink Partitioning mentioned above via `PARTITIONED BY` to dedeuplicate data and support DELETEs.
+
 ## Notice
 
 The current implementation of the DynamoDB SQL connector is write-only and doesn't provide an implementation for source queries.
