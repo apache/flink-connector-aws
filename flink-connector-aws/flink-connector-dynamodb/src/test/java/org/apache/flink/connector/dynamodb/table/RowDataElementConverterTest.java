@@ -33,6 +33,9 @@ import org.apache.flink.util.InstantiationUtil;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -45,10 +48,16 @@ public class RowDataElementConverterTest {
                     DataTypes.FIELD("partition_key", DataTypes.STRING()),
                     DataTypes.FIELD("payload", DataTypes.STRING()));
     private static final RowDataElementConverter elementConverter =
-            new RowDataElementConverter(DATA_TYPE);
+            new RowDataElementConverter(DATA_TYPE, null);
     private static final SinkWriter.Context context = new UnusedSinkWriterContext();
     private static final RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
-            new RowDataToAttributeValueConverter(DATA_TYPE);
+            new RowDataToAttributeValueConverter(DATA_TYPE, null);
+
+    private static final Set<String> primaryKeys = new HashSet<>(Collections.singletonList("partition_key"));
+    private static final RowDataElementConverter elementConverterWithPK =
+            new RowDataElementConverter(DATA_TYPE, primaryKeys);
+    private static final RowDataToAttributeValueConverter rowDataToAttributeValueConverterWithPK =
+            new RowDataToAttributeValueConverter(DATA_TYPE, primaryKeys);
 
     @Test
     void testInsert() {
@@ -91,11 +100,12 @@ public class RowDataElementConverterTest {
     @Test
     void testDelete() {
         RowData rowData = createElement(RowKind.DELETE);
-        DynamoDbWriteRequest actualWriteRequest = elementConverter.apply(rowData, context);
+        // In case of DELETE, a set of Primary Key(s) is required.
+        DynamoDbWriteRequest actualWriteRequest = elementConverterWithPK.apply(rowData, context);
         DynamoDbWriteRequest expectedWriterequest =
                 DynamoDbWriteRequest.builder()
                         .setType(DynamoDbWriteRequestType.DELETE)
-                        .setItem(rowDataToAttributeValueConverter.convertRowData(rowData))
+                        .setItem(rowDataToAttributeValueConverterWithPK.convertRowData(rowData))
                         .build();
 
         assertThat(actualWriteRequest).usingRecursiveComparison().isEqualTo(expectedWriterequest);
@@ -106,7 +116,7 @@ public class RowDataElementConverterTest {
             throws IOException, ClassNotFoundException {
         RowData rowData = createElement(RowKind.INSERT);
 
-        RowDataElementConverter originalConverter = new RowDataElementConverter(DATA_TYPE);
+        RowDataElementConverter originalConverter = new RowDataElementConverter(DATA_TYPE, null);
         RowDataElementConverter transformedConverter =
                 InstantiationUtil.deserializeObject(
                         InstantiationUtil.serializeObject(originalConverter),
