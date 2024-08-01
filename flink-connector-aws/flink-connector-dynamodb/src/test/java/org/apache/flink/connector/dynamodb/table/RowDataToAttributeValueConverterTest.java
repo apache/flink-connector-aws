@@ -19,6 +19,7 @@
 package org.apache.flink.connector.dynamodb.table;
 
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.api.TableException;
 import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.GenericArrayData;
 import org.apache.flink.table.data.GenericRowData;
@@ -45,6 +46,7 @@ import java.util.stream.Collectors;
 
 import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /** Test for {@link RowDataToAttributeValueConverter}. */
 public class RowDataToAttributeValueConverterTest {
@@ -553,6 +555,30 @@ public class RowDataToAttributeValueConverterTest {
     }
 
     @Test
+    void testDeleteExceptionWhenNoPrimaryKey() {
+        String key = "key";
+        String value = "some_string";
+        String otherField = "other_field";
+        String otherValue = "other_value";
+        Set<String> primaryKeys = Collections.emptySet();
+
+        // Create a Row with two fields - "key" and "otherField".  "key" is the single primary key.
+        DataType dataType =
+                DataTypes.ROW(
+                        DataTypes.FIELD(key, DataTypes.STRING()),
+                        DataTypes.FIELD(otherField, DataTypes.STRING()));
+        RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
+                new RowDataToAttributeValueConverter(dataType, primaryKeys);
+        RowData rowData =
+                createElementWithMultipleFields(
+                        StringData.fromString(value), StringData.fromString(otherValue));
+        rowData.setRowKind(RowKind.DELETE);
+
+        assertThrows(TableException.class, () -> {
+                rowDataToAttributeValueConverter.convertRowData(rowData);
+        });
+    }
+
     void testDeleteOnlyPrimaryKey() {
         String key = "key";
         String value = "some_string";

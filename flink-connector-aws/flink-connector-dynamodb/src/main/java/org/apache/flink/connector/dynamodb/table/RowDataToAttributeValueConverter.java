@@ -34,6 +34,7 @@ import software.amazon.awssdk.enhanced.dynamodb.TableSchema;
 import software.amazon.awssdk.enhanced.dynamodb.mapper.StaticTableSchema;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -48,6 +49,12 @@ public class RowDataToAttributeValueConverter {
     private final DataType physicalDataType;
     private final TableSchema<RowData> tableSchema;
     private final Set<String> primaryKeys;
+
+    public RowDataToAttributeValueConverter(DataType physicalDataType) {
+        this.physicalDataType = physicalDataType;
+        this.primaryKeys = Collections.emptySet();
+        this.tableSchema = createTableSchema();
+    }
 
     public RowDataToAttributeValueConverter(DataType physicalDataType, Set<String> primaryKeys) {
         this.physicalDataType = physicalDataType;
