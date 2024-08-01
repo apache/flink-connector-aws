@@ -561,11 +561,17 @@ public class RowDataToAttributeValueConverterTest {
         Set<String> primaryKeys = new HashSet<>(Collections.singletonList(key));
 
         // Create a Row with two fields - "key" and "otherField".  "key" is the single primary key.
-        // For a Delete request, only "key" should be included in the expectedResult, and not "otherField".
-        DataType dataType = DataTypes.ROW(DataTypes.FIELD(key, DataTypes.STRING()), DataTypes.FIELD(otherField, DataTypes.STRING()));
+        // For a Delete request, only "key" should be included in the expectedResult, and not
+        // "otherField".
+        DataType dataType =
+                DataTypes.ROW(
+                        DataTypes.FIELD(key, DataTypes.STRING()),
+                        DataTypes.FIELD(otherField, DataTypes.STRING()));
         RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
                 new RowDataToAttributeValueConverter(dataType, primaryKeys);
-        RowData rowData = createElementWithMultipleFields(StringData.fromString(value), StringData.fromString(otherValue));
+        RowData rowData =
+                createElementWithMultipleFields(
+                        StringData.fromString(value), StringData.fromString(otherValue));
         rowData.setRowKind(RowKind.DELETE);
 
         Map<String, AttributeValue> actualResult =
@@ -591,15 +597,20 @@ public class RowDataToAttributeValueConverterTest {
 
         // Create a Row with three fields - "key", "additional_key", and "otherField".
         // "key" and "additional_key" make up the composite primary key.
-        // For a Delete request, only "key" and "additional_key" should be included in the expectedResult, and not "otherField".
-        DataType dataType = DataTypes.ROW(
-                DataTypes.FIELD(key, DataTypes.STRING()),
-                DataTypes.FIELD(additionalKey, DataTypes.STRING()),
-                DataTypes.FIELD(otherField, DataTypes.STRING()));
+        // For a Delete request, only "key" and "additional_key" should be included in the
+        // expectedResult, and not "otherField".
+        DataType dataType =
+                DataTypes.ROW(
+                        DataTypes.FIELD(key, DataTypes.STRING()),
+                        DataTypes.FIELD(additionalKey, DataTypes.STRING()),
+                        DataTypes.FIELD(otherField, DataTypes.STRING()));
         RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
                 new RowDataToAttributeValueConverter(dataType, primaryKeys);
-        RowData rowData = createElementWithMultipleFields(
-                StringData.fromString(value), StringData.fromString(additionalValue), StringData.fromString(otherValue));
+        RowData rowData =
+                createElementWithMultipleFields(
+                        StringData.fromString(value),
+                        StringData.fromString(additionalValue),
+                        StringData.fromString(otherValue));
         rowData.setRowKind(RowKind.DELETE);
 
         Map<String, AttributeValue> actualResult =
@@ -622,10 +633,15 @@ public class RowDataToAttributeValueConverterTest {
 
         // Create a Row with two fields - "key" and "otherField".  "key" is the primary key.
         // For an Insert request, all fields should be included regardless of the Primary Key.
-        DataType dataType = DataTypes.ROW(DataTypes.FIELD(key, DataTypes.STRING()), DataTypes.FIELD(otherField, DataTypes.STRING()));
+        DataType dataType =
+                DataTypes.ROW(
+                        DataTypes.FIELD(key, DataTypes.STRING()),
+                        DataTypes.FIELD(otherField, DataTypes.STRING()));
         RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
                 new RowDataToAttributeValueConverter(dataType, primaryKeys);
-        RowData rowData = createElementWithMultipleFields(StringData.fromString(value), StringData.fromString(otherValue));
+        RowData rowData =
+                createElementWithMultipleFields(
+                        StringData.fromString(value), StringData.fromString(otherValue));
         rowData.setRowKind(RowKind.INSERT);
 
         Map<String, AttributeValue> actualResult =
@@ -647,11 +663,17 @@ public class RowDataToAttributeValueConverterTest {
         Set<String> primaryKeys = new HashSet<>(Collections.singletonList(key));
 
         // Create a Row with two fields - "key" and "otherField".  "key" is the primary key.
-        // For an UPDATE_BEFORE request, all fields should be included regardless of the Primary Key.
-        DataType dataType = DataTypes.ROW(DataTypes.FIELD(key, DataTypes.STRING()), DataTypes.FIELD(otherField, DataTypes.STRING()));
+        // For an UPDATE_BEFORE request, all fields should be included regardless of the Primary
+        // Key.
+        DataType dataType =
+                DataTypes.ROW(
+                        DataTypes.FIELD(key, DataTypes.STRING()),
+                        DataTypes.FIELD(otherField, DataTypes.STRING()));
         RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
                 new RowDataToAttributeValueConverter(dataType, primaryKeys);
-        RowData rowData = createElementWithMultipleFields(StringData.fromString(value), StringData.fromString(otherValue));
+        RowData rowData =
+                createElementWithMultipleFields(
+                        StringData.fromString(value), StringData.fromString(otherValue));
         rowData.setRowKind(RowKind.UPDATE_AFTER);
 
         Map<String, AttributeValue> actualResult =

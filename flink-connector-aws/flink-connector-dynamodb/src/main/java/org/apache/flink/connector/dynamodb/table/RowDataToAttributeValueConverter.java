@@ -60,22 +60,22 @@ public class RowDataToAttributeValueConverter {
         itemMap = tableSchema.itemToMap(row, false);
 
         // In case of DELETE, only the primary key field(s) should be sent in the request
-        // In order to accomplish this, we need PRIMARY KEY fields to have been set in Table definition.
-        if (row.getRowKind() == RowKind.DELETE){
-                if (primaryKeys == null || primaryKeys.isEmpty()) {
-                        throw new TableException("PRIMARY KEY on Table must be set for DynamoDB DELETE operation");
-                }
-                Map<String, AttributeValue> pkOnlyMap = new HashMap<String, AttributeValue>();
-                for (String key : primaryKeys) {
-                        AttributeValue value = itemMap.get(key);
-                        pkOnlyMap.put(key, value);
-                }
-                return pkOnlyMap;
+        // In order to accomplish this, we need PRIMARY KEY fields to have been set in Table
+        // definition.
+        if (row.getRowKind() == RowKind.DELETE) {
+            if (primaryKeys == null || primaryKeys.isEmpty()) {
+                throw new TableException(
+                        "PRIMARY KEY on Table must be set for DynamoDB DELETE operation");
+            }
+            Map<String, AttributeValue> pkOnlyMap = new HashMap<String, AttributeValue>();
+            for (String key : primaryKeys) {
+                AttributeValue value = itemMap.get(key);
+                pkOnlyMap.put(key, value);
+            }
+            return pkOnlyMap;
+        } else {
+            return itemMap;
         }
-        else {
-                return itemMap;
-        }
-
     }
 
     private StaticTableSchema<RowData> createTableSchema() {

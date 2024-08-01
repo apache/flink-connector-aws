@@ -53,7 +53,8 @@ public class RowDataElementConverterTest {
     private static final RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
             new RowDataToAttributeValueConverter(DATA_TYPE, null);
 
-    private static final Set<String> primaryKeys = new HashSet<>(Collections.singletonList("partition_key"));
+    private static final Set<String> primaryKeys =
+            new HashSet<>(Collections.singletonList("partition_key"));
     private static final RowDataElementConverter elementConverterWithPK =
             new RowDataElementConverter(DATA_TYPE, primaryKeys);
     private static final RowDataToAttributeValueConverter rowDataToAttributeValueConverterWithPK =

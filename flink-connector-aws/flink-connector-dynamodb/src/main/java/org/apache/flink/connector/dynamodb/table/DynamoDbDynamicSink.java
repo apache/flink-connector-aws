@@ -92,7 +92,8 @@ public class DynamoDbDynamicSink extends AsyncDynamicTableSink<DynamoDbWriteRequ
                         .setFailOnError(failOnError)
                         .setOverwriteByPartitionKeys(new ArrayList<>(overwriteByPartitionKeys))
                         .setDynamoDbProperties(dynamoDbClientProperties)
-                        .setElementConverter(new RowDataElementConverter(physicalDataType, primaryKeys));
+                        .setElementConverter(
+                                new RowDataElementConverter(physicalDataType, primaryKeys));
 
         addAsyncOptionsToSinkBuilder(builder);
 
