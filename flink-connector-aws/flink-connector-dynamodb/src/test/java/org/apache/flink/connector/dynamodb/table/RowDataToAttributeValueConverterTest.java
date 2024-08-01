@@ -574,9 +574,11 @@ public class RowDataToAttributeValueConverterTest {
                         StringData.fromString(value), StringData.fromString(otherValue));
         rowData.setRowKind(RowKind.DELETE);
 
-        assertThrows(TableException.class, () -> {
-                rowDataToAttributeValueConverter.convertRowData(rowData);
-        });
+        assertThrows(
+                TableException.class,
+                () -> {
+                    rowDataToAttributeValueConverter.convertRowData(rowData);
+                });
     }
 
     void testDeleteOnlyPrimaryKey() {
