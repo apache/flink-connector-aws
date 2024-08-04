@@ -18,6 +18,7 @@
 package org.apache.flink.streaming.connectors.kinesis.util;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.util.ExceptionUtils;
 
 import software.amazon.awssdk.http.SdkHttpConfigurationOption;
 import software.amazon.awssdk.services.kinesis.model.LimitExceededException;
@@ -74,8 +75,12 @@ public class AwsV2Util {
     }
 
     public static boolean isRecoverableException(Exception e) {
-        Throwable cause = e.getCause();
-        return cause instanceof LimitExceededException
-                || cause instanceof ProvisionedThroughputExceededException;
+        return ExceptionUtils.findThrowable(
+                        e,
+                        throwable ->
+                                throwable instanceof LimitExceededException
+                                        || throwable
+                                                instanceof ProvisionedThroughputExceededException)
+                .isPresent();
     }
 }
