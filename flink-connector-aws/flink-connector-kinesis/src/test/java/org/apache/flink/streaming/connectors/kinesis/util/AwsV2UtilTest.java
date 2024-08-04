@@ -20,6 +20,7 @@ package org.apache.flink.streaming.connectors.kinesis.util;
 import org.junit.Test;
 import software.amazon.awssdk.http.SdkHttpConfigurationOption;
 import software.amazon.awssdk.services.kinesis.model.LimitExceededException;
+import software.amazon.awssdk.services.kinesis.model.ProvisionedThroughputExceededException;
 import software.amazon.awssdk.utils.AttributeMap;
 
 import java.time.Duration;
@@ -133,7 +134,19 @@ public class AwsV2UtilTest {
     }
 
     @Test
-    public void testIsRecoverableExceptionForRecoverable() {
+    public void testIsRecoverableExceptionForRecoverableLimitExceeded() {
+        Exception recoverable = LimitExceededException.builder().build();
+        assertThat(AwsV2Util.isRecoverableException(recoverable)).isTrue();
+    }
+
+    @Test
+    public void testIsRecoverableExceptionForRecoverableProvisionedThroughputExceeded() {
+        Exception recoverable = ProvisionedThroughputExceededException.builder().build();
+        assertThat(AwsV2Util.isRecoverableException(recoverable)).isTrue();
+    }
+
+    @Test
+    public void testIsRecoverableExceptionForRecoverableWrapped() {
         Exception recoverable = LimitExceededException.builder().build();
         assertThat(AwsV2Util.isRecoverableException(new ExecutionException(recoverable))).isTrue();
     }
