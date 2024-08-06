@@ -19,9 +19,11 @@
 package org.apache.flink.connector.kinesis.source.reader;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitReader;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsChange;
+import org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions;
 import org.apache.flink.connector.kinesis.source.metrics.KinesisShardMetrics;
 import org.apache.flink.connector.kinesis.source.proxy.StreamProxy;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
@@ -64,16 +66,21 @@ public class PollingKinesisShardSplitReader implements SplitReader<Record, Kines
     private final Set<String> pausedSplitIds = new HashSet<>();
 
     private final Map<String, KinesisShardMetrics> shardMetricGroupMap;
+    private final Configuration sourceConfig;
 
     public PollingKinesisShardSplitReader(
-            StreamProxy kinesisProxy, Map<String, KinesisShardMetrics> shardMetricGroupMap) {
+            StreamProxy kinesisProxy,
+            Map<String, KinesisShardMetrics> shardMetricGroupMap,
+            Configuration sourceConfig) {
         this.kinesis = kinesisProxy;
         this.shardMetricGroupMap = shardMetricGroupMap;
+        this.sourceConfig = sourceConfig;
     }
 
     @Override
     public RecordsWithSplitIds<Record> fetch() throws IOException {
         KinesisShardSplitState splitState = assignedSplits.poll();
+
         if (splitState == null) {
             return INCOMPLETE_SHARD_EMPTY_RECORDS;
         }
@@ -90,7 +97,8 @@ public class PollingKinesisShardSplitReader implements SplitReader<Record, Kines
                     kinesis.getRecords(
                             splitState.getStreamArn(),
                             splitState.getShardId(),
-                            splitState.getNextStartingPosition());
+                            splitState.getNextStartingPosition(),
+                            sourceConfig.get(KinesisSourceConfigOptions.SHARD_GET_RECORDS_MAX));
         } catch (ResourceNotFoundException e) {
             LOG.warn(
                     "Failed to fetch records from shard {}: shard no longer exists. Marking split as complete",

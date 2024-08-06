@@ -171,6 +171,48 @@ public class AWSClientUtil extends AWSGeneralUtil {
      * @param configProps configuration properties
      * @param httpClient the underlying HTTP client used to talk to AWS
      * @param clientBuilder the builder for the AWS SDK client
+     * @param overrideConfigurationBuilder the builder for the AWS SDK client config overrides
+     * @param awsUserAgentPrefixFormat user agent prefix for Flink
+     * @param awsClientUserAgentPrefix user agent prefix for kinesis client
+     * @return a new AWS Sync Client
+     */
+    public static <
+                    S extends SdkClient,
+                    T extends
+                            AwsSyncClientBuilder<? extends T, S> & AwsClientBuilder<? extends T, S>>
+            S createAwsSyncClient(
+                    final Properties configProps,
+                    final SdkHttpClient httpClient,
+                    final T clientBuilder,
+                    final ClientOverrideConfiguration.Builder overrideConfigurationBuilder,
+                    final String awsUserAgentPrefixFormat,
+                    final String awsClientUserAgentPrefix) {
+        SdkClientConfiguration clientConfiguration = SdkClientConfiguration.builder().build();
+
+        String flinkUserAgentPrefix =
+                getFlinkUserAgentPrefix(
+                        configProps, awsUserAgentPrefixFormat, awsClientUserAgentPrefix);
+
+        final ClientOverrideConfiguration overrideConfiguration =
+                createClientOverrideConfiguration(
+                        clientConfiguration, overrideConfigurationBuilder, flinkUserAgentPrefix);
+
+        updateEndpointOverride(configProps, clientBuilder);
+
+        return clientBuilder
+                .httpClient(httpClient)
+                .overrideConfiguration(overrideConfiguration)
+                .credentialsProvider(getCredentialsProvider(configProps))
+                .region(getRegion(configProps))
+                .build();
+    }
+
+    /**
+     * Creates an AWS Sync Client.
+     *
+     * @param configProps configuration properties
+     * @param httpClient the underlying HTTP client used to talk to AWS
+     * @param clientBuilder the builder for the AWS SDK client
      * @param awsUserAgentPrefixFormat user agent prefix for Flink
      * @param awsClientUserAgentPrefix user agent prefix for kinesis client
      * @return a new AWS Sync Client
@@ -185,26 +227,14 @@ public class AWSClientUtil extends AWSGeneralUtil {
                     final T clientBuilder,
                     final String awsUserAgentPrefixFormat,
                     final String awsClientUserAgentPrefix) {
-        SdkClientConfiguration clientConfiguration = SdkClientConfiguration.builder().build();
 
-        String flinkUserAgentPrefix =
-                getFlinkUserAgentPrefix(
-                        configProps, awsUserAgentPrefixFormat, awsClientUserAgentPrefix);
-
-        final ClientOverrideConfiguration overrideConfiguration =
-                createClientOverrideConfiguration(
-                        clientConfiguration,
-                        ClientOverrideConfiguration.builder(),
-                        flinkUserAgentPrefix);
-
-        updateEndpointOverride(configProps, clientBuilder);
-
-        return clientBuilder
-                .httpClient(httpClient)
-                .overrideConfiguration(overrideConfiguration)
-                .credentialsProvider(getCredentialsProvider(configProps))
-                .region(getRegion(configProps))
-                .build();
+        return createAwsSyncClient(
+                configProps,
+                httpClient,
+                clientBuilder,
+                ClientOverrideConfiguration.builder(),
+                awsUserAgentPrefixFormat,
+                awsClientUserAgentPrefix);
     }
 
     private static String getFlinkUserAgentPrefix(

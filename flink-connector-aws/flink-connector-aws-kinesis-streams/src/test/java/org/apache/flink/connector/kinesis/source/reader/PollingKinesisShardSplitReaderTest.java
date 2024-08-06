@@ -18,8 +18,10 @@
 
 package org.apache.flink.connector.kinesis.source.reader;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsAddition;
+import org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions;
 import org.apache.flink.connector.kinesis.source.metrics.KinesisShardMetrics;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.connector.kinesis.source.util.KinesisStreamProxyProvider.TestKinesisStreamProxy;
@@ -54,6 +56,7 @@ class PollingKinesisShardSplitReaderTest {
     private TestKinesisStreamProxy testStreamProxy;
     private MetricListener metricListener;
     private Map<String, KinesisShardMetrics> shardMetricGroupMap;
+    private Configuration sourceConfig;
     private static final String TEST_SHARD_ID = TestUtil.generateShardId(1);
 
     @BeforeEach
@@ -62,11 +65,16 @@ class PollingKinesisShardSplitReaderTest {
         metricListener = new MetricListener();
         shardMetricGroupMap = new ConcurrentHashMap<>();
 
+        sourceConfig = new Configuration();
+        sourceConfig.set(KinesisSourceConfigOptions.SHARD_GET_RECORDS_MAX, 50);
+
         shardMetricGroupMap.put(
                 TEST_SHARD_ID,
                 new KinesisShardMetrics(
                         TestUtil.getTestSplit(TEST_SHARD_ID), metricListener.getMetricGroup()));
-        splitReader = new PollingKinesisShardSplitReader(testStreamProxy, shardMetricGroupMap);
+        splitReader =
+                new PollingKinesisShardSplitReader(
+                        testStreamProxy, shardMetricGroupMap, sourceConfig);
     }
 
     @Test
@@ -360,6 +368,27 @@ class PollingKinesisShardSplitReaderTest {
         splitReader.fetch();
         TestUtil.assertMillisBehindLatest(
                 split, TestUtil.MILLIS_BEHIND_LATEST_TEST_VALUE, metricListener);
+    }
+
+    @Test
+    void testMaxRecordsToGetParameterPassed() throws IOException {
+        int maxRecordsToGet = 2;
+        sourceConfig.set(KinesisSourceConfigOptions.SHARD_GET_RECORDS_MAX, maxRecordsToGet);
+        testStreamProxy.addShards(TEST_SHARD_ID);
+        List<Record> sentRecords =
+                Stream.of(getTestRecord("data-1"), getTestRecord("data-2"), getTestRecord("data-3"))
+                        .collect(Collectors.toList());
+
+        testStreamProxy.addRecords(TestUtil.STREAM_ARN, TEST_SHARD_ID, sentRecords);
+
+        splitReader.handleSplitsChanges(
+                new SplitsAddition<>(Collections.singletonList(getTestSplit(TEST_SHARD_ID))));
+
+        RecordsWithSplitIds<Record> retrievedRecords = splitReader.fetch();
+        List<Record> records = new ArrayList<>(readAllRecords(retrievedRecords));
+
+        assertThat(sentRecords.size() > maxRecordsToGet).isTrue();
+        assertThat(records.size()).isEqualTo(maxRecordsToGet);
     }
 
     private List<Record> readAllRecords(RecordsWithSplitIds<Record> recordsWithSplitIds) {
