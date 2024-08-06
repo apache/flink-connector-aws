@@ -80,10 +80,13 @@ under the License.
 
     <modules>
         <module>flink-connector-aws-base</module>
+
         <module>flink-connector-aws</module>
         <module>flink-formats-aws</module>
         <module>flink-python</module>
+        <module>flink-catalog-aws</module>
         <module>flink-connector-aws-e2e-tests</module>
+
     </modules>
 
     <dependencies>
