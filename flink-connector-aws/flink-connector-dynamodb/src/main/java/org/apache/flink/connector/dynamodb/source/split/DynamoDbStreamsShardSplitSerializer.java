@@ -29,6 +29,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Serializes and deserializes the {@link DynamoDbStreamsShardSplit}. This class needs to handle
@@ -63,6 +65,11 @@ public class DynamoDbStreamsShardSplitSerializer
                     out.writeUTF((String) startingMarker);
                 }
             }
+            out.writeInt(split.getParentShardIds().size());
+            for (String parentShardId : split.getParentShardIds()) {
+                out.writeUTF(parentShardId);
+            }
+
             out.flush();
             return baos.toByteArray();
         }
@@ -93,8 +100,19 @@ public class DynamoDbStreamsShardSplitSerializer
                 }
             }
 
+            Set<String> parentShardIds = new HashSet<>();
+            if (version == CURRENT_VERSION) {
+                int parentShardCount = in.readInt();
+                for (int i = 0; i < parentShardCount; i++) {
+                    parentShardIds.add(in.readUTF());
+                }
+            }
+
             return new DynamoDbStreamsShardSplit(
-                    streamArn, shardId, new StartingPosition(shardIteratorType, startingMarker));
+                    streamArn,
+                    shardId,
+                    new StartingPosition(shardIteratorType, startingMarker),
+                    parentShardIds);
         }
     }
 }

@@ -20,6 +20,7 @@ package org.apache.flink.connector.dynamodb.source.proxy;
 
 import org.apache.flink.connector.dynamodb.source.split.StartingPosition;
 import org.apache.flink.connector.dynamodb.source.util.DynamoDbStreamsClientProvider.TestingDynamoDbStreamsClient;
+import org.apache.flink.connector.dynamodb.source.util.ListShardsResult;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -60,7 +61,9 @@ public class DynamoDbStreamsProxyTest {
     void testListShards(String lastSeenShardId) {
         final String streamArn =
                 "arn:aws:dynamodb:us-east-1:1231231230:table/test/stream/2024-01-01T00:00:00.826";
+        final ListShardsResult expectedListShardsResult = new ListShardsResult();
         final List<Shard> expectedShards = getTestShards(0, 3);
+        expectedListShardsResult.addShards(expectedShards);
         DescribeStreamResponse describeStreamResponse =
                 DescribeStreamResponse.builder()
                         .streamDescription(
@@ -80,7 +83,7 @@ public class DynamoDbStreamsProxyTest {
                 new DynamoDbStreamsProxy(testingDynamoDbStreamsClient, HTTP_CLIENT);
 
         assertThat(dynamoDbStreamsProxy.listShards(streamArn, lastSeenShardId))
-                .isEqualTo(expectedShards);
+                .isEqualTo(expectedListShardsResult);
     }
 
     @Test

@@ -18,7 +18,9 @@
 
 package org.apache.flink.connector.dynamodb.source.reader;
 
+import org.apache.flink.api.connector.source.SourceEvent;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.connector.dynamodb.source.enumerator.event.SplitsFinishedEvent;
 import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplit;
 import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplitState;
 import org.apache.flink.connector.testutils.source.reader.TestingReaderContext;
@@ -27,11 +29,13 @@ import org.apache.flink.runtime.operators.testutils.TestData;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
+import java.util.List;
+import java.util.Set;
 
 import static org.apache.flink.connector.dynamodb.source.util.TestUtil.getTestSplit;
 import static org.apache.flink.connector.dynamodb.source.util.TestUtil.getTestSplitState;
-import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatNoException;
+import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
 
 class DynamoDbStreamsSourceReaderTest {
 
@@ -65,5 +69,24 @@ class DynamoDbStreamsSourceReaderTest {
                         null, null, null, new Configuration(), new TestingReaderContext());
         assertThatNoException()
                 .isThrownBy(() -> sourceReader.onSplitFinished(Collections.emptyMap()));
+    }
+
+    @Test
+    void testOnSplitFinishedEventSent() {
+        DynamoDbStreamsShardSplit split = getTestSplit();
+        TestingReaderContext testingReaderContext = new TestingReaderContext();
+        DynamoDbStreamsSourceReader<TestData> sourceReader =
+                new DynamoDbStreamsSourceReader<>(
+                        null, null, null, new Configuration(), testingReaderContext);
+        sourceReader.onSplitFinished(
+                Collections.singletonMap(
+                        split.splitId(), new DynamoDbStreamsShardSplitState(split)));
+        List<SourceEvent> events = testingReaderContext.getSentEvents();
+        Set<String> expectedSplitIds = Collections.singleton(split.splitId());
+        assertThat(events)
+                .singleElement()
+                .isInstanceOf(SplitsFinishedEvent.class)
+                .usingRecursiveComparison()
+                .isEqualTo(new SplitsFinishedEvent(expectedSplitIds));
     }
 }

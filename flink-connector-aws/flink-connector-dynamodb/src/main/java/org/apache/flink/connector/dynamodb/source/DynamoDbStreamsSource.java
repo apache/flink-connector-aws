@@ -50,14 +50,22 @@ import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.UserCodeClassLoader;
 
+import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.http.SdkHttpClient;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
+import software.amazon.awssdk.retries.AdaptiveRetryStrategy;
+import software.amazon.awssdk.retries.api.BackoffStrategy;
 import software.amazon.awssdk.services.dynamodb.model.Record;
 import software.amazon.awssdk.services.dynamodb.streams.DynamoDbStreamsClient;
 import software.amazon.awssdk.utils.AttributeMap;
 
+import java.time.Duration;
 import java.util.Properties;
 import java.util.function.Supplier;
+
+import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.DESCRIBE_STREAM_EXPONENTIAL_DELAY_MAX;
+import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.DESCRIBE_STREAM_EXPONENTIAL_DELAY_MIN;
+import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.DESCRIBE_STREAM_RETRY_CALL_COUNT;
 
 /**
  * The {@link DynamoDbStreamsSource} is an exactly-once parallel streaming data source that
@@ -159,7 +167,7 @@ public class DynamoDbStreamsSource<T>
                 enumContext,
                 streamArn,
                 sourceConfig,
-                createDynamoDbStreamsProxy(sourceConfig),
+                createDynamoDbStreamsProxyWithRetries(sourceConfig),
                 dynamoDbStreamsShardAssigner,
                 checkpoint);
     }
@@ -197,6 +205,52 @@ public class DynamoDbStreamsSource<T>
                         dynamoDbStreamsClientProperties,
                         httpClient,
                         DynamoDbStreamsClient.builder(),
+                        DynamodbStreamsSourceConfigConstants
+                                .BASE_DDB_STREAMS_USER_AGENT_PREFIX_FORMAT,
+                        DynamodbStreamsSourceConfigConstants.DDB_STREAMS_CLIENT_USER_AGENT_PREFIX);
+        return new DynamoDbStreamsProxy(dynamoDbStreamsClient, httpClient);
+    }
+
+    private DynamoDbStreamsProxy createDynamoDbStreamsProxyWithRetries(
+            Configuration consumerConfig) {
+        SdkHttpClient httpClient =
+                AWSGeneralUtil.createSyncHttpClient(
+                        AttributeMap.builder().build(), ApacheHttpClient.builder());
+
+        Properties dynamoDbStreamsClientProperties = new Properties();
+        String region =
+                AWSGeneralUtil.getRegionFromArn(streamArn)
+                        .orElseThrow(
+                                () ->
+                                        new IllegalStateException(
+                                                "Unable to determine region from stream arn"));
+        dynamoDbStreamsClientProperties.put(AWSConfigConstants.AWS_REGION, region);
+        consumerConfig.addAllToProperties(dynamoDbStreamsClientProperties);
+
+        AWSGeneralUtil.validateAwsCredentials(dynamoDbStreamsClientProperties);
+        int maxDescribeStreamCallAttempts =
+                sourceConfig.getInteger(DESCRIBE_STREAM_RETRY_CALL_COUNT);
+        int minDescribeStreamDelay = sourceConfig.getInteger(DESCRIBE_STREAM_EXPONENTIAL_DELAY_MIN);
+        int maxDescribeStreamDelay = sourceConfig.getInteger(DESCRIBE_STREAM_EXPONENTIAL_DELAY_MAX);
+        BackoffStrategy backoffStrategy =
+                BackoffStrategy.exponentialDelay(
+                        Duration.ofMillis(minDescribeStreamDelay),
+                        Duration.ofMillis(maxDescribeStreamDelay));
+        AdaptiveRetryStrategy adaptiveRetryStrategy =
+                AdaptiveRetryStrategy.builder()
+                        .maxAttempts(maxDescribeStreamCallAttempts)
+                        .backoffStrategy(backoffStrategy)
+                        .throttlingBackoffStrategy(backoffStrategy)
+                        .build();
+        DynamoDbStreamsClient dynamoDbStreamsClient =
+                AWSClientUtil.createAwsSyncClient(
+                        dynamoDbStreamsClientProperties,
+                        httpClient,
+                        DynamoDbStreamsClient.builder()
+                                .overrideConfiguration(
+                                        ClientOverrideConfiguration.builder()
+                                                .retryStrategy(adaptiveRetryStrategy)
+                                                .build()),
                         DynamodbStreamsSourceConfigConstants
                                 .BASE_DDB_STREAMS_USER_AGENT_PREFIX_FORMAT,
                         DynamodbStreamsSourceConfigConstants.DDB_STREAMS_CLIENT_USER_AGENT_PREFIX);

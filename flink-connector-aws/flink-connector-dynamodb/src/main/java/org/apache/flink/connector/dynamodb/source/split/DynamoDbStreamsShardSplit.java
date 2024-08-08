@@ -23,7 +23,10 @@ import org.apache.flink.api.connector.source.SourceSplit;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitReader;
 import org.apache.flink.connector.dynamodb.source.enumerator.DynamoDbStreamsSourceEnumerator;
 
+import java.time.Instant;
+import java.util.HashSet;
 import java.util.Objects;
+import java.util.Set;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -39,16 +42,22 @@ public final class DynamoDbStreamsShardSplit implements SourceSplit {
     private final String streamArn;
     private final String shardId;
     private final StartingPosition startingPosition;
+    private final Set<String> parentShardIds;
 
     public DynamoDbStreamsShardSplit(
-            String streamArn, String shardId, StartingPosition startingPosition) {
+            String streamArn,
+            String shardId,
+            StartingPosition startingPosition,
+            Set<String> parentShardIds) {
         checkNotNull(streamArn, "streamArn cannot be null");
         checkNotNull(shardId, "shardId cannot be null");
         checkNotNull(startingPosition, "startingPosition cannot be null");
+        checkNotNull(parentShardIds, "parentShardIds cannot be null");
 
         this.streamArn = streamArn;
         this.shardId = shardId;
         this.startingPosition = startingPosition;
+        this.parentShardIds = new HashSet<>(parentShardIds);
     }
 
     @Override
@@ -68,6 +77,14 @@ public final class DynamoDbStreamsShardSplit implements SourceSplit {
         return startingPosition;
     }
 
+    public Set<String> getParentShardIds() {
+        return parentShardIds;
+    }
+
+    public Instant getShardCreationTime() {
+        return Instant.ofEpochMilli(Long.parseLong(shardId.split("-")[1]));
+    }
+
     @Override
     public String toString() {
         return "DynamoDbStreamsShardSplit{"
@@ -79,6 +96,8 @@ public final class DynamoDbStreamsShardSplit implements SourceSplit {
                 + '\''
                 + ", startingPosition="
                 + startingPosition
+                + ", parentShardIds=["
+                + String.join(",", parentShardIds)
                 + '}';
     }
 
@@ -93,11 +112,12 @@ public final class DynamoDbStreamsShardSplit implements SourceSplit {
         DynamoDbStreamsShardSplit that = (DynamoDbStreamsShardSplit) o;
         return Objects.equals(streamArn, that.streamArn)
                 && Objects.equals(shardId, that.shardId)
-                && Objects.equals(startingPosition, that.startingPosition);
+                && Objects.equals(startingPosition, that.startingPosition)
+                && Objects.equals(parentShardIds, that.parentShardIds);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(streamArn, shardId, startingPosition);
+        return Objects.hash(streamArn, shardId, startingPosition, parentShardIds);
     }
 }

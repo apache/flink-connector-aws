@@ -20,22 +20,32 @@ package org.apache.flink.connector.dynamodb.source.enumerator;
 
 import org.apache.flink.annotation.Internal;
 
-import java.util.List;
-
 /**
- * State for the {@link DynamoDbStreamsSourceEnumerator}. This class is stored in state, so any
- * changes need to be backwards compatible
+ * Assignment status of {@link
+ * org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplit}.
  */
 @Internal
-public class DynamoDbStreamsSourceEnumeratorState {
-    private final List<DynamoDBStreamsShardSplitWithAssignmentStatus> knownSplits;
+public enum SplitAssignmentStatus {
+    ASSIGNED(0),
+    UNASSIGNED(1),
+    FINISHED(2);
 
-    public DynamoDbStreamsSourceEnumeratorState(
-            List<DynamoDBStreamsShardSplitWithAssignmentStatus> knownSplits) {
-        this.knownSplits = knownSplits;
+    private final int statusCode;
+
+    SplitAssignmentStatus(int statusCode) {
+        this.statusCode = statusCode;
     }
 
-    public List<DynamoDBStreamsShardSplitWithAssignmentStatus> getKnownSplits() {
-        return knownSplits;
+    public int getStatusCode() {
+        return statusCode;
+    }
+
+    public static SplitAssignmentStatus fromStatusCode(int statusCode) {
+        for (SplitAssignmentStatus splitAssignmentStatus : SplitAssignmentStatus.values()) {
+            if (statusCode == splitAssignmentStatus.statusCode) {
+                return splitAssignmentStatus;
+            }
+        }
+        throw new IllegalArgumentException("Unknown status code: " + statusCode);
     }
 }

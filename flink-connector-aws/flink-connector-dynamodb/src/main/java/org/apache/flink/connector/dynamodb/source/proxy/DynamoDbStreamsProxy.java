@@ -20,6 +20,7 @@ package org.apache.flink.connector.dynamodb.source.proxy;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.connector.dynamodb.source.split.StartingPosition;
+import org.apache.flink.connector.dynamodb.source.util.ListShardsResult;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,16 +32,14 @@ import software.amazon.awssdk.services.dynamodb.model.GetRecordsRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetRecordsResponse;
 import software.amazon.awssdk.services.dynamodb.model.GetShardIteratorRequest;
 import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
-import software.amazon.awssdk.services.dynamodb.model.Shard;
 import software.amazon.awssdk.services.dynamodb.model.StreamStatus;
+import software.amazon.awssdk.services.dynamodb.model.TrimmedDataAccessException;
 import software.amazon.awssdk.services.dynamodb.streams.DynamoDbStreamsClient;
 
 import javax.annotation.Nullable;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -62,7 +61,7 @@ public class DynamoDbStreamsProxy implements StreamProxy {
     }
 
     @Override
-    public List<Shard> listShards(String streamArn, @Nullable String lastSeenShardId) {
+    public ListShardsResult listShards(String streamArn, @Nullable String lastSeenShardId) {
         return this.getShardsOfStream(streamArn, lastSeenShardId);
     }
 
@@ -93,6 +92,13 @@ public class DynamoDbStreamsProxy implements StreamProxy {
                 shardIdToIteratorStore.put(shardId, getRecordsResponse.nextShardIterator());
             }
             return getRecordsResponse;
+        } catch (TrimmedDataAccessException e) {
+            shardIterator = getShardIterator(streamArn, shardId, StartingPosition.fromStart());
+            GetRecordsResponse getRecordsResponse = getRecords(shardIterator);
+            if (getRecordsResponse.nextShardIterator() != null) {
+                shardIdToIteratorStore.put(shardId, getRecordsResponse.nextShardIterator());
+            }
+            return getRecordsResponse;
         }
     }
 
@@ -102,18 +108,22 @@ public class DynamoDbStreamsProxy implements StreamProxy {
         httpClient.close();
     }
 
-    private List<Shard> getShardsOfStream(String streamName, @Nullable String lastSeenShardId) {
-        List<Shard> shardsOfStream = new ArrayList<>();
+    private ListShardsResult getShardsOfStream(
+            String streamName, @Nullable String lastSeenShardId) {
+        ListShardsResult listShardsResult = new ListShardsResult();
 
+        String lastEvaluatedShardId = lastSeenShardId;
         DescribeStreamResponse describeStreamResponse;
         do {
-            describeStreamResponse = this.describeStream(streamName, lastSeenShardId);
-            List<Shard> shards = describeStreamResponse.streamDescription().shards();
-            shardsOfStream.addAll(shards);
-
+            describeStreamResponse = this.describeStream(streamName, lastEvaluatedShardId);
+            listShardsResult.addShards(describeStreamResponse.streamDescription().shards());
+            listShardsResult.setStreamStatus(
+                    describeStreamResponse.streamDescription().streamStatus());
+            lastEvaluatedShardId =
+                    describeStreamResponse.streamDescription().lastEvaluatedShardId();
         } while (describeStreamResponse.streamDescription().lastEvaluatedShardId() != null);
 
-        return shardsOfStream;
+        return listShardsResult;
     }
 
     private DescribeStreamResponse describeStream(String streamArn, @Nullable String startShardId) {
@@ -127,8 +137,8 @@ public class DynamoDbStreamsProxy implements StreamProxy {
                 dynamoDbStreamsClient.describeStream(describeStreamRequest);
 
         StreamStatus streamStatus = describeStreamResponse.streamDescription().streamStatus();
-        if (!(streamStatus.equals(StreamStatus.DISABLED)
-                || streamStatus.equals(StreamStatus.ENABLING.toString()))) {
+        if (streamStatus.equals(StreamStatus.DISABLED)
+                || streamStatus.equals(StreamStatus.ENABLING)) {
             if (LOG.isWarnEnabled()) {
                 LOG.warn(
                         String.format(
@@ -170,6 +180,13 @@ public class DynamoDbStreamsProxy implements StreamProxy {
         } catch (ResourceNotFoundException e) {
             LOG.info(
                     "Received ResourceNotFoundException. "
+                            + "Shard {} of stream {} is no longer valid, marking it as complete.",
+                    shardId,
+                    streamArn);
+            return null;
+        } catch (TrimmedDataAccessException e) {
+            LOG.info(
+                    "Received TrimmedDataAccessException. "
                             + "Shard {} of stream {} is no longer valid, marking it as complete.",
                     shardId,
                     streamArn);

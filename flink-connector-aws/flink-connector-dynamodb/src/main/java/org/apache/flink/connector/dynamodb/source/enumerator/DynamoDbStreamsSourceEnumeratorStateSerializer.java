@@ -29,7 +29,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /** Used to serialize and deserialize the {@link DynamoDbStreamsSourceEnumeratorState}. */
@@ -37,7 +40,8 @@ import java.util.Set;
 public class DynamoDbStreamsSourceEnumeratorStateSerializer
         implements SimpleVersionedSerializer<DynamoDbStreamsSourceEnumeratorState> {
 
-    private static final int CURRENT_VERSION = 0;
+    private static final Set<Integer> COMPATIBLE_VERSIONS = new HashSet<>(Arrays.asList(0, 1));
+    private static final int CURRENT_VERSION = 1;
 
     private final DynamoDbStreamsShardSplitSerializer splitSerializer;
 
@@ -58,20 +62,14 @@ public class DynamoDbStreamsSourceEnumeratorStateSerializer
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 DataOutputStream out = new DataOutputStream(baos)) {
 
-            boolean hasLastSeenShardId =
-                    dynamoDbStreamsSourceEnumeratorState.getLastSeenShardId() != null;
-            out.writeBoolean(hasLastSeenShardId);
-            if (hasLastSeenShardId) {
-                out.writeUTF(dynamoDbStreamsSourceEnumeratorState.getLastSeenShardId());
-            }
-
-            out.writeInt(dynamoDbStreamsSourceEnumeratorState.getUnassignedSplits().size());
+            out.writeInt(dynamoDbStreamsSourceEnumeratorState.getKnownSplits().size());
             out.writeInt(splitSerializer.getVersion());
-            for (DynamoDbStreamsShardSplit split :
-                    dynamoDbStreamsSourceEnumeratorState.getUnassignedSplits()) {
-                byte[] serializedSplit = splitSerializer.serialize(split);
+            for (DynamoDBStreamsShardSplitWithAssignmentStatus split :
+                    dynamoDbStreamsSourceEnumeratorState.getKnownSplits()) {
+                byte[] serializedSplit = splitSerializer.serialize(split.split());
                 out.writeInt(serializedSplit.length);
                 out.write(serializedSplit);
+                out.writeInt(split.assignmentStatus().getStatusCode());
             }
 
             out.flush();
@@ -86,37 +84,32 @@ public class DynamoDbStreamsSourceEnumeratorStateSerializer
         try (ByteArrayInputStream bais = new ByteArrayInputStream(serializedEnumeratorState);
                 DataInputStream in = new DataInputStream(bais)) {
 
-            if (version != getVersion()) {
+            if (!COMPATIBLE_VERSIONS.contains(version)) {
                 throw new VersionMismatchException(
                         "Trying to deserialize DynamoDbStreamsSourceEnumeratorState serialized with unsupported version "
                                 + version
                                 + ". Serializer version is "
                                 + getVersion());
             }
-
-            String lastSeenShardId = null;
-
-            final boolean hasLastSeenShardId = in.readBoolean();
-            if (hasLastSeenShardId) {
-                lastSeenShardId = in.readUTF();
-            }
-
-            final int numUnassignedSplits = in.readInt();
+            final int numKnownSplits = in.readInt();
             final int splitSerializerVersion = in.readInt();
-            if (splitSerializerVersion != splitSerializer.getVersion()) {
-                throw new VersionMismatchException(
-                        "Trying to deserialize DynamoDbStreamsShardSplit serialized with unsupported version "
-                                + splitSerializerVersion
-                                + ". Serializer version is "
-                                + splitSerializer.getVersion());
-            }
-            Set<DynamoDbStreamsShardSplit> unassignedSplits = new HashSet<>(numUnassignedSplits);
-            for (int i = 0; i < numUnassignedSplits; i++) {
+
+            List<DynamoDBStreamsShardSplitWithAssignmentStatus> knownSplits =
+                    new ArrayList<>(numKnownSplits);
+
+            for (int i = 0; i < numKnownSplits; i++) {
                 int serializedLength = in.readInt();
                 byte[] serializedSplit = new byte[serializedLength];
                 if (in.read(serializedSplit) != -1) {
-                    unassignedSplits.add(
-                            splitSerializer.deserialize(splitSerializerVersion, serializedSplit));
+                    DynamoDbStreamsShardSplit deserializedSplit =
+                            splitSerializer.deserialize(splitSerializerVersion, serializedSplit);
+                    SplitAssignmentStatus assignmentStatus = SplitAssignmentStatus.UNASSIGNED;
+                    if (version == CURRENT_VERSION) {
+                        assignmentStatus = SplitAssignmentStatus.fromStatusCode(in.readInt());
+                    }
+                    knownSplits.add(
+                            new DynamoDBStreamsShardSplitWithAssignmentStatus(
+                                    deserializedSplit, assignmentStatus));
                 } else {
                     throw new IOException(
                             "Unexpectedly reading more bytes than is present in stream.");
@@ -127,7 +120,7 @@ public class DynamoDbStreamsSourceEnumeratorStateSerializer
                 throw new IOException("Unexpected trailing bytes when deserializing.");
             }
 
-            return new DynamoDbStreamsSourceEnumeratorState(unassignedSplits, lastSeenShardId);
+            return new DynamoDbStreamsSourceEnumeratorState(knownSplits);
         }
     }
 }

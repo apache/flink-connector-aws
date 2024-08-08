@@ -39,7 +39,8 @@ public class DynamoDbStreamsShardSplitState {
         return new DynamoDbStreamsShardSplit(
                 dynamoDbStreamsShardSplit.getStreamArn(),
                 dynamoDbStreamsShardSplit.getShardId(),
-                nextStartingPosition);
+                nextStartingPosition,
+                dynamoDbStreamsShardSplit.getParentShardIds());
     }
 
     public String getSplitId() {

@@ -26,11 +26,13 @@ import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.SingleThreadMultiplexSourceReaderBase;
 import org.apache.flink.connector.base.source.reader.fetcher.SingleThreadFetcherManager;
 import org.apache.flink.connector.base.source.reader.synchronization.FutureCompletingBlockingQueue;
+import org.apache.flink.connector.dynamodb.source.enumerator.event.SplitsFinishedEvent;
 import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplit;
 import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplitState;
 
 import software.amazon.awssdk.services.dynamodb.model.Record;
 
+import java.util.HashSet;
 import java.util.Map;
 
 /**
@@ -54,7 +56,8 @@ public class DynamoDbStreamsSourceReader<T>
 
     @Override
     protected void onSplitFinished(Map<String, DynamoDbStreamsShardSplitState> finishedSplitIds) {
-        // no-op. We don't need to do anything on finished split now
+        context.sendSourceEventToCoordinator(
+                new SplitsFinishedEvent(new HashSet<>(finishedSplitIds.keySet())));
     }
 
     @Override
