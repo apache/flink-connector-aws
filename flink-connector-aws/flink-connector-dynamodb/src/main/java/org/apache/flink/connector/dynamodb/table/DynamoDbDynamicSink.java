@@ -48,6 +48,7 @@ public class DynamoDbDynamicSink extends AsyncDynamicTableSink<DynamoDbWriteRequ
 
     private final String tableName;
     private final boolean failOnError;
+    private final boolean ignoreNulls;
     private final Properties dynamoDbClientProperties;
     private final DataType physicalDataType;
     private final Set<String> overwriteByPartitionKeys;
@@ -60,6 +61,7 @@ public class DynamoDbDynamicSink extends AsyncDynamicTableSink<DynamoDbWriteRequ
             @Nullable Long maxTimeInBufferMS,
             String tableName,
             boolean failOnError,
+            boolean ignoreNulls,
             Properties dynamoDbClientProperties,
             DataType physicalDataType,
             Set<String> overwriteByPartitionKeys) {
@@ -71,6 +73,7 @@ public class DynamoDbDynamicSink extends AsyncDynamicTableSink<DynamoDbWriteRequ
                 maxTimeInBufferMS);
         this.tableName = tableName;
         this.failOnError = failOnError;
+        this.ignoreNulls = ignoreNulls;
         this.dynamoDbClientProperties = dynamoDbClientProperties;
         this.physicalDataType = physicalDataType;
         this.overwriteByPartitionKeys = overwriteByPartitionKeys;
@@ -89,7 +92,8 @@ public class DynamoDbDynamicSink extends AsyncDynamicTableSink<DynamoDbWriteRequ
                         .setFailOnError(failOnError)
                         .setOverwriteByPartitionKeys(new ArrayList<>(overwriteByPartitionKeys))
                         .setDynamoDbProperties(dynamoDbClientProperties)
-                        .setElementConverter(new RowDataElementConverter(physicalDataType));
+                        .setElementConverter(
+                                new RowDataElementConverter(physicalDataType, ignoreNulls));
 
         addAsyncOptionsToSinkBuilder(builder);
 
@@ -106,6 +110,7 @@ public class DynamoDbDynamicSink extends AsyncDynamicTableSink<DynamoDbWriteRequ
                 maxTimeInBufferMS,
                 tableName,
                 failOnError,
+                ignoreNulls,
                 dynamoDbClientProperties,
                 physicalDataType,
                 overwriteByPartitionKeys);
@@ -133,6 +138,7 @@ public class DynamoDbDynamicSink extends AsyncDynamicTableSink<DynamoDbWriteRequ
                     DynamoDbWriteRequest, DynamoDbDynamicTableSinkBuilder> {
         private String tableName;
         private boolean failOnError;
+        private boolean ignoreNulls;
         private Properties dynamoDbClientProperties;
         private DataType physicalDataType;
         private Set<String> overwriteByPartitionKeys;
@@ -144,6 +150,11 @@ public class DynamoDbDynamicSink extends AsyncDynamicTableSink<DynamoDbWriteRequ
 
         public DynamoDbDynamicTableSinkBuilder setFailOnError(boolean failOnError) {
             this.failOnError = failOnError;
+            return this;
+        }
+
+        public DynamoDbDynamicTableSinkBuilder setIgnoreNulls(boolean ignoreNulls) {
+            this.ignoreNulls = ignoreNulls;
             return this;
         }
 
@@ -174,6 +185,7 @@ public class DynamoDbDynamicSink extends AsyncDynamicTableSink<DynamoDbWriteRequ
                     getMaxTimeInBufferMS(),
                     tableName,
                     failOnError,
+                    ignoreNulls,
                     dynamoDbClientProperties,
                     physicalDataType,
                     overwriteByPartitionKeys);

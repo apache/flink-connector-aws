@@ -46,6 +46,13 @@ public class DynamoDbConnectorOptions {
                     .withDescription(
                             "Determines whether an exception should fail the job, otherwise failed requests are retried.");
 
+    public static final ConfigOption<Boolean> IGNORE_NULLS =
+            ConfigOptions.key("sink.ignore-nulls")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "Determines whether null values should be ignored in the sink. If set to true, null values are excluded from processing.");
+
     private DynamoDbConnectorOptions() {
         // private constructor to prevent initialization of static class
     }

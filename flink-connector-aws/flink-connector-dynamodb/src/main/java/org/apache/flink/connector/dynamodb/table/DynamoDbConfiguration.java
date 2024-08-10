@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.flink.connector.dynamodb.table.DynamoDbConnectorOptions.FAIL_ON_ERROR;
+import static org.apache.flink.connector.dynamodb.table.DynamoDbConnectorOptions.IGNORE_NULLS;
 import static org.apache.flink.connector.dynamodb.table.DynamoDbConnectorOptions.TABLE_NAME;
 
 /** DynamoDb specific configuration. */
@@ -51,6 +52,10 @@ public class DynamoDbConfiguration {
 
     public boolean getFailOnError() {
         return tableOptions.get(FAIL_ON_ERROR);
+    }
+
+    public boolean getIgnoreNulls() {
+        return tableOptions.get(IGNORE_NULLS);
     }
 
     public Properties getAsyncSinkProperties() {
