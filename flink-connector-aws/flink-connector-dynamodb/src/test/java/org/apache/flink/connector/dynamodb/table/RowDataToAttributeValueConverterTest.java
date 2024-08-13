@@ -58,7 +58,7 @@ public class RowDataToAttributeValueConverterTest {
 
         DataType dataType = DataTypes.ROW(DataTypes.FIELD(key, DataTypes.CHAR(9)));
         RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
-                new RowDataToAttributeValueConverter(dataType, null);
+                new RowDataToAttributeValueConverter(dataType);
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(
                         createElement(StringData.fromString(value)));
@@ -75,7 +75,7 @@ public class RowDataToAttributeValueConverterTest {
 
         DataType dataType = DataTypes.ROW(DataTypes.FIELD(key, DataTypes.VARCHAR(13)));
         RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
-                new RowDataToAttributeValueConverter(dataType, null);
+                new RowDataToAttributeValueConverter(dataType);
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(
                         createElement(StringData.fromString(value)));
@@ -92,7 +92,7 @@ public class RowDataToAttributeValueConverterTest {
 
         DataType dataType = DataTypes.ROW(DataTypes.FIELD(key, DataTypes.STRING()));
         RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
-                new RowDataToAttributeValueConverter(dataType, null);
+                new RowDataToAttributeValueConverter(dataType);
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(
                         createElement(StringData.fromString(value)));
@@ -109,7 +109,7 @@ public class RowDataToAttributeValueConverterTest {
 
         DataType dataType = DataTypes.ROW(DataTypes.FIELD(key, DataTypes.BOOLEAN()));
         RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
-                new RowDataToAttributeValueConverter(dataType, null);
+                new RowDataToAttributeValueConverter(dataType);
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createElement(value));
         Map<String, AttributeValue> expectedResult =
@@ -125,7 +125,7 @@ public class RowDataToAttributeValueConverterTest {
 
         DataType dataType = DataTypes.ROW(DataTypes.FIELD(key, DataTypes.DECIMAL(5, 4)));
         RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
-                new RowDataToAttributeValueConverter(dataType, null);
+                new RowDataToAttributeValueConverter(dataType);
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(
                         createElement(DecimalData.fromBigDecimal(value, 5, 4)));
@@ -142,7 +142,7 @@ public class RowDataToAttributeValueConverterTest {
 
         DataType dataType = DataTypes.ROW(DataTypes.FIELD(key, DataTypes.TINYINT()));
         RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
-                new RowDataToAttributeValueConverter(dataType, null);
+                new RowDataToAttributeValueConverter(dataType);
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createElement(value));
         Map<String, AttributeValue> expectedResult =
@@ -158,7 +158,7 @@ public class RowDataToAttributeValueConverterTest {
 
         DataType dataType = DataTypes.ROW(DataTypes.FIELD(key, DataTypes.SMALLINT()));
         RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
-                new RowDataToAttributeValueConverter(dataType, null);
+                new RowDataToAttributeValueConverter(dataType);
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createElement(value));
         Map<String, AttributeValue> expectedResult =
@@ -174,7 +174,7 @@ public class RowDataToAttributeValueConverterTest {
 
         DataType dataType = DataTypes.ROW(DataTypes.FIELD(key, DataTypes.INT()));
         RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
-                new RowDataToAttributeValueConverter(dataType, null);
+                new RowDataToAttributeValueConverter(dataType);
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createElement(value));
         Map<String, AttributeValue> expectedResult =
@@ -190,7 +190,7 @@ public class RowDataToAttributeValueConverterTest {
 
         DataType dataType = DataTypes.ROW(DataTypes.FIELD(key, DataTypes.BIGINT()));
         RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
-                new RowDataToAttributeValueConverter(dataType, null);
+                new RowDataToAttributeValueConverter(dataType);
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createElement(value));
         Map<String, AttributeValue> expectedResult =
@@ -206,7 +206,7 @@ public class RowDataToAttributeValueConverterTest {
 
         DataType dataType = DataTypes.ROW(DataTypes.FIELD(key, DataTypes.FLOAT()));
         RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
-                new RowDataToAttributeValueConverter(dataType, null);
+                new RowDataToAttributeValueConverter(dataType);
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createElement(value));
         Map<String, AttributeValue> expectedResult =
@@ -222,7 +222,7 @@ public class RowDataToAttributeValueConverterTest {
 
         DataType dataType = DataTypes.ROW(DataTypes.FIELD(key, DataTypes.DOUBLE()));
         RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
-                new RowDataToAttributeValueConverter(dataType, null);
+                new RowDataToAttributeValueConverter(dataType);
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createElement(value));
         Map<String, AttributeValue> expectedResult =
@@ -238,7 +238,7 @@ public class RowDataToAttributeValueConverterTest {
 
         DataType dataType = DataTypes.ROW(DataTypes.FIELD(key, DataTypes.TIMESTAMP()));
         RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
-                new RowDataToAttributeValueConverter(dataType, null);
+                new RowDataToAttributeValueConverter(dataType);
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(
                         createElement(TimestampData.fromLocalDateTime(value)));
@@ -256,7 +256,7 @@ public class RowDataToAttributeValueConverterTest {
         DataType dataType =
                 DataTypes.ROW(DataTypes.FIELD(key, DataTypes.ARRAY(DataTypes.STRING())));
         RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
-                new RowDataToAttributeValueConverter(dataType, null);
+                new RowDataToAttributeValueConverter(dataType);
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(
                         createArray(value, StringData::fromString));
@@ -281,7 +281,7 @@ public class RowDataToAttributeValueConverterTest {
         DataType dataType =
                 DataTypes.ROW(DataTypes.FIELD(key, DataTypes.ARRAY(DataTypes.BOOLEAN())));
         RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
-                new RowDataToAttributeValueConverter(dataType, null);
+                new RowDataToAttributeValueConverter(dataType);
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createArray(value, t -> t));
         Map<String, AttributeValue> expectedResult =
@@ -309,7 +309,7 @@ public class RowDataToAttributeValueConverterTest {
         DataType dataType =
                 DataTypes.ROW(DataTypes.FIELD(key, DataTypes.ARRAY(DataTypes.DECIMAL(1, 0))));
         RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
-                new RowDataToAttributeValueConverter(dataType, null);
+                new RowDataToAttributeValueConverter(dataType);
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(
                         createArray(value, d -> DecimalData.fromBigDecimal(d, 1, 0)));
@@ -338,7 +338,7 @@ public class RowDataToAttributeValueConverterTest {
         DataType dataType =
                 DataTypes.ROW(DataTypes.FIELD(key, DataTypes.ARRAY(DataTypes.TINYINT())));
         RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
-                new RowDataToAttributeValueConverter(dataType, null);
+                new RowDataToAttributeValueConverter(dataType);
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createArray(value, t -> t));
         Map<String, AttributeValue> expectedResult =
@@ -366,7 +366,7 @@ public class RowDataToAttributeValueConverterTest {
         DataType dataType =
                 DataTypes.ROW(DataTypes.FIELD(key, DataTypes.ARRAY(DataTypes.SMALLINT())));
         RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
-                new RowDataToAttributeValueConverter(dataType, null);
+                new RowDataToAttributeValueConverter(dataType);
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createArray(value, t -> t));
         Map<String, AttributeValue> expectedResult =
@@ -393,7 +393,7 @@ public class RowDataToAttributeValueConverterTest {
 
         DataType dataType = DataTypes.ROW(DataTypes.FIELD(key, DataTypes.ARRAY(DataTypes.INT())));
         RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
-                new RowDataToAttributeValueConverter(dataType, null);
+                new RowDataToAttributeValueConverter(dataType);
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createArray(value, t -> t));
         Map<String, AttributeValue> expectedResult =
@@ -421,7 +421,7 @@ public class RowDataToAttributeValueConverterTest {
         DataType dataType =
                 DataTypes.ROW(DataTypes.FIELD(key, DataTypes.ARRAY(DataTypes.BIGINT())));
         RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
-                new RowDataToAttributeValueConverter(dataType, null);
+                new RowDataToAttributeValueConverter(dataType);
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createArray(value, t -> t));
         Map<String, AttributeValue> expectedResult =
@@ -448,7 +448,7 @@ public class RowDataToAttributeValueConverterTest {
 
         DataType dataType = DataTypes.ROW(DataTypes.FIELD(key, DataTypes.ARRAY(DataTypes.FLOAT())));
         RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
-                new RowDataToAttributeValueConverter(dataType, null);
+                new RowDataToAttributeValueConverter(dataType);
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createArray(value, t -> t));
         Map<String, AttributeValue> expectedResult =
@@ -476,7 +476,7 @@ public class RowDataToAttributeValueConverterTest {
         DataType dataType =
                 DataTypes.ROW(DataTypes.FIELD(key, DataTypes.ARRAY(DataTypes.DOUBLE())));
         RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
-                new RowDataToAttributeValueConverter(dataType, null);
+                new RowDataToAttributeValueConverter(dataType);
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createArray(value, t -> t));
         Map<String, AttributeValue> expectedResult =
@@ -504,7 +504,7 @@ public class RowDataToAttributeValueConverterTest {
         DataType dataType =
                 DataTypes.ROW(DataTypes.FIELD(key, DataTypes.ARRAY(DataTypes.TIMESTAMP())));
         RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
-                new RowDataToAttributeValueConverter(dataType, null);
+                new RowDataToAttributeValueConverter(dataType);
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(
                         createArray(value, TimestampData::fromLocalDateTime));
@@ -533,7 +533,7 @@ public class RowDataToAttributeValueConverterTest {
         DataType dataType =
                 DataTypes.ROW(DataTypes.FIELD(key, DataTypes.ARRAY(DataTypes.TIMESTAMP_LTZ())));
         RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
-                new RowDataToAttributeValueConverter(dataType, null);
+                new RowDataToAttributeValueConverter(dataType);
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(
                         createArray(value, TimestampData::fromInstant));
@@ -607,8 +607,7 @@ public class RowDataToAttributeValueConverterTest {
         Map<String, AttributeValue> expectedResult =
                 singletonMap(key, AttributeValue.builder().s(value).build());
 
-        assertThat(actualResult).containsAllEntriesOf(expectedResult);
-        assertThat(expectedResult).containsAllEntriesOf(actualResult);
+        assertThat(actualResult).containsExactlyInAnyOrderEntriesOf(expectedResult);
     }
 
     @Test
@@ -647,8 +646,7 @@ public class RowDataToAttributeValueConverterTest {
         expectedResult.put(key, AttributeValue.builder().s(value).build());
         expectedResult.put(additionalKey, AttributeValue.builder().s(additionalValue).build());
 
-        assertThat(actualResult).containsAllEntriesOf(expectedResult);
-        assertThat(expectedResult).containsAllEntriesOf(actualResult);
+        assertThat(actualResult).containsExactlyInAnyOrderEntriesOf(expectedResult);
     }
 
     @Test
@@ -678,8 +676,7 @@ public class RowDataToAttributeValueConverterTest {
         expectedResult.put(key, AttributeValue.builder().s(value).build());
         expectedResult.put(otherField, AttributeValue.builder().s(otherValue).build());
 
-        assertThat(actualResult).containsAllEntriesOf(expectedResult);
-        assertThat(expectedResult).containsAllEntriesOf(actualResult);
+        assertThat(actualResult).containsExactlyInAnyOrderEntriesOf(expectedResult);
     }
 
     @Test
@@ -688,7 +685,7 @@ public class RowDataToAttributeValueConverterTest {
         String value = "some_string";
         String otherField = "other_field";
         String otherValue = "other_value";
-        Set<String> primaryKeys = new HashSet<>(Collections.singletonList(key));
+        Set<String> primaryKeys = Collections.singleton(key);
 
         // Create a Row with two fields - "key" and "otherField".  "key" is the primary key.
         // For an UPDATE_BEFORE request, all fields should be included regardless of the Primary
@@ -710,8 +707,7 @@ public class RowDataToAttributeValueConverterTest {
         expectedResult.put(key, AttributeValue.builder().s(value).build());
         expectedResult.put(otherField, AttributeValue.builder().s(otherValue).build());
 
-        assertThat(actualResult).containsAllEntriesOf(expectedResult);
-        assertThat(expectedResult).containsAllEntriesOf(actualResult);
+        assertThat(actualResult).containsExactlyInAnyOrderEntriesOf(expectedResult);
     }
 
     private RowData createElement(Object value) {

@@ -34,7 +34,6 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -53,8 +52,7 @@ public class RowDataElementConverterTest {
     private static final RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
             new RowDataToAttributeValueConverter(DATA_TYPE, null);
 
-    private static final Set<String> primaryKeys =
-            new HashSet<>(Collections.singletonList("partition_key"));
+    private static final Set<String> primaryKeys = Collections.singleton("partition_key");
     private static final RowDataElementConverter elementConverterWithPK =
             new RowDataElementConverter(DATA_TYPE, primaryKeys);
     private static final RowDataToAttributeValueConverter rowDataToAttributeValueConverterWithPK =

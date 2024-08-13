@@ -51,9 +51,7 @@ public class RowDataToAttributeValueConverter {
     private final Set<String> primaryKeys;
 
     public RowDataToAttributeValueConverter(DataType physicalDataType) {
-        this.physicalDataType = physicalDataType;
-        this.primaryKeys = Collections.emptySet();
-        this.tableSchema = createTableSchema();
+        this(physicalDataType, Collections.emptySet());
     }
 
     public RowDataToAttributeValueConverter(DataType physicalDataType, Set<String> primaryKeys) {
