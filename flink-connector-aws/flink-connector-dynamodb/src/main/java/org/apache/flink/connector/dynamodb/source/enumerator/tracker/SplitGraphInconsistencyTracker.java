@@ -49,9 +49,25 @@ public class SplitGraphInconsistencyTracker {
         closedLeafNodes = new TreeSet<>();
     }
 
+    /**
+     * Adds shards to the shard graph tracker. We first add shards and once shards are added, we
+     * remove the parent shards from closedLeafNodes. We need 2x for loops here to make sure if the
+     * shards are not ordered, parent and child can both reside in closedLeafNodes
+     *
+     * @param shards Shards to add in the tracker
+     */
     public void addNodes(List<Shard> shards) {
         for (Shard shard : shards) {
             addNode(shard);
+        }
+        for (Shard shard : shards) {
+            removeParentFromClosedLeafNodes(shard);
+        }
+    }
+
+    private void removeParentFromClosedLeafNodes(Shard shard) {
+        if (shard.parentShardId() != null) {
+            closedLeafNodes.remove(shard.parentShardId());
         }
     }
 
@@ -59,9 +75,6 @@ public class SplitGraphInconsistencyTracker {
         nodes.put(shard.shardId(), shard);
         if (shard.sequenceNumberRange().endingSequenceNumber() != null) {
             closedLeafNodes.add(shard.shardId());
-        }
-        if (shard.parentShardId() != null) {
-            closedLeafNodes.remove(shard.parentShardId());
         }
     }
 
@@ -93,7 +106,7 @@ public class SplitGraphInconsistencyTracker {
 
     private void removeExpiredInconsistentLeaves(String shardId) {
         String currentShardId = shardId;
-        while (nodes.containsKey(currentShardId)) {
+        while (currentShardId != null && nodes.containsKey(currentShardId)) {
             Shard currentShard = nodes.remove(currentShardId);
             closedLeafNodes.remove(currentShardId);
             currentShardId = currentShard.parentShardId();
