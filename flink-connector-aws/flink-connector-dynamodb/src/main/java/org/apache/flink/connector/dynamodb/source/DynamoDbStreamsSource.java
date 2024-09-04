@@ -248,11 +248,8 @@ public class DynamoDbStreamsSource<T>
                 AWSClientUtil.createAwsSyncClient(
                         dynamoDbStreamsClientProperties,
                         httpClient,
-                        DynamoDbStreamsClient.builder()
-                                .overrideConfiguration(
-                                        ClientOverrideConfiguration.builder()
-                                                .retryStrategy(adaptiveRetryStrategy)
-                                                .build()),
+                        DynamoDbStreamsClient.builder(),
+                        ClientOverrideConfiguration.builder().retryStrategy(adaptiveRetryStrategy),
                         DynamodbStreamsSourceConfigConstants
                                 .BASE_DDB_STREAMS_USER_AGENT_PREFIX_FORMAT,
                         DynamodbStreamsSourceConfigConstants.DDB_STREAMS_CLIENT_USER_AGENT_PREFIX);
