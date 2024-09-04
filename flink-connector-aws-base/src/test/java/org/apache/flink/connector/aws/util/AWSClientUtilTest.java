@@ -28,17 +28,29 @@ import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.core.client.config.SdkAdvancedClientOption;
 import software.amazon.awssdk.core.client.config.SdkClientConfiguration;
 import software.amazon.awssdk.core.client.config.SdkClientOption;
+import software.amazon.awssdk.http.SdkHttpClient;
+import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.retries.api.BackoffStrategy;
+import software.amazon.awssdk.retries.api.RetryStrategy;
+import software.amazon.awssdk.retries.internal.DefaultAdaptiveRetryStrategy;
+import software.amazon.awssdk.retries.internal.DefaultLegacyRetryStrategy;
+import software.amazon.awssdk.retries.internal.circuitbreaker.TokenBucketStore;
+import software.amazon.awssdk.retries.internal.ratelimiter.RateLimiterTokenBucketStore;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.utils.AttributeMap;
 
 import java.net.URI;
 import java.time.Duration;
+import java.util.Optional;
 import java.util.Properties;
 
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.AWS_ENDPOINT;
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.AWS_REGION;
 import static org.apache.flink.connector.aws.util.AWSClientUtil.formatFlinkUserAgentPrefix;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
@@ -71,6 +83,125 @@ class AWSClientUtilTest {
         verify(builder)
                 .credentialsProvider(argThat(cp -> cp instanceof DefaultCredentialsProvider));
         verify(builder, never()).endpointOverride(any());
+    }
+
+    @Test
+    void testCreateAwsSyncClientWithoutOverrideConfiguration() {
+        Properties properties = TestUtil.properties(AWS_REGION, "eu-west-2");
+        SdkHttpClient httpClient =
+                AWSGeneralUtil.createSyncHttpClient(
+                        AttributeMap.builder().build(), ApacheHttpClient.builder());
+
+        S3Client s3Client =
+                AWSClientUtil.createAwsSyncClient(
+                        properties,
+                        httpClient,
+                        S3Client.builder(),
+                        DEFAULT_USER_AGENT_PREFIX_FORMAT,
+                        formatFlinkUserAgentPrefix(
+                                DEFAULT_USER_AGENT_PREFIX_FORMAT
+                                        + AWSClientUtil.V2_USER_AGENT_SUFFIX));
+
+        ClientOverrideConfiguration resultOverrideConfiguration =
+                s3Client.serviceClientConfiguration().overrideConfiguration();
+        assertThat(resultOverrideConfiguration.retryStrategy().get())
+                .isInstanceOf(DefaultLegacyRetryStrategy.class);
+        assertThat(resultOverrideConfiguration.retryPolicy()).isEqualTo(Optional.empty());
+        assertThat(resultOverrideConfiguration.retryMode()).isEqualTo(Optional.empty());
+        assertThat(resultOverrideConfiguration.retryStrategyConfigurator())
+                .isEqualTo(Optional.empty());
+        assertThat(resultOverrideConfiguration.apiCallAttemptTimeout()).isEqualTo(Optional.empty());
+        assertThat(resultOverrideConfiguration.apiCallTimeout()).isEqualTo(Optional.empty());
+        assertThat(
+                        resultOverrideConfiguration
+                                .advancedOption(SdkAdvancedClientOption.USER_AGENT_PREFIX)
+                                .isPresent())
+                .isTrue();
+    }
+
+    @Test
+    void testCreateAwsSyncClientWithEmptyOverrideConfiguration() {
+        Properties properties = TestUtil.properties(AWS_REGION, "eu-west-2");
+        SdkHttpClient httpClient =
+                AWSGeneralUtil.createSyncHttpClient(
+                        AttributeMap.builder().build(), ApacheHttpClient.builder());
+        ClientOverrideConfiguration.Builder clientOverrideConfigurationBuilder =
+                ClientOverrideConfiguration.builder();
+
+        S3Client s3Client =
+                AWSClientUtil.createAwsSyncClient(
+                        properties,
+                        httpClient,
+                        S3Client.builder(),
+                        clientOverrideConfigurationBuilder,
+                        DEFAULT_USER_AGENT_PREFIX_FORMAT,
+                        formatFlinkUserAgentPrefix(
+                                DEFAULT_USER_AGENT_PREFIX_FORMAT
+                                        + AWSClientUtil.V2_USER_AGENT_SUFFIX));
+
+        ClientOverrideConfiguration resultOverrideConfiguration =
+                s3Client.serviceClientConfiguration().overrideConfiguration();
+        assertThat(resultOverrideConfiguration.retryStrategy().get())
+                .isInstanceOf(DefaultLegacyRetryStrategy.class);
+        assertThat(resultOverrideConfiguration.retryPolicy()).isEqualTo(Optional.empty());
+        assertThat(resultOverrideConfiguration.retryMode()).isEqualTo(Optional.empty());
+        assertThat(resultOverrideConfiguration.retryStrategyConfigurator())
+                .isEqualTo(Optional.empty());
+        assertThat(resultOverrideConfiguration.apiCallAttemptTimeout()).isEqualTo(Optional.empty());
+        assertThat(resultOverrideConfiguration.apiCallTimeout()).isEqualTo(Optional.empty());
+        assertThat(
+                        resultOverrideConfiguration
+                                .advancedOption(SdkAdvancedClientOption.USER_AGENT_PREFIX)
+                                .isPresent())
+                .isTrue();
+    }
+
+    @Test
+    void testCreateAwsSyncClientWithOverrideConfiguration() {
+        Properties properties = TestUtil.properties(AWS_REGION, "eu-west-2");
+        SdkHttpClient httpClient =
+                AWSGeneralUtil.createSyncHttpClient(
+                        AttributeMap.builder().build(), ApacheHttpClient.builder());
+        ClientOverrideConfiguration.Builder clientOverrideConfigurationBuilder =
+                ClientOverrideConfiguration.builder();
+        RetryStrategy overrideRetryStrategy =
+                DefaultAdaptiveRetryStrategy.builder()
+                        .maxAttempts(10)
+                        .backoffStrategy(BackoffStrategy.fixedDelay(Duration.ofMillis(500)))
+                        .throttlingBackoffStrategy(
+                                BackoffStrategy.fixedDelay(Duration.ofMillis(500)))
+                        .tokenBucketStore(TokenBucketStore.builder().build())
+                        .rateLimiterTokenBucketStore(RateLimiterTokenBucketStore.builder().build())
+                        .tokenBucketExceptionCost(5)
+                        .build();
+        clientOverrideConfigurationBuilder.retryStrategy(overrideRetryStrategy);
+
+        S3Client s3Client =
+                AWSClientUtil.createAwsSyncClient(
+                        properties,
+                        httpClient,
+                        S3Client.builder(),
+                        clientOverrideConfigurationBuilder,
+                        DEFAULT_USER_AGENT_PREFIX_FORMAT,
+                        formatFlinkUserAgentPrefix(
+                                DEFAULT_USER_AGENT_PREFIX_FORMAT
+                                        + AWSClientUtil.V2_USER_AGENT_SUFFIX));
+
+        ClientOverrideConfiguration resultOverrideConfiguration =
+                s3Client.serviceClientConfiguration().overrideConfiguration();
+        assertThat(resultOverrideConfiguration.retryStrategy())
+                .isEqualTo(Optional.of(overrideRetryStrategy));
+        assertThat(resultOverrideConfiguration.retryPolicy()).isEqualTo(Optional.empty());
+        assertThat(resultOverrideConfiguration.retryMode()).isEqualTo(Optional.empty());
+        assertThat(resultOverrideConfiguration.retryStrategyConfigurator())
+                .isEqualTo(Optional.empty());
+        assertThat(resultOverrideConfiguration.apiCallAttemptTimeout()).isEqualTo(Optional.empty());
+        assertThat(resultOverrideConfiguration.apiCallTimeout()).isEqualTo(Optional.empty());
+        assertThat(
+                        resultOverrideConfiguration
+                                .advancedOption(SdkAdvancedClientOption.USER_AGENT_PREFIX)
+                                .isPresent())
+                .isTrue();
     }
 
     @Test
