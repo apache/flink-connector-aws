@@ -85,10 +85,13 @@ public class SplitTracker {
      * @param shardsToAdd collection of splits to add to tracking
      */
     public void addSplits(Collection<Shard> shardsToAdd) {
+        Set<String> discoveredShardIds =
+                shardsToAdd.stream().map(Shard::shardId).collect(Collectors.toSet());
         for (Shard shard : shardsToAdd) {
             String shardId = shard.shardId();
             if (!knownSplits.containsKey(shardId)) {
-                DynamoDbStreamsShardSplit newSplit = mapToSplit(shard, getStartingPosition(shard));
+                DynamoDbStreamsShardSplit newSplit =
+                        mapToSplit(shard, getStartingPosition(shard, discoveredShardIds));
                 knownSplits.put(shardId, newSplit);
             }
         }
@@ -104,11 +107,12 @@ public class SplitTracker {
      *
      * @param shard Shard whose starting position has to be determined.
      */
-    private InitialPosition getStartingPosition(Shard shard) {
+    private InitialPosition getStartingPosition(Shard shard, Set<String> discoveredShardIds) {
         if (shard.parentShardId() == null) {
             return initialPosition;
         }
-        if (!knownSplits.containsKey(shard.parentShardId())) {
+        if (!knownSplits.containsKey(shard.parentShardId())
+                && !discoveredShardIds.contains(shard.parentShardId())) {
             return initialPosition;
         }
         return TRIM_HORIZON;
