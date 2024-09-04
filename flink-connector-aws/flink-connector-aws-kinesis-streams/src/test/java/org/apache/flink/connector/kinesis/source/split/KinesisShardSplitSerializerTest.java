@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.math.BigInteger;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
@@ -32,6 +33,8 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import static org.apache.flink.connector.kinesis.source.util.TestUtil.ENDING_HASH_KEY_TEST_VALUE;
+import static org.apache.flink.connector.kinesis.source.util.TestUtil.STARTING_HASH_KEY_TEST_VALUE;
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.STREAM_ARN;
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.generateShardId;
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.getTestSplit;
@@ -74,7 +77,9 @@ class KinesisShardSplitSerializerTest {
                         STREAM_ARN,
                         generateShardId(10),
                         StartingPosition.continueFromSequenceNumber("some-sequence-number"),
-                        new HashSet<>(Arrays.asList(generateShardId(2), generateShardId(5))));
+                        new HashSet<>(Arrays.asList(generateShardId(2), generateShardId(5))),
+                        STARTING_HASH_KEY_TEST_VALUE,
+                        ENDING_HASH_KEY_TEST_VALUE);
 
         byte[] oldSerializedState = serializer.serializeV0(initialSplit);
         KinesisShardSplit deserializedSplit = serializer.deserialize(0, oldSerializedState);
@@ -82,10 +87,14 @@ class KinesisShardSplitSerializerTest {
         assertThat(deserializedSplit)
                 .usingRecursiveComparison(
                         RecursiveComparisonConfiguration.builder()
-                                .withIgnoredFields("parentShardIds")
+                                .withIgnoredFields(
+                                        "parentShardIds", "startingHashKey", "endingHashKey")
                                 .build())
                 .isEqualTo(initialSplit);
         assertThat(deserializedSplit.getParentShardIds()).isNotNull().matches(Set::isEmpty);
+        assertThat(deserializedSplit.getStartingHashKey())
+                .isEqualTo(BigInteger.ONE.negate().toString());
+        assertThat(deserializedSplit.getEndingHashKey()).isEqualTo(BigInteger.ZERO.toString());
     }
 
     @Test

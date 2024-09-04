@@ -42,21 +42,29 @@ public final class KinesisShardSplit implements SourceSplit {
     private final String shardId;
     private final StartingPosition startingPosition;
     private final Set<String> parentShardIds;
+    private final String startingHashKey;
+    private final String endingHashKey;
 
     public KinesisShardSplit(
             String streamArn,
             String shardId,
             StartingPosition startingPosition,
-            Set<String> parentShardIds) {
+            Set<String> parentShardIds,
+            String startingHashKey,
+            String endingHashKey) {
         checkNotNull(streamArn, "streamArn cannot be null");
         checkNotNull(shardId, "shardId cannot be null");
         checkNotNull(startingPosition, "startingPosition cannot be null");
         checkNotNull(parentShardIds, "parentShardIds cannot be null");
+        checkNotNull(startingHashKey, "startingHashKey cannot be null");
+        checkNotNull(endingHashKey, "endingHashKey cannot be null");
 
         this.streamArn = streamArn;
         this.shardId = shardId;
         this.startingPosition = startingPosition;
         this.parentShardIds = new HashSet<>(parentShardIds);
+        this.startingHashKey = startingHashKey;
+        this.endingHashKey = endingHashKey;
     }
 
     @Override
@@ -80,6 +88,14 @@ public final class KinesisShardSplit implements SourceSplit {
         return parentShardIds;
     }
 
+    public String getStartingHashKey() {
+        return startingHashKey;
+    }
+
+    public String getEndingHashKey() {
+        return endingHashKey;
+    }
+
     @Override
     public String toString() {
         return "KinesisShardSplit{"
@@ -94,6 +110,12 @@ public final class KinesisShardSplit implements SourceSplit {
                 + ", parentShardIds=["
                 + String.join(",", parentShardIds)
                 + ']'
+                + ", startingHashKey='"
+                + startingHashKey
+                + '\''
+                + ", endingHashKey='"
+                + endingHashKey
+                + '\''
                 + '}';
     }
 
@@ -109,11 +131,19 @@ public final class KinesisShardSplit implements SourceSplit {
         return Objects.equals(streamArn, that.streamArn)
                 && Objects.equals(shardId, that.shardId)
                 && Objects.equals(startingPosition, that.startingPosition)
-                && Objects.equals(parentShardIds, that.parentShardIds);
+                && Objects.equals(parentShardIds, that.parentShardIds)
+                && Objects.equals(startingHashKey, that.startingHashKey)
+                && Objects.equals(endingHashKey, that.endingHashKey);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(streamArn, shardId, startingPosition, parentShardIds);
+        return Objects.hash(
+                streamArn,
+                shardId,
+                startingPosition,
+                parentShardIds,
+                startingHashKey,
+                endingHashKey);
     }
 }

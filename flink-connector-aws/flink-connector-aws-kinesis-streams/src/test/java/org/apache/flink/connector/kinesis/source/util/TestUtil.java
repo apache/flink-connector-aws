@@ -29,12 +29,16 @@ import org.apache.flink.metrics.testutils.MetricListener;
 
 import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.core.SdkBytes;
+import software.amazon.awssdk.services.kinesis.model.HashKeyRange;
 import software.amazon.awssdk.services.kinesis.model.Record;
+import software.amazon.awssdk.services.kinesis.model.Shard;
 
+import java.math.BigInteger;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -46,9 +50,40 @@ public class TestUtil {
     public static final String SHARD_ID = "shardId-000000000002";
     public static final SimpleStringSchema STRING_SCHEMA = new SimpleStringSchema();
     public static final long MILLIS_BEHIND_LATEST_TEST_VALUE = 100L;
+    public static final String STARTING_HASH_KEY_TEST_VALUE =
+            "42535295865117307932921825928971026432";
+    public static final String ENDING_HASH_KEY_TEST_VALUE =
+            "85070591730234615865843651857942052863";
 
     public static String generateShardId(int shardId) {
         return String.format("shardId-%012d", shardId);
+    }
+
+    public static Shard[] generateShardsWithEqualHashKeyRange(int numberOfShards) {
+        BigInteger two = BigInteger.valueOf(2);
+        BigInteger numShards = BigInteger.valueOf(numberOfShards);
+        BigInteger maxHashKey = two.pow(128).subtract(BigInteger.ONE);
+        BigInteger[] hashKeyRangeBoundaries = new BigInteger[numberOfShards + 1];
+        for (int i = 0; i <= numberOfShards; i++) {
+            hashKeyRangeBoundaries[i] =
+                    maxHashKey.multiply(BigInteger.valueOf(i)).divide(numShards);
+        }
+        return IntStream.range(0, numberOfShards)
+                .mapToObj(
+                        i ->
+                                Shard.builder()
+                                        .shardId(generateShardId(i))
+                                        .hashKeyRange(
+                                                HashKeyRange.builder()
+                                                        .startingHashKey(
+                                                                hashKeyRangeBoundaries[i]
+                                                                        .toString())
+                                                        .endingHashKey(
+                                                                hashKeyRangeBoundaries[i + 1]
+                                                                        .toString())
+                                                        .build())
+                                        .build())
+                .toArray(Shard[]::new);
     }
 
     public static KinesisShardSplitState getTestSplitState() {
@@ -73,18 +108,44 @@ public class TestUtil {
 
     public static KinesisShardSplit getTestSplit(String streamArn, String shardId) {
         return new KinesisShardSplit(
-                streamArn, shardId, StartingPosition.fromStart(), Collections.emptySet());
+                streamArn,
+                shardId,
+                StartingPosition.fromStart(),
+                Collections.emptySet(),
+                STARTING_HASH_KEY_TEST_VALUE,
+                ENDING_HASH_KEY_TEST_VALUE);
     }
 
     public static KinesisShardSplit getTestSplit(
             String streamArn, String shardId, Set<String> parentShards) {
         return new KinesisShardSplit(
-                streamArn, shardId, StartingPosition.fromStart(), parentShards);
+                streamArn,
+                shardId,
+                StartingPosition.fromStart(),
+                parentShards,
+                STARTING_HASH_KEY_TEST_VALUE,
+                ENDING_HASH_KEY_TEST_VALUE);
     }
 
     public static KinesisShardSplit getTestSplit(StartingPosition startingPosition) {
         return new KinesisShardSplit(
-                STREAM_ARN, SHARD_ID, startingPosition, Collections.emptySet());
+                STREAM_ARN,
+                SHARD_ID,
+                startingPosition,
+                Collections.emptySet(),
+                STARTING_HASH_KEY_TEST_VALUE,
+                ENDING_HASH_KEY_TEST_VALUE);
+    }
+
+    public static KinesisShardSplit getTestSplit(
+            BigInteger startingHashKey, BigInteger endingHashKey) {
+        return new KinesisShardSplit(
+                STREAM_ARN,
+                SHARD_ID,
+                StartingPosition.fromStart(),
+                Collections.emptySet(),
+                startingHashKey.toString(),
+                endingHashKey.toString());
     }
 
     public static ReaderInfo getTestReaderInfo(final int subtaskId) {

@@ -35,9 +35,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
+import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -48,6 +50,7 @@ import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSou
 import static org.apache.flink.connector.kinesis.source.util.KinesisStreamProxyProvider.TestKinesisStreamProxy;
 import static org.apache.flink.connector.kinesis.source.util.KinesisStreamProxyProvider.getTestStreamProxy;
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.generateShardId;
+import static org.apache.flink.connector.kinesis.source.util.TestUtil.generateShardsWithEqualHashKeyRange;
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.getTestSplit;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatExceptionOfType;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatNoException;
@@ -440,18 +443,12 @@ class KinesisStreamsSourceEnumeratorTest {
                             true);
             enumerator.start();
 
-            // Given enumerator is initialised without only one reader
+            // Given enumerator is initialised with only one reader
             final int subtaskId = 1;
             context.registerReader(TestUtil.getTestReaderInfo(subtaskId));
             enumerator.addReader(subtaskId);
-            String[] shardIds =
-                    new String[] {
-                        generateShardId(0),
-                        generateShardId(1),
-                        generateShardId(2),
-                        generateShardId(3)
-                    };
-            streamProxy.addShards(shardIds);
+            Shard[] shards = generateShardsWithEqualHashKeyRange(4);
+            streamProxy.addShards(shards);
 
             // When first discovery runs
             context.runNextOneTimeCallable();
@@ -476,7 +473,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             initialSplitAssignment.assignment().values().stream()
                                     .flatMap(Collection::stream)
                                     .map(KinesisShardSplit::getShardId))
-                    .containsExactlyInAnyOrder(shardIds);
+                    .containsExactlyInAnyOrder(
+                            Arrays.stream(shards).map(Shard::shardId).toArray(String[]::new));
             assertThat(
                             initialSplitAssignment.assignment().values().stream()
                                     .flatMap(Collection::stream)

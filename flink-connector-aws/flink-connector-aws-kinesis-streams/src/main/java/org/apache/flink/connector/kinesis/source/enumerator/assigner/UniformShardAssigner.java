@@ -23,37 +23,42 @@ import org.apache.flink.connector.kinesis.source.enumerator.KinesisShardAssigner
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.util.Preconditions;
 
-import java.util.Collections;
+import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
-/** An implementation of the {@link KinesisShardAssigner} that assigns splits uniformly. */
+/**
+ * An implementation of the {@link KinesisShardAssigner} that maps Kinesis shard hash-key ranges to
+ * Flink subtasks. This shard assigner will ensure that the hash-key range across all shards are
+ * split across all subtasks (on a shard-level granularity). This is essential to ensure even
+ * distribution of open shards across subtasks when the Kinesis stream is scaled.
+ */
 @Internal
 public class UniformShardAssigner implements KinesisShardAssigner {
+
+    private static final BigInteger TWO = BigInteger.valueOf(2);
+
+    private static final BigInteger HASH_KEY_BOUND = TWO.pow(128);
+
     @Override
     public int assign(KinesisShardSplit split, Context context) {
-        int selectedSubtask = -1;
-        int curMinAssignment = Integer.MAX_VALUE;
-        Map<Integer, Set<KinesisShardSplit>> splitAssignment = context.getCurrentSplitAssignment();
-        Map<Integer, List<KinesisShardSplit>> pendingSplitAssignments =
-                context.getPendingSplitAssignments();
-
-        for (int subtaskId : context.getRegisteredReaders().keySet()) {
-            int subtaskAssignmentSize =
-                    splitAssignment.getOrDefault(subtaskId, Collections.emptySet()).size()
-                            + pendingSplitAssignments
-                                    .getOrDefault(subtaskId, Collections.emptyList())
-                                    .size();
-            if (subtaskAssignmentSize < curMinAssignment) {
-                curMinAssignment = subtaskAssignmentSize;
-                selectedSubtask = subtaskId;
-            }
-        }
-
         Preconditions.checkArgument(
-                selectedSubtask != -1,
+                !context.getRegisteredReaders().isEmpty(),
                 "Expected at least one registered reader. Unable to assign split.");
-        return selectedSubtask;
+        BigInteger hashKeyStart = new BigInteger(split.getStartingHashKey());
+        BigInteger hashKeyEnd = new BigInteger(split.getEndingHashKey());
+        BigInteger hashKeyMid = hashKeyStart.add(hashKeyEnd).divide(TWO);
+        // index = hashKeyMid / HASH_KEY_BOUND * nSubtasks + stream-specific offset
+        // The stream specific offset is added so that different streams will be less likely to be
+        // distributed in the same way, even if they are sharded in the same way.
+        // (The caller takes result modulo nSubtasks.)
+        List<Integer> registeredReaders = new ArrayList<>(context.getRegisteredReaders().keySet());
+        int selectedReaderIndex =
+                Math.abs(
+                        hashKeyMid
+                                .multiply(BigInteger.valueOf(registeredReaders.size()))
+                                .divide(HASH_KEY_BOUND)
+                                .intValue());
+        return registeredReaders.get(selectedReaderIndex);
     }
 }
