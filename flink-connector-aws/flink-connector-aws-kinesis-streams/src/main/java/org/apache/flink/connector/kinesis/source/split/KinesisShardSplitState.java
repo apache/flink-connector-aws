@@ -40,7 +40,9 @@ public class KinesisShardSplitState {
                 kinesisShardSplit.getStreamArn(),
                 kinesisShardSplit.getShardId(),
                 nextStartingPosition,
-                kinesisShardSplit.getParentShardIds());
+                kinesisShardSplit.getParentShardIds(),
+                kinesisShardSplit.getStartingHashKey(),
+                kinesisShardSplit.getEndingHashKey());
     }
 
     public String getSplitId() {

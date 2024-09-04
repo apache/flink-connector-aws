@@ -24,6 +24,8 @@ import org.junit.jupiter.api.Test;
 import java.util.Collections;
 import java.util.Set;
 
+import static org.apache.flink.connector.kinesis.source.util.TestUtil.ENDING_HASH_KEY_TEST_VALUE;
+import static org.apache.flink.connector.kinesis.source.util.TestUtil.STARTING_HASH_KEY_TEST_VALUE;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatExceptionOfType;
 
 class KinesisShardSplitTest {
@@ -40,7 +42,12 @@ class KinesisShardSplitTest {
                 .isThrownBy(
                         () ->
                                 new KinesisShardSplit(
-                                        null, SHARD_ID, STARTING_POSITION, PARENT_SHARD_IDS))
+                                        null,
+                                        SHARD_ID,
+                                        STARTING_POSITION,
+                                        PARENT_SHARD_IDS,
+                                        STARTING_HASH_KEY_TEST_VALUE,
+                                        ENDING_HASH_KEY_TEST_VALUE))
                 .withMessageContaining("streamArn cannot be null");
     }
 
@@ -50,7 +57,12 @@ class KinesisShardSplitTest {
                 .isThrownBy(
                         () ->
                                 new KinesisShardSplit(
-                                        STREAM_ARN, null, STARTING_POSITION, PARENT_SHARD_IDS))
+                                        STREAM_ARN,
+                                        null,
+                                        STARTING_POSITION,
+                                        PARENT_SHARD_IDS,
+                                        STARTING_HASH_KEY_TEST_VALUE,
+                                        ENDING_HASH_KEY_TEST_VALUE))
                 .withMessageContaining("shardId cannot be null");
     }
 
@@ -58,7 +70,14 @@ class KinesisShardSplitTest {
     void testStartingPositionNull() {
         assertThatExceptionOfType(NullPointerException.class)
                 .isThrownBy(
-                        () -> new KinesisShardSplit(STREAM_ARN, SHARD_ID, null, PARENT_SHARD_IDS))
+                        () ->
+                                new KinesisShardSplit(
+                                        STREAM_ARN,
+                                        SHARD_ID,
+                                        null,
+                                        PARENT_SHARD_IDS,
+                                        STARTING_HASH_KEY_TEST_VALUE,
+                                        ENDING_HASH_KEY_TEST_VALUE))
                 .withMessageContaining("startingPosition cannot be null");
     }
 
@@ -66,8 +85,45 @@ class KinesisShardSplitTest {
     void testParentShardIdsNull() {
         assertThatExceptionOfType(NullPointerException.class)
                 .isThrownBy(
-                        () -> new KinesisShardSplit(STREAM_ARN, SHARD_ID, STARTING_POSITION, null))
+                        () ->
+                                new KinesisShardSplit(
+                                        STREAM_ARN,
+                                        SHARD_ID,
+                                        STARTING_POSITION,
+                                        null,
+                                        STARTING_HASH_KEY_TEST_VALUE,
+                                        ENDING_HASH_KEY_TEST_VALUE))
                 .withMessageContaining("parentShardIds cannot be null");
+    }
+
+    @Test
+    void testStartingHashKeyNull() {
+        assertThatExceptionOfType(NullPointerException.class)
+                .isThrownBy(
+                        () ->
+                                new KinesisShardSplit(
+                                        STREAM_ARN,
+                                        SHARD_ID,
+                                        STARTING_POSITION,
+                                        PARENT_SHARD_IDS,
+                                        null,
+                                        ENDING_HASH_KEY_TEST_VALUE))
+                .withMessageContaining("startingHashKey cannot be null");
+    }
+
+    @Test
+    void testEndingHashKeyNull() {
+        assertThatExceptionOfType(NullPointerException.class)
+                .isThrownBy(
+                        () ->
+                                new KinesisShardSplit(
+                                        STREAM_ARN,
+                                        SHARD_ID,
+                                        STARTING_POSITION,
+                                        PARENT_SHARD_IDS,
+                                        STARTING_HASH_KEY_TEST_VALUE,
+                                        null))
+                .withMessageContaining("endingHashKey cannot be null");
     }
 
     @Test

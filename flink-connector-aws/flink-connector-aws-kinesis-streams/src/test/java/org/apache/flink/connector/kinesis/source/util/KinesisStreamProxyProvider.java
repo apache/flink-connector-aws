@@ -25,6 +25,7 @@ import org.apache.flink.connector.kinesis.source.split.StartingPosition;
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
+import software.amazon.awssdk.services.kinesis.model.HashKeyRange;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.awssdk.services.kinesis.model.ShardFilter;
@@ -36,6 +37,7 @@ import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
@@ -43,6 +45,9 @@ import java.util.Map;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.flink.connector.kinesis.source.util.TestUtil.ENDING_HASH_KEY_TEST_VALUE;
+import static org.apache.flink.connector.kinesis.source.util.TestUtil.STARTING_HASH_KEY_TEST_VALUE;
 
 /** Provides {@link StreamProxy} with mocked Kinesis Streams behavior. */
 public class KinesisStreamProxyProvider {
@@ -146,8 +151,20 @@ public class KinesisStreamProxyProvider {
 
         public void addShards(String... shardIds) {
             for (String shardId : shardIds) {
-                shards.add(Shard.builder().shardId(shardId).build());
+                shards.add(
+                        Shard.builder()
+                                .shardId(shardId)
+                                .hashKeyRange(
+                                        HashKeyRange.builder()
+                                                .startingHashKey(STARTING_HASH_KEY_TEST_VALUE)
+                                                .endingHashKey(ENDING_HASH_KEY_TEST_VALUE)
+                                                .build())
+                                .build());
             }
+        }
+
+        public void addShards(Shard... shards) {
+            Collections.addAll(this.shards, shards);
         }
 
         public void setListShardsExceptionSupplier(Supplier<Exception> exceptionSupplier) {
