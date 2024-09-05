@@ -22,10 +22,8 @@ import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.connector.source.SourceReaderContext;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.base.source.reader.RecordEmitter;
-import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.SingleThreadMultiplexSourceReaderBase;
 import org.apache.flink.connector.base.source.reader.fetcher.SingleThreadFetcherManager;
-import org.apache.flink.connector.base.source.reader.synchronization.FutureCompletingBlockingQueue;
 import org.apache.flink.connector.dynamodb.source.enumerator.event.SplitsFinishedEvent;
 import org.apache.flink.connector.dynamodb.source.metrics.DynamoDbStreamsShardMetrics;
 import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplit;
@@ -53,13 +51,12 @@ public class DynamoDbStreamsSourceReader<T>
     private final Map<String, DynamoDbStreamsShardMetrics> shardMetricGroupMap;
 
     public DynamoDbStreamsSourceReader(
-            FutureCompletingBlockingQueue<RecordsWithSplitIds<Record>> elementsQueue,
             SingleThreadFetcherManager<Record, DynamoDbStreamsShardSplit> splitFetcherManager,
             RecordEmitter<Record, T, DynamoDbStreamsShardSplitState> recordEmitter,
             Configuration config,
             SourceReaderContext context,
             Map<String, DynamoDbStreamsShardMetrics> shardMetricGroupMap) {
-        super(elementsQueue, splitFetcherManager, recordEmitter, config, context);
+        super(splitFetcherManager, recordEmitter, config, context);
         this.shardMetricGroupMap = shardMetricGroupMap;
     }
 

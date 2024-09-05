@@ -30,9 +30,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.aws.config.AWSConfigConstants;
 import org.apache.flink.connector.aws.util.AWSClientUtil;
 import org.apache.flink.connector.aws.util.AWSGeneralUtil;
-import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.fetcher.SingleThreadFetcherManager;
-import org.apache.flink.connector.base.source.reader.synchronization.FutureCompletingBlockingQueue;
 import org.apache.flink.connector.kinesis.sink.KinesisStreamsConfigConstants;
 import org.apache.flink.connector.kinesis.source.enumerator.KinesisShardAssigner;
 import org.apache.flink.connector.kinesis.source.enumerator.KinesisStreamsSourceEnumerator;
@@ -54,7 +52,6 @@ import org.apache.flink.util.UserCodeClassLoader;
 import software.amazon.awssdk.http.SdkHttpClient;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
-import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.utils.AttributeMap;
 
 import java.util.Map;
@@ -129,9 +126,6 @@ public class KinesisStreamsSource<T>
             throws Exception {
         setUpDeserializationSchema(readerContext);
 
-        FutureCompletingBlockingQueue<RecordsWithSplitIds<Record>> elementsQueue =
-                new FutureCompletingBlockingQueue<>();
-
         Map<String, KinesisShardMetrics> shardMetricGroupMap = new ConcurrentHashMap<>();
 
         // We create a new stream proxy for each split reader since they have their own independent
@@ -144,8 +138,7 @@ public class KinesisStreamsSource<T>
                 new KinesisStreamsRecordEmitter<>(deserializationSchema);
 
         return new KinesisStreamsSourceReader<>(
-                elementsQueue,
-                new SingleThreadFetcherManager<>(elementsQueue, splitReaderSupplier::get),
+                new SingleThreadFetcherManager<>(splitReaderSupplier::get),
                 recordEmitter,
                 sourceConfig,
                 readerContext,

@@ -22,10 +22,8 @@ import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.connector.source.SourceReaderContext;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.base.source.reader.RecordEmitter;
-import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.SingleThreadMultiplexSourceReaderBase;
 import org.apache.flink.connector.base.source.reader.fetcher.SingleThreadFetcherManager;
-import org.apache.flink.connector.base.source.reader.synchronization.FutureCompletingBlockingQueue;
 import org.apache.flink.connector.kinesis.source.event.SplitsFinishedEvent;
 import org.apache.flink.connector.kinesis.source.metrics.KinesisShardMetrics;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
@@ -53,13 +51,12 @@ public class KinesisStreamsSourceReader<T>
     private final Map<String, KinesisShardMetrics> shardMetricGroupMap;
 
     public KinesisStreamsSourceReader(
-            FutureCompletingBlockingQueue<RecordsWithSplitIds<Record>> elementsQueue,
             SingleThreadFetcherManager<Record, KinesisShardSplit> splitFetcherManager,
             RecordEmitter<Record, T, KinesisShardSplitState> recordEmitter,
             Configuration config,
             SourceReaderContext context,
             Map<String, KinesisShardMetrics> shardMetricGroupMap) {
-        super(elementsQueue, splitFetcherManager, recordEmitter, config, context);
+        super(splitFetcherManager, recordEmitter, config, context);
         this.shardMetricGroupMap = shardMetricGroupMap;
     }
 

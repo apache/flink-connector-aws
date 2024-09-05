@@ -20,9 +20,7 @@ package org.apache.flink.connector.dynamodb.source.reader;
 
 import org.apache.flink.api.connector.source.SourceEvent;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.fetcher.SingleThreadFetcherManager;
-import org.apache.flink.connector.base.source.reader.synchronization.FutureCompletingBlockingQueue;
 import org.apache.flink.connector.dynamodb.source.enumerator.event.SplitsFinishedEvent;
 import org.apache.flink.connector.dynamodb.source.metrics.DynamoDbStreamsShardMetrics;
 import org.apache.flink.connector.dynamodb.source.proxy.StreamProxy;
@@ -36,7 +34,6 @@ import org.apache.flink.runtime.operators.testutils.TestData;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import software.amazon.awssdk.services.dynamodb.model.Record;
 
 import java.util.Collections;
 import java.util.List;
@@ -67,16 +64,12 @@ class DynamoDbStreamsSourceReaderTest {
                         new PollingDynamoDbStreamsShardSplitReader(
                                 testStreamProxy, shardMetricGroupMap);
 
-        FutureCompletingBlockingQueue<RecordsWithSplitIds<Record>> elementsQueue =
-                new FutureCompletingBlockingQueue<>();
-
         testingReaderContext =
                 DynamoDbStreamsContextProvider.DynamoDbStreamsTestingContext
                         .getDynamoDbStreamsTestingContext(metricListener);
         sourceReader =
                 new DynamoDbStreamsSourceReader<>(
-                        elementsQueue,
-                        new SingleThreadFetcherManager<>(elementsQueue, splitReaderSupplier::get),
+                        new SingleThreadFetcherManager<>(splitReaderSupplier::get),
                         new DynamoDbStreamsRecordEmitter<>(null),
                         new Configuration(),
                         testingReaderContext,
