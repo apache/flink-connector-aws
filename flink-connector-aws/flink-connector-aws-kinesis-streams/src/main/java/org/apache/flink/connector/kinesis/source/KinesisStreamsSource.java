@@ -97,18 +97,16 @@ public class KinesisStreamsSource<T>
             KinesisShardAssigner kinesisShardAssigner,
             boolean preserveShardOrder) {
         Preconditions.checkNotNull(
-                streamArn,
-                "No stream ARN was supplied to the KinesisStreamsSource builder.");
+                streamArn, "No stream ARN was supplied to the KinesisStreamsSource.");
         Preconditions.checkArgument(!streamArn.isEmpty(), "stream ARN cannot be empty string");
         Preconditions.checkNotNull(
-                sourceConfig,
-                "No source config was supplied to the KinesisStreamsSource builder.");
+                sourceConfig, "No source config was supplied to the KinesisStreamsSource.");
         Preconditions.checkNotNull(
                 deserializationSchema,
-                "No KinesisDeserializationSchema was supplied to the KinesisStreamsSource builder.");
+                "No KinesisDeserializationSchema was supplied to the KinesisStreamsSource.");
         Preconditions.checkNotNull(
                 kinesisShardAssigner,
-                "No KinesisShardAssigner was supplied to the  KinesisStreamsSource builder.");
+                "No KinesisShardAssigner was supplied to the KinesisStreamsSource.");
         this.streamArn = streamArn;
         this.sourceConfig = sourceConfig;
         this.deserializationSchema = deserializationSchema;
