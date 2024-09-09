@@ -19,6 +19,8 @@
 package org.apache.flink.connector.dynamodb.source.util;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.connector.dynamodb.source.enumerator.tracker.SplitGraphInconsistencyTracker;
+import org.apache.flink.connector.dynamodb.source.enumerator.tracker.SplitTracker;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -26,7 +28,22 @@ import java.time.Instant;
 /** Utility methods for properties of DynamoDB streams shards. */
 @Internal
 public class ShardUtils {
-    private static final Duration DDB_STREAMS_MAX_RETENTION_PERIOD = Duration.ofHours(25);
+    /**
+     * Maximum retention period for shards to be stored in {@link SplitTracker}. We keep this 48
+     * hours to avoid corner cases during expiry of DDB Streams shards which can lead to
+     * DescribeStream returning the shard, shard being finished processing and {@link SplitTracker}
+     * tracking them again leading to reprocessing.
+     */
+    private static final Duration DDB_STREAMS_MAX_RETENTION_PERIOD = Duration.ofHours(48);
+
+    /**
+     * Maximum retention period for shards to be stored in {@link SplitGraphInconsistencyTracker}.
+     * DDB Streams records are expired after 24 hours. We do not need to resolve inconsistencies
+     * during shard expiry time.
+     */
+    private static final Duration DDB_STREAMS_MAX_RETENTION_PERIOD_FOR_RESOLVING_INCONSISTENCIES =
+            Duration.ofHours(25);
+
     private static final String SHARD_ID_SEPARATOR = "-";
     /**
      * This method extracts the shard creation timestamp from the shardId.
@@ -39,12 +56,26 @@ public class ShardUtils {
     }
 
     /**
-     * Returns true if the shard has been created for more than 24 hours.
+     * Returns true if the shard is older than what we want to store in {@link SplitTracker}.
      *
      * @param shardId
      */
     public static boolean isShardOlderThanRetentionPeriod(String shardId) {
         return Instant.now()
                 .isAfter(getShardCreationTime(shardId).plus(DDB_STREAMS_MAX_RETENTION_PERIOD));
+    }
+
+    /**
+     * Returns true if the shard is older than what we want to store in {@link
+     * SplitGraphInconsistencyTracker}.
+     *
+     * @param shardId
+     */
+    public static boolean isShardOlderThanInconsistencyDetectionRetentionPeriod(String shardId) {
+        return Instant.now()
+                .isAfter(
+                        getShardCreationTime(shardId)
+                                .plus(
+                                        DDB_STREAMS_MAX_RETENTION_PERIOD_FOR_RESOLVING_INCONSISTENCIES));
     }
 }

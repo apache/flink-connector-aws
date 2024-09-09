@@ -20,9 +20,9 @@ package org.apache.flink.connector.dynamodb.source.util;
 
 import org.junit.jupiter.api.Test;
 
-import java.time.Duration;
 import java.time.Instant;
 
+import static org.apache.flink.connector.dynamodb.source.util.TestUtil.OLD_SHARD_DURATION;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
 /** Unit tests for {@link ShardUtils} class. */
@@ -37,7 +37,16 @@ public class ShardUtilsTest {
     @Test
     void testIsShardOlderThanRetentionPeriod() {
         Instant currentTime = Instant.now();
-        String oldShardId = "shardId-" + currentTime.minus(Duration.ofHours(26)).toEpochMilli();
+        String oldShardId = "shardId-" + currentTime.minus(OLD_SHARD_DURATION).toEpochMilli();
+        String newShardId = "shardId-" + currentTime.toEpochMilli();
+        assertThat(ShardUtils.isShardOlderThanRetentionPeriod(oldShardId)).isTrue();
+        assertThat(ShardUtils.isShardOlderThanRetentionPeriod(newShardId)).isFalse();
+    }
+
+    @Test
+    void testIsShardOlderThanInconsistencyDetectionRetentionPeriod() {
+        Instant currentTime = Instant.now();
+        String oldShardId = "shardId-" + currentTime.minus(OLD_SHARD_DURATION).toEpochMilli();
         String newShardId = "shardId-" + currentTime.toEpochMilli();
         assertThat(ShardUtils.isShardOlderThanRetentionPeriod(oldShardId)).isTrue();
         assertThat(ShardUtils.isShardOlderThanRetentionPeriod(newShardId)).isFalse();
