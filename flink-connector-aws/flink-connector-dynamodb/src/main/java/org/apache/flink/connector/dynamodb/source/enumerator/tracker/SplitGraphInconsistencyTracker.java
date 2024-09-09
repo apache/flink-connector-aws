@@ -86,7 +86,8 @@ public class SplitGraphInconsistencyTracker {
     public boolean inconsistencyDetected() {
         Set<String> closedLeafNodesCopy = new HashSet<>(closedLeafNodes);
         for (String closedLeafNodeId : closedLeafNodesCopy) {
-            if (ShardUtils.isShardOlderThanRetentionPeriod(closedLeafNodeId)) {
+            if (ShardUtils.isShardOlderThanInconsistencyDetectionRetentionPeriod(
+                    closedLeafNodeId)) {
                 LOG.warn(
                         "Shard id: {} has no child and has been created more than 24 hours ago. Not tracking it and its ancestors",
                         closedLeafNodeId);

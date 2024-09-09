@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.flink.connector.dynamodb.source.util.TestUtil.OLD_SHARD_DURATION;
 import static org.apache.flink.connector.dynamodb.source.util.TestUtil.STREAM_ARN;
 import static org.apache.flink.connector.dynamodb.source.util.TestUtil.generateShard;
 import static org.apache.flink.connector.dynamodb.source.util.TestUtil.generateShardId;
@@ -256,12 +257,9 @@ class SplitTrackerTest {
 
     @Test
     public void testSplitTrackerCleansUpOlderFinished() {
-        String firstShardId =
-                "shardId-"
-                        + String.valueOf(Instant.now().minus(Duration.ofHours(26)).toEpochMilli());
+        String firstShardId = "shardId-" + Instant.now().minus(OLD_SHARD_DURATION).toEpochMilli();
         String secondShardId =
-                "shardId-"
-                        + String.valueOf(Instant.now().minus(Duration.ofHours(23)).toEpochMilli());
+                "shardId-" + Instant.now().minus(Duration.ofHours(23)).toEpochMilli();
 
         List<Shard> shards =
                 Arrays.asList(

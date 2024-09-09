@@ -33,6 +33,7 @@ import software.amazon.awssdk.services.dynamodb.model.SequenceNumberRange;
 import software.amazon.awssdk.services.dynamodb.model.Shard;
 import software.amazon.awssdk.services.dynamodb.model.StreamRecord;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 
@@ -47,6 +48,9 @@ public class TestUtil {
     public static final SimpleStringSchema STRING_SCHEMA = new SimpleStringSchema();
 
     public static final long MILLIS_BEHIND_LATEST_TEST_VALUE = -1L;
+    public static final Duration OLD_SHARD_DURATION = Duration.ofHours(49);
+
+    public static final Duration OLD_INCONSISTENT_SHARD_DURATION = Duration.ofHours(26);
 
     public static String generateShardId(long shardId) {
         return String.format("shardId-%012d", shardId);
