@@ -32,6 +32,17 @@ public class KinesisStreamsSourceConfigConstants {
         AT_TIMESTAMP
     }
 
+    /** Defines mechanism used to consume records from Kinesis stream. */
+    public enum ReaderType {
+        POLLING,
+        EFO
+    }
+
+    public enum EfoConsumerRegistrationStrategy {
+        EAGER,
+        NONE
+    }
+
     public static final ConfigOption<InitialPosition> STREAM_INITIAL_POSITION =
             ConfigOptions.key("flink.stream.initpos")
                     .enumType(InitialPosition.class)
@@ -57,4 +68,26 @@ public class KinesisStreamsSourceConfigConstants {
                     .longType()
                     .defaultValue(10000L)
                     .withDescription("The interval between each attempt to discover new shards.");
+
+    public static final ConfigOption<ReaderType> READER_TYPE =
+            ConfigOptions.key("type")
+                    .enumType(ReaderType.class)
+                    .defaultValue(ReaderType.POLLING)
+                    .withDescription("The type of reader used to read from the Kinesis stream.");
+
+    public static final ConfigOption<EfoConsumerRegistrationStrategy> EFO_CONSUMER_REGISTRATION_STRATEGY =
+            ConfigOptions.key("efo.consumer.registration.type")
+                    .enumType(EfoConsumerRegistrationStrategy.class)
+                    .defaultValue(EfoConsumerRegistrationStrategy.EAGER)
+                    .withDescription("Strategy used for EFO consumer registration. If EAGER is selected, consumer with specified name will be registered if it doesn't exist.");
+
+    public static final ConfigOption<String> EFO_CONSUMER_NAME =
+            ConfigOptions.key("efo.consumer.name")
+                    .stringType()
+                    .noDefaultValue();
+
+    public static final ConfigOption<String> EFO_CONSUMER_ARN =
+            ConfigOptions.key("efo.consumer.arn")
+                    .stringType()
+                    .noDefaultValue();
 }

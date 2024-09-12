@@ -19,6 +19,7 @@
 package org.apache.flink.connector.kinesis.source.split;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.util.Preconditions;
 
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 
@@ -31,7 +32,9 @@ import static software.amazon.awssdk.services.kinesis.model.ShardIteratorType.AF
 import static software.amazon.awssdk.services.kinesis.model.ShardIteratorType.AT_TIMESTAMP;
 import static software.amazon.awssdk.services.kinesis.model.ShardIteratorType.TRIM_HORIZON;
 
-/** Data class indicating the starting position for reading a given shard. */
+/**
+ * Data class indicating the starting position for reading a given shard.
+ */
 @Internal
 public final class StartingPosition {
 
@@ -50,6 +53,26 @@ public final class StartingPosition {
     @Nullable
     public Object getStartingMarker() {
         return startingMarker;
+    }
+
+    public software.amazon.awssdk.services.kinesis.model.StartingPosition getSdkStartingPosition() {
+        software.amazon.awssdk.services.kinesis.model.StartingPosition.Builder builder = software.amazon.awssdk.services.kinesis.model.StartingPosition.builder()
+                .type(shardIteratorType);
+
+        switch (shardIteratorType) {
+            case LATEST:
+            case TRIM_HORIZON:
+                return builder.build();
+            case AT_TIMESTAMP:
+                Preconditions.checkArgument(startingMarker instanceof Instant, "Invalid StartingPosition. When ShardIteratorType is AT_TIMESTAMP, startingMarker must be an Instant.");
+                return builder.timestamp((Instant) startingMarker).build();
+            case AT_SEQUENCE_NUMBER:
+            case AFTER_SEQUENCE_NUMBER:
+                Preconditions.checkArgument(startingMarker instanceof String, "Invalid StartingPosition. When ShardIteratorType is AT_SEQUENCE_NUMBER or AFTER_SEQUENCE_NUMBER, startingMarker must be a String.");
+                return builder.sequenceNumber((String) startingMarker).build();
+        }
+        throw new IllegalArgumentException(
+                "Unsupported shardIteratorType " + shardIteratorType);
     }
 
     public static StartingPosition fromTimestamp(final Instant timestamp) {
