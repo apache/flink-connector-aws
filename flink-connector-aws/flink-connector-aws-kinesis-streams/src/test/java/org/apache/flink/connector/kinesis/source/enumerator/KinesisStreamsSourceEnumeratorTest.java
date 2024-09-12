@@ -26,6 +26,7 @@ import org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptio
 import org.apache.flink.connector.kinesis.source.enumerator.assigner.ShardAssignerFactory;
 import org.apache.flink.connector.kinesis.source.proxy.ListShardsStartingPosition;
 import org.apache.flink.connector.kinesis.source.proxy.StreamProxy;
+import org.apache.flink.connector.kinesis.source.reader.fanout.StreamConsumerRegistrar;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.connector.kinesis.source.util.TestUtil;
 import org.apache.flink.util.FlinkRuntimeException;
@@ -85,7 +86,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             null,
-                            true);
+                            true,
+                            new StreamConsumerRegistrar(sourceConfig, STREAM_ARN, streamProxy));
             // When enumerator starts
             enumerator.start();
             // Then initial discovery scheduled, with periodic discovery after
@@ -182,7 +184,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             state,
-                            true);
+                            true,
+                            new StreamConsumerRegistrar(sourceConfig, STREAM_ARN, streamProxy));
             // When enumerator starts
             enumerator.start();
             // Then no initial discovery is scheduled, but a periodic discovery is scheduled
@@ -243,7 +246,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             null,
-                            true);
+                            true,
+                            new StreamConsumerRegistrar(sourceConfig, STREAM_ARN, streamProxy));
 
             assertThat(
                             enumerator.getInitialPositionForShardDiscovery(
@@ -297,7 +301,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             null,
-                            true);
+                            true,
+                            new StreamConsumerRegistrar(sourceConfig, STREAM_ARN, streamProxy));
             enumerator.start();
 
             // Given List Shard request throws an Exception
@@ -327,7 +332,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             null,
-                            true);
+                            true,
+                            new StreamConsumerRegistrar(sourceConfig, STREAM_ARN, streamProxy));
             enumerator.start();
 
             // Given enumerator is initialised with one registered reader, with 4 shards in stream
@@ -381,7 +387,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             null,
-                            true);
+                            true,
+                            new StreamConsumerRegistrar(sourceConfig, STREAM_ARN, streamProxy));
             enumerator.start();
 
             // Given enumerator is initialised without a reader
@@ -440,7 +447,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             null,
-                            true);
+                            true,
+                            new StreamConsumerRegistrar(sourceConfig, STREAM_ARN, streamProxy));
             enumerator.start();
 
             // Given enumerator is initialised with only one reader
@@ -502,7 +510,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             null,
-                            true);
+                            true,
+                            new StreamConsumerRegistrar(sourceConfig, STREAM_ARN, streamProxy));
             enumerator.start();
 
             // Given enumerator is initialised with one registered reader, with 4 shards in stream
@@ -530,7 +539,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             snapshottedState,
-                            true);
+                            true,
+                            new StreamConsumerRegistrar(sourceConfig, STREAM_ARN, streamProxy));
             restoredEnumerator.start();
             // Given enumerator is initialised with one registered reader, with 4 shards in stream
             restoredContext.registerReader(TestUtil.getTestReaderInfo(subtaskId));
@@ -561,7 +571,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             null,
-                            true);
+                            true,
+                            new StreamConsumerRegistrar(sourceConfig, STREAM_ARN, streamProxy));
 
             assertThatNoException()
                     .isThrownBy(() -> enumerator.handleSourceEvent(1, new SourceEvent() {}));
@@ -582,7 +593,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             null,
-                            true);
+                            true,
+                            new StreamConsumerRegistrar(sourceConfig, STREAM_ARN, streamProxy));
             enumerator.start();
 
             assertThatNoException().isThrownBy(enumerator::close);
@@ -601,7 +613,8 @@ class KinesisStreamsSourceEnumeratorTest {
                         streamProxy,
                         ShardAssignerFactory.uniformShardAssigner(),
                         null,
-                        true);
+                        true,
+                        new StreamConsumerRegistrar(sourceConfig, STREAM_ARN, streamProxy));
         enumerator.start();
         assertThat(context.getOneTimeCallables()).hasSize(1);
         assertThat(context.getPeriodicCallables()).hasSize(1);

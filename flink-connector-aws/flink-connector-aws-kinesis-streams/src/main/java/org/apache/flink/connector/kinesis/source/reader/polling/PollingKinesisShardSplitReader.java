@@ -19,6 +19,8 @@
 package org.apache.flink.connector.kinesis.source.reader.polling;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions;
 import org.apache.flink.connector.kinesis.source.metrics.KinesisShardMetrics;
 import org.apache.flink.connector.kinesis.source.proxy.StreamProxy;
 import org.apache.flink.connector.kinesis.source.reader.KinesisShardSplitReaderBase;
@@ -35,11 +37,17 @@ import java.util.Map;
 @Internal
 public class PollingKinesisShardSplitReader extends KinesisShardSplitReaderBase {
     private final StreamProxy kinesis;
+    private final Configuration configuration;
+    private final int maxRecordsToGet;
 
     public PollingKinesisShardSplitReader(
-            StreamProxy kinesisProxy, Map<String, KinesisShardMetrics> shardMetricGroupMap) {
+            StreamProxy kinesisProxy,
+            Map<String, KinesisShardMetrics> shardMetricGroupMap,
+            Configuration configuration) {
         super(shardMetricGroupMap);
         this.kinesis = kinesisProxy;
+        this.configuration = configuration;
+        this.maxRecordsToGet = configuration.get(KinesisSourceConfigOptions.SHARD_GET_RECORDS_MAX);
     }
 
     @Override
@@ -48,7 +56,8 @@ public class PollingKinesisShardSplitReader extends KinesisShardSplitReaderBase 
                 kinesis.getRecords(
                         splitState.getStreamArn(),
                         splitState.getShardId(),
-                        splitState.getNextStartingPosition());
+                        splitState.getNextStartingPosition(),
+                        this.maxRecordsToGet);
         boolean isCompleted = getRecordsResponse.nextShardIterator() == null;
         return new RecordBatch(
                 getRecordsResponse.records(), getRecordsResponse.millisBehindLatest(), isCompleted);
