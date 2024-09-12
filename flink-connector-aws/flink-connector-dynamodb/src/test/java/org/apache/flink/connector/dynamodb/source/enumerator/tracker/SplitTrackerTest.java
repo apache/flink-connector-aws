@@ -229,6 +229,91 @@ class SplitTrackerTest {
     }
 
     @Test
+    public void testOrderedUnassignedChildSplitsParentsFinishedAvailableForAssignment() {
+        List<Shard> finishedParentShards =
+                Arrays.asList(
+                        generateShard(1, "1000", "3000", null),
+                        generateShard(2, "2000", "4000", null),
+                        generateShard(3, "3000", "5000", null));
+        List<Shard> shardsWithParents =
+                Arrays.asList(
+                        generateShard(4, "4000", null, generateShardId(1)),
+                        generateShard(5, "5000", null, generateShardId(1)),
+                        generateShard(6, "6000", null, generateShardId(2)),
+                        generateShard(7, "7000", null, generateShardId(3)));
+        List<Shard> shardsWithoutParents =
+                Arrays.asList(
+                        generateShard(8, "8000", null, null), generateShard(9, "9000", null, null));
+
+        SplitTracker splitTracker = new SplitTracker(STREAM_ARN, InitialPosition.TRIM_HORIZON);
+        splitTracker.addSplits(
+                Stream.of(finishedParentShards, shardsWithParents, shardsWithParents)
+                        .flatMap(Collection::stream)
+                        .collect(Collectors.toList()));
+        splitTracker.markAsFinished(
+                finishedParentShards.stream().map(Shard::shardId).collect(Collectors.toList()));
+
+        List<DynamoDbStreamsShardSplit> unassignedChildSplits =
+                splitTracker.getUnassignedChildSplits(
+                        finishedParentShards.stream()
+                                .map(Shard::shardId)
+                                .collect(Collectors.toSet()));
+
+        assertThat(unassignedChildSplits)
+                .containsExactlyInAnyOrderElementsOf(
+                        shardsWithParents.stream()
+                                .map(this::getSplitFromShard)
+                                .collect(Collectors.toList()));
+        assertThat(unassignedChildSplits)
+                .doesNotContainAnyElementsOf(
+                        shardsWithoutParents.stream()
+                                .map(this::getSplitFromShard)
+                                .collect(Collectors.toList()));
+    }
+
+    @Test
+    public void testOrderedUnassignedChildSplitsWithUnknownParentsFinishedAvailableForAssignment() {
+        List<Shard> finishedParentShards =
+                Arrays.asList(
+                        generateShard(1, "1000", "3000", null),
+                        generateShard(2, "2000", "4000", null),
+                        generateShard(3, "3000", "5000", null));
+        List<Shard> shardsWithParents =
+                Arrays.asList(
+                        generateShard(4, "4000", null, generateShardId(1)),
+                        generateShard(5, "5000", null, generateShardId(1)),
+                        generateShard(6, "6000", null, generateShardId(2)));
+        List<Shard> shardsWithoutParents =
+                Arrays.asList(
+                        generateShard(8, "8000", null, null), generateShard(9, "9000", null, null));
+
+        SplitTracker splitTracker = new SplitTracker(STREAM_ARN, InitialPosition.TRIM_HORIZON);
+        splitTracker.addSplits(
+                Stream.of(finishedParentShards, shardsWithParents, shardsWithParents)
+                        .flatMap(Collection::stream)
+                        .collect(Collectors.toList()));
+        splitTracker.markAsFinished(
+                finishedParentShards.stream().map(Shard::shardId).collect(Collectors.toList()));
+
+        List<DynamoDbStreamsShardSplit> unassignedChildSplits =
+                splitTracker.getUnassignedChildSplits(
+                        finishedParentShards.stream()
+                                .map(Shard::shardId)
+                                .collect(Collectors.toSet()));
+
+        assertThat(unassignedChildSplits)
+                .containsExactlyInAnyOrderElementsOf(
+                        shardsWithParents.stream()
+                                .map(this::getSplitFromShard)
+                                .collect(Collectors.toList()));
+        assertThat(unassignedChildSplits)
+                .doesNotContainAnyElementsOf(
+                        shardsWithoutParents.stream()
+                                .map(this::getSplitFromShard)
+                                .collect(Collectors.toList()));
+    }
+
+    @Test
     public void testOrderedMarkingParentSplitAsFinishedMakesChildrenAvailableForAssignment() {
         List<Shard> shards =
                 Arrays.asList(

@@ -28,6 +28,8 @@ import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSpli
 import org.apache.flink.connector.dynamodb.source.split.StartingPosition;
 import org.apache.flink.connector.dynamodb.source.util.ShardUtils;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.dynamodb.model.Shard;
 
 import java.util.Collection;
@@ -50,10 +52,12 @@ import static org.apache.flink.connector.dynamodb.source.enumerator.SplitAssignm
 @Internal
 public class SplitTracker {
     private final Map<String, DynamoDbStreamsShardSplit> knownSplits = new ConcurrentHashMap<>();
+    private final Map<String, Set<String>> parentChildSplitMap = new ConcurrentHashMap<>();
     private final Set<String> assignedSplits = new HashSet<>();
     private final Set<String> finishedSplits = new HashSet<>();
     private final String streamArn;
     private final InitialPosition initialPosition;
+    private static final Logger LOG = LoggerFactory.getLogger(SplitTracker.class);
 
     public SplitTracker(String streamArn, InitialPosition initialPosition) {
         this(Collections.emptyList(), streamArn, initialPosition);
@@ -69,7 +73,7 @@ public class SplitTracker {
                 splitWithStatus -> {
                     DynamoDbStreamsShardSplit currentSplit = splitWithStatus.split();
                     knownSplits.put(currentSplit.splitId(), currentSplit);
-
+                    addSplitToMapping(currentSplit);
                     if (ASSIGNED.equals(splitWithStatus.assignmentStatus())) {
                         assignedSplits.add(splitWithStatus.split().splitId());
                     }
@@ -93,8 +97,18 @@ public class SplitTracker {
                 DynamoDbStreamsShardSplit newSplit =
                         mapToSplit(shard, getStartingPosition(shard, discoveredShardIds));
                 knownSplits.put(shardId, newSplit);
+                addSplitToMapping(newSplit);
             }
         }
+    }
+
+    private void addSplitToMapping(DynamoDbStreamsShardSplit split) {
+        if (split.getParentShardId() == null) {
+            return;
+        }
+        parentChildSplitMap
+                .computeIfAbsent(split.getParentShardId(), k -> new HashSet<>())
+                .add(split.splitId());
     }
 
     /**
@@ -160,23 +174,62 @@ public class SplitTracker {
     }
 
     /**
+     * Function to get children splits available for given parent ids. This will ensure not to
+     * iterate all the values in knownSplits so saving compute
+     */
+    public List<DynamoDbStreamsShardSplit> getUnassignedChildSplits(Set<String> parentSplitIds) {
+        return parentSplitIds
+                .parallelStream()
+                .filter(
+                        splitId -> {
+                            if (!parentChildSplitMap.containsKey(splitId)) {
+                                LOG.warn(
+                                        "splitId: {} is not present in parent-child relationship map. "
+                                                + "This indicates that there might be some data loss in the application",
+                                        splitId);
+                            }
+                            return parentChildSplitMap.containsKey(splitId);
+                        })
+                .map(parentChildSplitMap::get)
+                .flatMap(Set::stream)
+                .filter(knownSplits::containsKey)
+                .map(knownSplits::get)
+                .filter(this::checkIfSplitCanBeAssigned)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Tells whether a split can be assigned or not. Conditions which it checks:
+     *
+     * <p>- Split should not already be assigned.
+     *
+     * <p>- Split should not be already finished.
+     *
+     * <p>- The parent splits should either be finished or no longer be present in knownSplits.
+     */
+    private boolean checkIfSplitCanBeAssigned(DynamoDbStreamsShardSplit split) {
+        boolean splitIsNotAssigned = !isAssigned(split.splitId());
+        return splitIsNotAssigned
+                && !isFinished(split.splitId())
+                && verifyParentIsEitherFinishedOrCleanedUp(split);
+    }
+
+    /**
      * Since we never put an inconsistent shard lineage to splitTracker, so if a shard's parent is
      * not there, that means that that should already be cleaned up.
      */
     public List<DynamoDbStreamsShardSplit> splitsAvailableForAssignment() {
-        return knownSplits.values().stream()
-                .filter(
-                        split -> {
-                            boolean splitIsNotAssigned = !isAssigned(split.splitId());
-                            return splitIsNotAssigned
-                                    && !isFinished(split.splitId())
-                                    && verifyParentIsEitherFinishedOrCleanedUp(split);
-                        })
+        return knownSplits
+                .values()
+                .parallelStream()
+                .filter(this::checkIfSplitCanBeAssigned)
                 .collect(Collectors.toList());
     }
 
     public List<DynamoDBStreamsShardSplitWithAssignmentStatus> snapshotState(long checkpointId) {
-        return knownSplits.values().stream()
+        return knownSplits
+                .values()
+                .parallelStream()
                 .map(
                         split -> {
                             SplitAssignmentStatus assignmentStatus =
@@ -209,6 +262,7 @@ public class SplitTracker {
             if (isSplitReadyToBeCleanedUp(finishedSplit, discoveredSplitIds)) {
                 finishedSplits.remove(finishedSplitId);
                 knownSplits.remove(finishedSplitId);
+                parentChildSplitMap.remove(finishedSplit.splitId());
             }
         }
     }

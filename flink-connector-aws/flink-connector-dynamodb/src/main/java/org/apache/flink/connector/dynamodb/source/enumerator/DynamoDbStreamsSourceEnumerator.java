@@ -128,6 +128,7 @@ public class DynamoDbStreamsSourceEnumerator
         }
     }
 
+    /** When we mark a split as finished, we will only assign its child splits to the subtasks. */
     private void handleFinishedSplits(int subtaskId, SplitsFinishedEvent splitsFinishedEvent) {
         splitTracker.markAsFinished(splitsFinishedEvent.getFinishedSplitIds());
         splitAssignment
@@ -137,7 +138,7 @@ public class DynamoDbStreamsSourceEnumerator
                                 splitsFinishedEvent
                                         .getFinishedSplitIds()
                                         .contains(split.splitId()));
-        assignSplits();
+        assignChildSplits(splitsFinishedEvent.getFinishedSplitIds());
     }
 
     private void processDiscoveredSplits(ListShardsResult discoveredSplits, Throwable throwable) {
@@ -161,7 +162,7 @@ public class DynamoDbStreamsSourceEnumerator
                     context.registeredReaders().size());
             return;
         }
-        assignSplits();
+        assignAllAvailableSplits();
     }
 
     /**
@@ -200,9 +201,21 @@ public class DynamoDbStreamsSourceEnumerator
         return splitGraphInconsistencyTracker;
     }
 
-    private void assignSplits() {
+    private void assignAllAvailableSplits() {
+        List<DynamoDbStreamsShardSplit> splitsAvailableForAssignment =
+                splitTracker.splitsAvailableForAssignment();
+        assignSplits(splitsAvailableForAssignment);
+    }
+
+    private void assignChildSplits(Set<String> finishedSplitIds) {
+        List<DynamoDbStreamsShardSplit> splitsAvailableForAssignment =
+                splitTracker.getUnassignedChildSplits(finishedSplitIds);
+        assignSplits(splitsAvailableForAssignment);
+    }
+
+    private void assignSplits(List<DynamoDbStreamsShardSplit> splitsAvailableForAssignment) {
         Map<Integer, List<DynamoDbStreamsShardSplit>> newSplitAssignments = new HashMap<>();
-        for (DynamoDbStreamsShardSplit split : splitTracker.splitsAvailableForAssignment()) {
+        for (DynamoDbStreamsShardSplit split : splitsAvailableForAssignment) {
             assignSplitToSubtask(split, newSplitAssignments);
         }
         updateSplitAssignment(newSplitAssignments);
