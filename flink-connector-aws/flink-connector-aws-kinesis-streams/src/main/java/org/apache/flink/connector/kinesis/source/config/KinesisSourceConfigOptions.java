@@ -19,22 +19,31 @@
 package org.apache.flink.connector.kinesis.source.config;
 
 import org.apache.flink.annotation.Experimental;
-import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
-import org.apache.flink.connector.aws.config.AWSConfigOptions;
 
 import java.time.Duration;
 
 /** Constants to be used with the KinesisStreamsSource. */
 @Experimental
-@PublicEvolving
-public class KinesisSourceConfigOptions extends AWSConfigOptions {
+public class KinesisSourceConfigOptions {
     /** Marks the initial position to use when reading from the Kinesis stream. */
     public enum InitialPosition {
         LATEST,
         TRIM_HORIZON,
         AT_TIMESTAMP
+    }
+
+    /** Defines mechanism used to consume records from Kinesis stream. */
+    public enum ReaderType {
+        POLLING,
+        EFO
+    }
+
+    /** Defines lifecycle management of EFO consumer on Kinesis stream. */
+    public enum ConsumerLifecycle {
+        JOB_MANAGED,
+        SELF_MANAGED
     }
 
     public static final ConfigOption<InitialPosition> STREAM_INITIAL_POSITION =
@@ -69,4 +78,57 @@ public class KinesisSourceConfigOptions extends AWSConfigOptions {
                     .defaultValue(10000)
                     .withDescription(
                             "The maximum number of records to try to get each time we fetch records from a AWS Kinesis shard");
+
+    public static final ConfigOption<ReaderType> READER_TYPE =
+            ConfigOptions.key("source.reader.type")
+                    .enumType(ReaderType.class)
+                    .defaultValue(ReaderType.POLLING)
+                    .withDescription("The type of reader used to read from the Kinesis stream.");
+
+    public static final ConfigOption<ConsumerLifecycle> EFO_CONSUMER_LIFECYCLE =
+            ConfigOptions.key("source.efo.lifecycle")
+                    .enumType(ConsumerLifecycle.class)
+                    .defaultValue(ConsumerLifecycle.JOB_MANAGED)
+                    .withDescription(
+                            "Setting to control whether the lifecycle of EFO consumer is managed by the Flink job. If JOB_MANAGED, then the Flink job will register the consumer on startup and deregister it on shutdown.");
+
+    public static final ConfigOption<String> EFO_CONSUMER_NAME =
+            ConfigOptions.key("source.efo.consumer.name").stringType().noDefaultValue();
+
+    public static final ConfigOption<Duration> EFO_CONSUMER_SUBSCRIPTION_TIMEOUT =
+            ConfigOptions.key("source.efo.subscription.timeout")
+                    .durationType()
+                    .defaultValue(Duration.ofMillis(60000))
+                    .withDescription("Timeout for EFO Consumer subscription.");
+
+    public static final ConfigOption<Duration>
+            EFO_DESCRIBE_CONSUMER_RETRY_STRATEGY_MIN_DELAY_OPTION =
+                    ConfigOptions.key("source.efo.describe.retry-strategy.delay.min")
+                            .durationType()
+                            .defaultValue(Duration.ofMillis(2000))
+                            .withDescription(
+                                    "Base delay for the exponential backoff retry strategy");
+
+    public static final ConfigOption<Duration>
+            EFO_DESCRIBE_CONSUMER_RETRY_STRATEGY_MAX_DELAY_OPTION =
+                    ConfigOptions.key("source.efo.describe.retry-strategy.delay.max")
+                            .durationType()
+                            .defaultValue(Duration.ofMillis(60000))
+                            .withDescription(
+                                    "Max delay for the exponential backoff retry strategy");
+
+    public static final ConfigOption<Integer>
+            EFO_DESCRIBE_CONSUMER_RETRY_STRATEGY_MAX_ATTEMPTS_OPTION =
+                    ConfigOptions.key("source.efo.describe.retry-strategy.attempts.max")
+                            .intType()
+                            .defaultValue(100)
+                            .withDescription(
+                                    "Maximum number of attempts for the exponential backoff retry strategy");
+
+    public static final ConfigOption<Duration> EFO_DEREGISTER_CONSUMER_TIMEOUT =
+            ConfigOptions.key("source.efo.deregister.timeout")
+                    .durationType()
+                    .defaultValue(Duration.ofMillis(10000))
+                    .withDescription(
+                            "Timeout for consumer deregistration. When timeout is reached, code will continue as per normal.");
 }

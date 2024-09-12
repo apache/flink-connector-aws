@@ -8,7 +8,6 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.aws.testutils.AWSServicesTestUtils;
 import org.apache.flink.connector.aws.testutils.LocalstackContainer;
 import org.apache.flink.connector.aws.util.AWSGeneralUtil;
-import org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.test.junit5.MiniClusterExtension;
 
@@ -53,6 +52,7 @@ import static org.apache.flink.connector.aws.config.AWSConfigConstants.AWS_REGIO
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.AWS_SECRET_ACCESS_KEY;
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.HTTP_PROTOCOL_VERSION;
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.TRUST_ALL_CERTIFICATES;
+import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.InitialPosition;
 import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.STREAM_INITIAL_POSITION;
 
 /**
@@ -146,8 +146,7 @@ public class KinesisStreamsSourceITCase {
         configuration.setString(AWS_REGION, Region.AP_SOUTHEAST_1.toString());
         configuration.setString(TRUST_ALL_CERTIFICATES, "true");
         configuration.setString(HTTP_PROTOCOL_VERSION, "HTTP1_1");
-        configuration.set(
-                STREAM_INITIAL_POSITION, KinesisSourceConfigOptions.InitialPosition.TRIM_HORIZON);
+        configuration.set(STREAM_INITIAL_POSITION, InitialPosition.TRIM_HORIZON);
         return configuration;
     }
 

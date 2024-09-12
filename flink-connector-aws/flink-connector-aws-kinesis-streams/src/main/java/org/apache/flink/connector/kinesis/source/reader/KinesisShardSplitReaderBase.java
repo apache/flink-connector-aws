@@ -19,7 +19,7 @@
 package org.apache.flink.connector.kinesis.source.reader;
 
 import org.apache.flink.annotation.Internal;
-=import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
+import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitReader;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsChange;
 import org.apache.flink.connector.kinesis.source.metrics.KinesisShardMetrics;
@@ -90,6 +90,11 @@ public abstract class KinesisShardSplitReaderBase
                     Collections.emptyIterator(), splitState.getSplitId(), true);
         }
 
+        if (recordBatch == null) {
+            assignedSplits.add(splitState);
+            return INCOMPLETE_SHARD_EMPTY_RECORDS;
+        }
+
         if (!recordBatch.isCompleted()) {
             assignedSplits.add(splitState);
         }
@@ -124,7 +129,8 @@ public abstract class KinesisShardSplitReaderBase
      * Main method implementations must implement to fetch records from Kinesis.
      *
      * @param splitState split to fetch records for
-     * @return RecordBatch containing the fetched records and metadata
+     * @return RecordBatch containing the fetched records and metadata. Returns null if there are no
+     *     records but fetching should be retried at a later time.
      */
     protected abstract RecordBatch fetchRecords(KinesisShardSplitState splitState);
 

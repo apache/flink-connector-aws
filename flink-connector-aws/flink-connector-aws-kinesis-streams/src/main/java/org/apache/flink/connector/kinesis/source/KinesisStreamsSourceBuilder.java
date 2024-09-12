@@ -22,13 +22,16 @@ import org.apache.flink.annotation.Experimental;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions;
 import org.apache.flink.connector.kinesis.source.enumerator.KinesisShardAssigner;
 import org.apache.flink.connector.kinesis.source.enumerator.assigner.ShardAssignerFactory;
 import org.apache.flink.connector.kinesis.source.enumerator.assigner.UniformShardAssigner;
 import org.apache.flink.connector.kinesis.source.serialization.KinesisDeserializationSchema;
 
 import java.time.Duration;
+
+import static org.apache.flink.connector.aws.config.AWSConfigOptions.RETRY_STRATEGY_MAX_ATTEMPTS_OPTION;
+import static org.apache.flink.connector.aws.config.AWSConfigOptions.RETRY_STRATEGY_MAX_DELAY_OPTION;
+import static org.apache.flink.connector.aws.config.AWSConfigOptions.RETRY_STRATEGY_MIN_DELAY_OPTION;
 
 /**
  * Builder to construct the {@link KinesisStreamsSource}.
@@ -128,15 +131,9 @@ public class KinesisStreamsSourceBuilder<T> {
     }
 
     private void setSourceConfigurations() {
-        overrideIfExists(
-                KinesisSourceConfigOptions.RETRY_STRATEGY_MIN_DELAY_OPTION,
-                this.retryStrategyMinDelay);
-        overrideIfExists(
-                KinesisSourceConfigOptions.RETRY_STRATEGY_MAX_DELAY_OPTION,
-                this.retryStrategyMaxDelay);
-        overrideIfExists(
-                KinesisSourceConfigOptions.RETRY_STRATEGY_MAX_ATTEMPTS_OPTION,
-                this.retryStrategyMaxAttempts);
+        overrideIfExists(RETRY_STRATEGY_MIN_DELAY_OPTION, this.retryStrategyMinDelay);
+        overrideIfExists(RETRY_STRATEGY_MAX_DELAY_OPTION, this.retryStrategyMaxDelay);
+        overrideIfExists(RETRY_STRATEGY_MAX_ATTEMPTS_OPTION, this.retryStrategyMaxAttempts);
     }
 
     private <E> void overrideIfExists(ConfigOption<E> configOption, E value) {

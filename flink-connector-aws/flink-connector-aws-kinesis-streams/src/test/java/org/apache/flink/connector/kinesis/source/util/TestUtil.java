@@ -48,6 +48,8 @@ public class TestUtil {
     public static final String STREAM_ARN =
             "arn:aws:kinesis:us-east-1:123456789012:stream/keenesesStream";
     public static final String SHARD_ID = "shardId-000000000002";
+    public static final String CONSUMER_ARN =
+            "arn:aws:kinesis:us-east-1:123456789012:stream/stream-name/consumer/consumer-name:1722967044";
     public static final SimpleStringSchema STRING_SCHEMA = new SimpleStringSchema();
     public static final long MILLIS_BEHIND_LATEST_TEST_VALUE = 100L;
     public static final String STARTING_HASH_KEY_TEST_VALUE =

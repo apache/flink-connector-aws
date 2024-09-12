@@ -21,7 +21,6 @@ package org.apache.flink.connector.kinesis.source.reader;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsAddition;
-import org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions;
 import org.apache.flink.connector.kinesis.source.metrics.KinesisShardMetrics;
 import org.apache.flink.connector.kinesis.source.reader.polling.PollingKinesisShardSplitReader;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
@@ -44,6 +43,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.SHARD_GET_RECORDS_MAX;
 import static org.apache.flink.connector.kinesis.source.util.KinesisStreamProxyProvider.getTestStreamProxy;
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.STREAM_ARN;
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.generateShardId;
@@ -67,7 +67,7 @@ class PollingKinesisShardSplitReaderTest {
         shardMetricGroupMap = new ConcurrentHashMap<>();
 
         sourceConfig = new Configuration();
-        sourceConfig.set(KinesisSourceConfigOptions.SHARD_GET_RECORDS_MAX, 50);
+        sourceConfig.set(SHARD_GET_RECORDS_MAX, 50);
 
         shardMetricGroupMap.put(
                 TEST_SHARD_ID,
@@ -374,7 +374,10 @@ class PollingKinesisShardSplitReaderTest {
     @Test
     void testMaxRecordsToGetParameterPassed() throws IOException {
         int maxRecordsToGet = 2;
-        sourceConfig.set(KinesisSourceConfigOptions.SHARD_GET_RECORDS_MAX, maxRecordsToGet);
+        sourceConfig.set(SHARD_GET_RECORDS_MAX, maxRecordsToGet);
+        splitReader =
+                new PollingKinesisShardSplitReader(
+                        testStreamProxy, shardMetricGroupMap, sourceConfig);
         testStreamProxy.addShards(TEST_SHARD_ID);
         List<Record> sentRecords =
                 Stream.of(getTestRecord("data-1"), getTestRecord("data-2"), getTestRecord("data-3"))
