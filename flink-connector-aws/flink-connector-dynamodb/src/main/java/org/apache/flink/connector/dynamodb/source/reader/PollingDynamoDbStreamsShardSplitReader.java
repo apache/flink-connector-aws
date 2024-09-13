@@ -22,6 +22,7 @@ import org.apache.flink.annotation.Internal;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitReader;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsChange;
+import org.apache.flink.connector.dynamodb.source.metrics.DynamoDbStreamsShardMetrics;
 import org.apache.flink.connector.dynamodb.source.proxy.StreamProxy;
 import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplit;
 import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplitState;
@@ -39,6 +40,7 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Set;
 
 import static java.util.Collections.singleton;
@@ -57,10 +59,14 @@ public class PollingDynamoDbStreamsShardSplitReader
     private final StreamProxy dynamodbStreams;
 
     private final Deque<DynamoDbStreamsShardSplitState> assignedSplits = new ArrayDeque<>();
+    private final Map<String, DynamoDbStreamsShardMetrics> shardMetricGroupMap;
     private final Set<String> pausedSplitIds = new HashSet<>();
 
-    public PollingDynamoDbStreamsShardSplitReader(StreamProxy dynamodbStreamsProxy) {
+    public PollingDynamoDbStreamsShardSplitReader(
+            StreamProxy dynamodbStreamsProxy,
+            Map<String, DynamoDbStreamsShardMetrics> shardMetricGroupMap) {
         this.dynamodbStreams = dynamodbStreamsProxy;
+        this.shardMetricGroupMap = shardMetricGroupMap;
     }
 
     @Override
@@ -90,6 +96,19 @@ public class PollingDynamoDbStreamsShardSplitReader
                 assignedSplits.add(splitState);
                 return INCOMPLETE_SHARD_EMPTY_RECORDS;
             }
+        } else {
+            DynamoDbStreamsShardMetrics shardMetrics =
+                    shardMetricGroupMap.get(splitState.getShardId());
+            Record lastRecord =
+                    getRecordsResponse.records().get(getRecordsResponse.records().size() - 1);
+            shardMetrics.setMillisBehindLatest(
+                    Math.max(
+                            System.currentTimeMillis()
+                                    - lastRecord
+                                            .dynamodb()
+                                            .approximateCreationDateTime()
+                                            .toEpochMilli(),
+                            0));
         }
 
         splitState.setNextStartingPosition(
@@ -100,7 +119,9 @@ public class PollingDynamoDbStreamsShardSplitReader
                                 .dynamodb()
                                 .sequenceNumber()));
 
-        assignedSplits.add(splitState);
+        if (!isComplete) {
+            assignedSplits.add(splitState);
+        }
         return new DynamoDbStreamRecordsWithSplitIds(
                 getRecordsResponse.records().iterator(), splitState.getSplitId(), isComplete);
     }

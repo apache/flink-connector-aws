@@ -19,11 +19,8 @@
 package org.apache.flink.connector.dynamodb.source.enumerator;
 
 import org.apache.flink.annotation.Internal;
-import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplit;
 
-import javax.annotation.Nullable;
-
-import java.util.Set;
+import java.util.List;
 
 /**
  * State for the {@link DynamoDbStreamsSourceEnumerator}. This class is stored in state, so any
@@ -31,20 +28,14 @@ import java.util.Set;
  */
 @Internal
 public class DynamoDbStreamsSourceEnumeratorState {
-    private final Set<DynamoDbStreamsShardSplit> unassignedSplits;
-    @Nullable private final String lastSeenShardId;
+    private final List<DynamoDBStreamsShardSplitWithAssignmentStatus> knownSplits;
 
     public DynamoDbStreamsSourceEnumeratorState(
-            Set<DynamoDbStreamsShardSplit> unassignedSplits, String lastSeenShardId) {
-        this.unassignedSplits = unassignedSplits;
-        this.lastSeenShardId = lastSeenShardId;
+            List<DynamoDBStreamsShardSplitWithAssignmentStatus> knownSplits) {
+        this.knownSplits = knownSplits;
     }
 
-    public String getLastSeenShardId() {
-        return lastSeenShardId;
-    }
-
-    public Set<DynamoDbStreamsShardSplit> getUnassignedSplits() {
-        return unassignedSplits;
+    public List<DynamoDBStreamsShardSplitWithAssignmentStatus> getKnownSplits() {
+        return knownSplits;
     }
 }

@@ -282,7 +282,12 @@ public class KinesisStreamsSourceEnumerator
             }
             splits.add(
                     new KinesisShardSplit(
-                            streamArn, shard.shardId(), startingPosition, parentShardIds));
+                            streamArn,
+                            shard.shardId(),
+                            startingPosition,
+                            parentShardIds,
+                            shard.hashKeyRange().startingHashKey(),
+                            shard.hashKeyRange().endingHashKey()));
         }
 
         return splits;

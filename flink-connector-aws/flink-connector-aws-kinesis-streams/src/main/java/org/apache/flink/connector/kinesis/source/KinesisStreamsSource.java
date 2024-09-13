@@ -31,9 +31,7 @@ import org.apache.flink.connector.aws.config.AWSConfigConstants;
 import org.apache.flink.connector.aws.config.AWSConfigOptions;
 import org.apache.flink.connector.aws.util.AWSClientUtil;
 import org.apache.flink.connector.aws.util.AWSGeneralUtil;
-import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.fetcher.SingleThreadFetcherManager;
-import org.apache.flink.connector.base.source.reader.synchronization.FutureCompletingBlockingQueue;
 import org.apache.flink.connector.kinesis.sink.KinesisStreamsConfigConstants;
 import org.apache.flink.connector.kinesis.source.enumerator.KinesisShardAssigner;
 import org.apache.flink.connector.kinesis.source.enumerator.KinesisStreamsSourceEnumerator;
@@ -61,7 +59,6 @@ import software.amazon.awssdk.retries.StandardRetryStrategy;
 import software.amazon.awssdk.retries.api.BackoffStrategy;
 import software.amazon.awssdk.retries.api.RetryStrategy;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
-import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.utils.AttributeMap;
 
 import java.time.Duration;
@@ -104,11 +101,17 @@ public class KinesisStreamsSource<T>
             KinesisDeserializationSchema<T> deserializationSchema,
             KinesisShardAssigner kinesisShardAssigner,
             boolean preserveShardOrder) {
-        Preconditions.checkNotNull(streamArn);
+        Preconditions.checkNotNull(
+                streamArn, "No stream ARN was supplied to the KinesisStreamsSource.");
         Preconditions.checkArgument(!streamArn.isEmpty(), "stream ARN cannot be empty string");
-        Preconditions.checkNotNull(sourceConfig);
-        Preconditions.checkNotNull(deserializationSchema);
-        Preconditions.checkNotNull(kinesisShardAssigner);
+        Preconditions.checkNotNull(
+                sourceConfig, "No source config was supplied to the KinesisStreamsSource.");
+        Preconditions.checkNotNull(
+                deserializationSchema,
+                "No KinesisDeserializationSchema was supplied to the KinesisStreamsSource.");
+        Preconditions.checkNotNull(
+                kinesisShardAssigner,
+                "No KinesisShardAssigner was supplied to the KinesisStreamsSource.");
         this.streamArn = streamArn;
         this.sourceConfig = sourceConfig;
         this.deserializationSchema = deserializationSchema;
@@ -137,9 +140,6 @@ public class KinesisStreamsSource<T>
             throws Exception {
         setUpDeserializationSchema(readerContext);
 
-        FutureCompletingBlockingQueue<RecordsWithSplitIds<Record>> elementsQueue =
-                new FutureCompletingBlockingQueue<>();
-
         Map<String, KinesisShardMetrics> shardMetricGroupMap = new ConcurrentHashMap<>();
 
         // We create a new stream proxy for each split reader since they have their own independent
@@ -154,8 +154,7 @@ public class KinesisStreamsSource<T>
                 new KinesisStreamsRecordEmitter<>(deserializationSchema);
 
         return new KinesisStreamsSourceReader<>(
-                elementsQueue,
-                new SingleThreadFetcherManager<>(elementsQueue, splitReaderSupplier::get),
+                new SingleThreadFetcherManager<>(splitReaderSupplier::get),
                 recordEmitter,
                 sourceConfig,
                 readerContext,

@@ -34,6 +34,7 @@ import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsRequest;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.awssdk.services.kinesis.model.GetShardIteratorRequest;
+import software.amazon.awssdk.services.kinesis.model.HashKeyRange;
 import software.amazon.awssdk.services.kinesis.model.KinesisRequest;
 import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
 import software.amazon.awssdk.services.kinesis.model.Record;
@@ -51,6 +52,8 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.flink.connector.kinesis.source.util.TestUtil.ENDING_HASH_KEY_TEST_VALUE;
+import static org.apache.flink.connector.kinesis.source.util.TestUtil.STARTING_HASH_KEY_TEST_VALUE;
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.generateShardId;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatNoException;
@@ -435,7 +438,15 @@ class KinesisStreamProxyTest {
     private List<Shard> getTestShards(final int startShardId, final int endShardId) {
         List<Shard> shards = new ArrayList<>();
         for (int i = startShardId; i <= endShardId; i++) {
-            shards.add(Shard.builder().shardId(generateShardId(i)).build());
+            shards.add(
+                    Shard.builder()
+                            .shardId(generateShardId(i))
+                            .hashKeyRange(
+                                    HashKeyRange.builder()
+                                            .startingHashKey(STARTING_HASH_KEY_TEST_VALUE)
+                                            .endingHashKey(ENDING_HASH_KEY_TEST_VALUE)
+                                            .build())
+                            .build());
         }
         return shards;
     }

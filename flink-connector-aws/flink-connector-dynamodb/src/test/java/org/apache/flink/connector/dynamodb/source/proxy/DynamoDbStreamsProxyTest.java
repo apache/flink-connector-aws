@@ -20,6 +20,7 @@ package org.apache.flink.connector.dynamodb.source.proxy;
 
 import org.apache.flink.connector.dynamodb.source.split.StartingPosition;
 import org.apache.flink.connector.dynamodb.source.util.DynamoDbStreamsClientProvider.TestingDynamoDbStreamsClient;
+import org.apache.flink.connector.dynamodb.source.util.ListShardsResult;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -35,10 +36,12 @@ import software.amazon.awssdk.services.dynamodb.model.GetRecordsRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetRecordsResponse;
 import software.amazon.awssdk.services.dynamodb.model.GetShardIteratorRequest;
 import software.amazon.awssdk.services.dynamodb.model.Record;
+import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.dynamodb.model.Shard;
 import software.amazon.awssdk.services.dynamodb.model.ShardIteratorType;
 import software.amazon.awssdk.services.dynamodb.model.StreamDescription;
 import software.amazon.awssdk.services.dynamodb.model.StreamStatus;
+import software.amazon.awssdk.services.dynamodb.model.TrimmedDataAccessException;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -60,7 +63,9 @@ public class DynamoDbStreamsProxyTest {
     void testListShards(String lastSeenShardId) {
         final String streamArn =
                 "arn:aws:dynamodb:us-east-1:1231231230:table/test/stream/2024-01-01T00:00:00.826";
+        final ListShardsResult expectedListShardsResult = new ListShardsResult();
         final List<Shard> expectedShards = getTestShards(0, 3);
+        expectedListShardsResult.addShards(expectedShards);
         DescribeStreamResponse describeStreamResponse =
                 DescribeStreamResponse.builder()
                         .streamDescription(
@@ -80,7 +85,7 @@ public class DynamoDbStreamsProxyTest {
                 new DynamoDbStreamsProxy(testingDynamoDbStreamsClient, HTTP_CLIENT);
 
         assertThat(dynamoDbStreamsProxy.listShards(streamArn, lastSeenShardId))
-                .isEqualTo(expectedShards);
+                .isEqualTo(expectedListShardsResult);
     }
 
     @Test
@@ -243,6 +248,68 @@ public class DynamoDbStreamsProxyTest {
         assertThat(dynamoDbStreamsProxy.getRecords(streamArn, shardId, startingPosition))
                 .isEqualTo(getRecordsResponse);
         assertThat(firstGetRecordsCall.get()).isFalse();
+    }
+
+    @Test
+    void testGetRecordsHandlesResourceNotFoundException() {
+        final String streamArn =
+                "arn:aws:dynamodb:us-east-1:1231231230:table/test/stream/2024-01-01T00:00:00.826";
+        final String shardId = "shardId-000000000002";
+        final String shardIterator = "some-shard-iterator";
+        final StartingPosition startingPosition = StartingPosition.fromStart();
+
+        final GetRecordsResponse getRecordsResponse =
+                GetRecordsResponse.builder()
+                        .records(Collections.emptyList())
+                        .nextShardIterator(null)
+                        .build();
+
+        TestingDynamoDbStreamsClient testingDynamoDbStreamsClient =
+                new TestingDynamoDbStreamsClient();
+        DynamoDbStreamsProxy dynamoDbStreamsProxy =
+                new DynamoDbStreamsProxy(testingDynamoDbStreamsClient, HTTP_CLIENT);
+
+        testingDynamoDbStreamsClient.setNextShardIterator(shardIterator);
+        testingDynamoDbStreamsClient.setShardIteratorValidation(ignored -> {});
+        testingDynamoDbStreamsClient.setGetRecordsValidation(
+                request -> {
+                    throw ResourceNotFoundException.builder().build();
+                });
+
+        // Then getRecords called with second shard iterator
+        assertThat(dynamoDbStreamsProxy.getRecords(streamArn, shardId, startingPosition))
+                .isEqualTo(getRecordsResponse);
+    }
+
+    @Test
+    void testGetRecordsHandlesTrimmedDataAccessException() {
+        final String streamArn =
+                "arn:aws:dynamodb:us-east-1:1231231230:table/test/stream/2024-01-01T00:00:00.826";
+        final String shardId = "shardId-000000000002";
+        final String shardIterator = "some-shard-iterator";
+        final StartingPosition startingPosition = StartingPosition.fromStart();
+
+        final GetRecordsResponse getRecordsResponse =
+                GetRecordsResponse.builder()
+                        .records(Collections.emptyList())
+                        .nextShardIterator(null)
+                        .build();
+
+        TestingDynamoDbStreamsClient testingDynamoDbStreamsClient =
+                new TestingDynamoDbStreamsClient();
+        DynamoDbStreamsProxy dynamoDbStreamsProxy =
+                new DynamoDbStreamsProxy(testingDynamoDbStreamsClient, HTTP_CLIENT);
+
+        testingDynamoDbStreamsClient.setNextShardIterator(shardIterator);
+        testingDynamoDbStreamsClient.setShardIteratorValidation(ignored -> {});
+        testingDynamoDbStreamsClient.setGetRecordsValidation(
+                request -> {
+                    throw TrimmedDataAccessException.builder().build();
+                });
+
+        // Then getRecords called with second shard iterator
+        assertThat(dynamoDbStreamsProxy.getRecords(streamArn, shardId, startingPosition))
+                .isEqualTo(getRecordsResponse);
     }
 
     @Test

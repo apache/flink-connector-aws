@@ -20,9 +20,7 @@ package org.apache.flink.connector.kinesis.source.reader;
 
 import org.apache.flink.api.connector.source.SourceEvent;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.fetcher.SingleThreadFetcherManager;
-import org.apache.flink.connector.base.source.reader.synchronization.FutureCompletingBlockingQueue;
 import org.apache.flink.connector.kinesis.source.event.SplitsFinishedEvent;
 import org.apache.flink.connector.kinesis.source.metrics.KinesisShardMetrics;
 import org.apache.flink.connector.kinesis.source.model.TestData;
@@ -36,7 +34,6 @@ import org.apache.flink.metrics.testutils.MetricListener;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import software.amazon.awssdk.services.kinesis.model.Record;
 
 import java.util.Collections;
 import java.util.List;
@@ -68,17 +65,13 @@ class KinesisStreamsSourceReaderTest {
                         new PollingKinesisShardSplitReader(
                                 testStreamProxy, shardMetricGroupMap, sourceConfig);
 
-        FutureCompletingBlockingQueue<RecordsWithSplitIds<Record>> elementsQueue =
-                new FutureCompletingBlockingQueue<>();
-
         testingReaderContext =
                 KinesisContextProvider.KinesisTestingContext.getKinesisTestingContext(
                         metricListener);
         sourceReader =
                 new KinesisStreamsSourceReader<>(
-                        elementsQueue,
                         new SingleThreadFetcherManager<>(
-                                elementsQueue, splitReaderSupplier::get, new Configuration()),
+                                splitReaderSupplier::get, new Configuration()),
                         new KinesisStreamsRecordEmitter<>(null),
                         new Configuration(),
                         testingReaderContext,

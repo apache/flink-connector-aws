@@ -63,6 +63,13 @@ public class DynamoDbStreamsShardSplitSerializer
                     out.writeUTF((String) startingMarker);
                 }
             }
+            if (split.getParentShardId() == null) {
+                out.writeBoolean(false);
+            } else {
+                out.writeBoolean(true);
+                out.writeUTF(split.getParentShardId());
+            }
+
             out.flush();
             return baos.toByteArray();
         }
@@ -93,8 +100,16 @@ public class DynamoDbStreamsShardSplitSerializer
                 }
             }
 
+            final boolean hasParentShardId = in.readBoolean();
+            String parentShardId = null;
+            if (hasParentShardId) {
+                parentShardId = in.readUTF();
+            }
             return new DynamoDbStreamsShardSplit(
-                    streamArn, shardId, new StartingPosition(shardIteratorType, startingMarker));
+                    streamArn,
+                    shardId,
+                    new StartingPosition(shardIteratorType, startingMarker),
+                    parentShardId);
         }
     }
 }

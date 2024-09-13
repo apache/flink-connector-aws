@@ -20,14 +20,24 @@ package org.apache.flink.connector.dynamodb.source.util;
 
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.connector.source.ReaderInfo;
+import org.apache.flink.connector.dynamodb.source.metrics.MetricConstants;
 import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplit;
 import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplitState;
 import org.apache.flink.connector.dynamodb.source.split.StartingPosition;
+import org.apache.flink.metrics.Gauge;
+import org.apache.flink.metrics.testutils.MetricListener;
 
+import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.services.dynamodb.model.Record;
+import software.amazon.awssdk.services.dynamodb.model.SequenceNumberRange;
+import software.amazon.awssdk.services.dynamodb.model.Shard;
 import software.amazon.awssdk.services.dynamodb.model.StreamRecord;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /** Utilities class for testing DynamoDbStreams Source. */
 public class TestUtil {
@@ -37,8 +47,39 @@ public class TestUtil {
     public static final String SHARD_ID = "shardId-000000000002";
     public static final SimpleStringSchema STRING_SCHEMA = new SimpleStringSchema();
 
-    public static String generateShardId(int shardId) {
+    public static final long MILLIS_BEHIND_LATEST_TEST_VALUE = -1L;
+    public static final Duration OLD_SHARD_DURATION = Duration.ofHours(49);
+
+    public static final Duration OLD_INCONSISTENT_SHARD_DURATION = Duration.ofHours(26);
+
+    public static String generateShardId(long shardId) {
         return String.format("shardId-%012d", shardId);
+    }
+
+    public static Shard generateShard(
+            long shardId, String startSN, String endSN, String parentShardId) {
+        return Shard.builder()
+                .shardId(generateShardId(shardId))
+                .parentShardId(parentShardId)
+                .sequenceNumberRange(
+                        SequenceNumberRange.builder()
+                                .startingSequenceNumber(startSN)
+                                .endingSequenceNumber(endSN)
+                                .build())
+                .build();
+    }
+
+    public static Shard generateShard(
+            String shardId, String startSN, String endSN, String parentShardId) {
+        return Shard.builder()
+                .shardId(shardId)
+                .parentShardId(parentShardId)
+                .sequenceNumberRange(
+                        SequenceNumberRange.builder()
+                                .startingSequenceNumber(startSN)
+                                .endingSequenceNumber(endSN)
+                                .build())
+                .build();
     }
 
     public static DynamoDbStreamsShardSplitState getTestSplitState() {
@@ -59,11 +100,12 @@ public class TestUtil {
     }
 
     public static DynamoDbStreamsShardSplit getTestSplit(String streamArn, String shardId) {
-        return new DynamoDbStreamsShardSplit(streamArn, shardId, StartingPosition.fromStart());
+        return new DynamoDbStreamsShardSplit(
+                streamArn, shardId, StartingPosition.fromStart(), null);
     }
 
     public static DynamoDbStreamsShardSplit getTestSplit(StartingPosition startingPosition) {
-        return new DynamoDbStreamsShardSplit(STREAM_ARN, SHARD_ID, startingPosition);
+        return new DynamoDbStreamsShardSplit(STREAM_ARN, SHARD_ID, startingPosition, null);
     }
 
     public static ReaderInfo getTestReaderInfo(final int subtaskId) {
@@ -78,5 +120,26 @@ public class TestUtil {
                                 .approximateCreationDateTime(Instant.now())
                                 .build())
                 .build();
+    }
+
+    public static void assertMillisBehindLatest(
+            DynamoDbStreamsShardSplit split, long expectedValue, MetricListener metricListener) {
+        Arn streamArn = Arn.fromString(split.getStreamArn());
+
+        final Optional<Gauge<Long>> millisBehindLatestGauge =
+                metricListener.getGauge(
+                        MetricConstants.DYNAMODB_STREAMS_SOURCE_METRIC_GROUP,
+                        MetricConstants.ACCOUNT_ID_METRIC_GROUP,
+                        streamArn.accountId().get(),
+                        MetricConstants.REGION_METRIC_GROUP,
+                        streamArn.region().get(),
+                        MetricConstants.STREAM_METRIC_GROUP,
+                        streamArn.resource().resource(),
+                        MetricConstants.SHARD_METRIC_GROUP,
+                        split.getShardId(),
+                        MetricConstants.MILLIS_BEHIND_LATEST);
+
+        assertThat(millisBehindLatestGauge).isPresent();
+        assertThat((long) millisBehindLatestGauge.get().getValue()).isEqualTo(expectedValue);
     }
 }
