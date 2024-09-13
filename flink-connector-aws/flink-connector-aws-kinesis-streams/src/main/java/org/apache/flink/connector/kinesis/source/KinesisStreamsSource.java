@@ -38,9 +38,11 @@ import org.apache.flink.connector.kinesis.source.enumerator.KinesisShardAssigner
 import org.apache.flink.connector.kinesis.source.enumerator.KinesisStreamsSourceEnumerator;
 import org.apache.flink.connector.kinesis.source.enumerator.KinesisStreamsSourceEnumeratorState;
 import org.apache.flink.connector.kinesis.source.enumerator.KinesisStreamsSourceEnumeratorStateSerializer;
+import org.apache.flink.connector.kinesis.source.exception.KinesisStreamsSourceException;
 import org.apache.flink.connector.kinesis.source.metrics.KinesisShardMetrics;
 import org.apache.flink.connector.kinesis.source.proxy.KinesisAsyncStreamProxy;
 import org.apache.flink.connector.kinesis.source.proxy.KinesisStreamProxy;
+import org.apache.flink.connector.kinesis.source.proxy.StreamProxy;
 import org.apache.flink.connector.kinesis.source.reader.KinesisStreamsRecordEmitter;
 import org.apache.flink.connector.kinesis.source.reader.KinesisStreamsSourceReader;
 import org.apache.flink.connector.kinesis.source.reader.fanout.FanOutKinesisShardSplitReader;
@@ -59,15 +61,17 @@ import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
+import software.amazon.awssdk.services.kinesis.model.DescribeStreamConsumerResponse;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.utils.AttributeMap;
 
+import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
-import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.EFO_CONSUMER_ARN;
+import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.EFO_CONSUMER_NAME;
 import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.READER_TYPE;
 
 /**
@@ -205,11 +209,19 @@ public class KinesisStreamsSource<T>
     private Supplier<SplitReader<Record, KinesisShardSplit>> getFanOutKinesisShardSplitReaderSupplier(
             Configuration sourceConfig,
             Map<String, KinesisShardMetrics> shardMetricGroupMap) {
-        String consumerArn = sourceConfig.get(EFO_CONSUMER_ARN);
-        // TODO: EFO consumer registration logic
+        String consumerArn = getConsumerArn(streamArn, sourceConfig.get(EFO_CONSUMER_NAME));
 
         // We create a new stream proxy for each split reader since they have their own independent lifecycle.
         return () -> new FanOutKinesisShardSplitReader(createKinesisAsyncStreamProxy(sourceConfig), consumerArn, shardMetricGroupMap);
+    }
+
+    private String getConsumerArn(final String streamArn, final String consumerName) {
+        try (StreamProxy streamProxy = createKinesisStreamProxy(sourceConfig)) {
+            DescribeStreamConsumerResponse response = streamProxy.describeStreamConsumer(streamArn, consumerName);
+            return response.consumerDescription().consumerARN();
+        } catch (IOException e) {
+            throw new KinesisStreamsSourceException("Unable to lookup consumer ARN for stream " + streamArn + " and consumer " + consumerName, e);
+        }
     }
 
     private KinesisAsyncStreamProxy createKinesisAsyncStreamProxy(Configuration consumerConfig) {

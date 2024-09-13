@@ -38,9 +38,10 @@ public class KinesisStreamsSourceConfigConstants {
         EFO
     }
 
-    public enum EfoConsumerRegistrationStrategy {
-        EAGER,
-        NONE
+    /** Defines lifecycle management of EFO consumer on Kinesis stream. */
+    public enum ConsumerLifecycle {
+        JOB_MANAGED,
+        SELF_MANAGED
     }
 
     public static final ConfigOption<InitialPosition> STREAM_INITIAL_POSITION =
@@ -75,19 +76,14 @@ public class KinesisStreamsSourceConfigConstants {
                     .defaultValue(ReaderType.POLLING)
                     .withDescription("The type of reader used to read from the Kinesis stream.");
 
-    public static final ConfigOption<EfoConsumerRegistrationStrategy> EFO_CONSUMER_REGISTRATION_STRATEGY =
-            ConfigOptions.key("efo.consumer.registration.type")
-                    .enumType(EfoConsumerRegistrationStrategy.class)
-                    .defaultValue(EfoConsumerRegistrationStrategy.EAGER)
-                    .withDescription("Strategy used for EFO consumer registration. If EAGER is selected, consumer with specified name will be registered if it doesn't exist.");
+    public static final ConfigOption<ConsumerLifecycle> EFO_CONSUMER_LIFECYCLE =
+            ConfigOptions.key("efo.consumer.lifecycle")
+                    .enumType(ConsumerLifecycle.class)
+                    .defaultValue(ConsumerLifecycle.JOB_MANAGED)
+                    .withDescription("Setting to control whether the lifecycle of EFO consumer is managed by the Flink job. If JOB_MANAGED, then the Flink job will register the consumer on startup and deregister it on shutdown.");
 
     public static final ConfigOption<String> EFO_CONSUMER_NAME =
             ConfigOptions.key("efo.consumer.name")
-                    .stringType()
-                    .noDefaultValue();
-
-    public static final ConfigOption<String> EFO_CONSUMER_ARN =
-            ConfigOptions.key("efo.consumer.arn")
                     .stringType()
                     .noDefaultValue();
 }
