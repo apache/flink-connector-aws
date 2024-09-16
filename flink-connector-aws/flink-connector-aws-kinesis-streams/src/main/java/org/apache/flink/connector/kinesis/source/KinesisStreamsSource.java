@@ -28,6 +28,7 @@ import org.apache.flink.api.connector.source.SplitEnumerator;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.aws.config.AWSConfigConstants;
+import org.apache.flink.connector.aws.config.AWSConfigOptions;
 import org.apache.flink.connector.aws.util.AWSClientUtil;
 import org.apache.flink.connector.aws.util.AWSGeneralUtil;
 import org.apache.flink.connector.base.source.reader.fetcher.SingleThreadFetcherManager;
@@ -49,11 +50,18 @@ import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.UserCodeClassLoader;
 
+import software.amazon.awssdk.awscore.exception.AwsServiceException;
+import software.amazon.awssdk.awscore.internal.AwsErrorCode;
+import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.http.SdkHttpClient;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
+import software.amazon.awssdk.retries.StandardRetryStrategy;
+import software.amazon.awssdk.retries.api.BackoffStrategy;
+import software.amazon.awssdk.retries.api.RetryStrategy;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
 import software.amazon.awssdk.utils.AttributeMap;
 
+import java.time.Duration;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
@@ -139,7 +147,9 @@ public class KinesisStreamsSource<T>
         Supplier<PollingKinesisShardSplitReader> splitReaderSupplier =
                 () ->
                         new PollingKinesisShardSplitReader(
-                                createKinesisStreamProxy(sourceConfig), shardMetricGroupMap);
+                                createKinesisStreamProxy(sourceConfig),
+                                shardMetricGroupMap,
+                                sourceConfig);
         KinesisStreamsRecordEmitter<T> recordEmitter =
                 new KinesisStreamsRecordEmitter<>(deserializationSchema);
 
@@ -199,12 +209,25 @@ public class KinesisStreamsSource<T>
         consumerConfig.addAllToProperties(kinesisClientProperties);
         kinesisClientProperties.put(AWSConfigConstants.AWS_REGION, region);
 
+        final ClientOverrideConfiguration.Builder overrideBuilder =
+                ClientOverrideConfiguration.builder()
+                        .retryStrategy(
+                                createExpBackoffRetryStrategy(
+                                        sourceConfig.get(
+                                                AWSConfigOptions.RETRY_STRATEGY_MIN_DELAY_OPTION),
+                                        sourceConfig.get(
+                                                AWSConfigOptions.RETRY_STRATEGY_MAX_DELAY_OPTION),
+                                        sourceConfig.get(
+                                                AWSConfigOptions
+                                                        .RETRY_STRATEGY_MAX_ATTEMPTS_OPTION)));
+
         AWSGeneralUtil.validateAwsCredentials(kinesisClientProperties);
         KinesisClient kinesisClient =
                 AWSClientUtil.createAwsSyncClient(
                         kinesisClientProperties,
                         httpClient,
                         KinesisClient.builder(),
+                        overrideBuilder,
                         KinesisStreamsConfigConstants.BASE_KINESIS_USER_AGENT_PREFIX_FORMAT,
                         KinesisStreamsConfigConstants.KINESIS_CLIENT_USER_AGENT_PREFIX);
         return new KinesisStreamProxy(kinesisClient, httpClient);
@@ -224,5 +247,38 @@ public class KinesisStreamsSource<T>
                         return sourceReaderContext.getUserCodeClassLoader();
                     }
                 });
+    }
+
+    private RetryStrategy createExpBackoffRetryStrategy(
+            Duration initialDelay, Duration maxDelay, int maxAttempts) {
+        final BackoffStrategy backoffStrategy =
+                BackoffStrategy.exponentialDelayHalfJitter(initialDelay, maxDelay);
+
+        return StandardRetryStrategy.builder()
+                .backoffStrategy(backoffStrategy)
+                .throttlingBackoffStrategy(backoffStrategy)
+                .maxAttempts(maxAttempts)
+                .retryOnException(
+                        throwable -> {
+                            if (throwable instanceof AwsServiceException) {
+                                AwsServiceException exception = (AwsServiceException) throwable;
+                                return (AwsErrorCode.RETRYABLE_ERROR_CODES.contains(
+                                                exception.awsErrorDetails().errorCode()))
+                                        || (AwsErrorCode.THROTTLING_ERROR_CODES.contains(
+                                                exception.awsErrorDetails().errorCode()));
+                            }
+                            return false;
+                        })
+                .treatAsThrottling(
+                        throwable -> {
+                            if (throwable instanceof AwsServiceException) {
+                                AwsServiceException exception = (AwsServiceException) throwable;
+                                return AwsErrorCode.THROTTLING_ERROR_CODES.contains(
+                                        exception.awsErrorDetails().errorCode());
+                            }
+                            return false;
+                        })
+                .circuitBreakerEnabled(false)
+                .build();
     }
 }

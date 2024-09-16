@@ -52,14 +52,18 @@ class KinesisStreamsSourceReaderTest {
     private KinesisStreamsSourceReader<TestData> sourceReader;
     private MetricListener metricListener;
     private Map<String, KinesisShardMetrics> shardMetricGroupMap;
+    private Configuration sourceConfig;
 
     @BeforeEach
     public void init() {
         metricListener = new MetricListener();
         shardMetricGroupMap = new ConcurrentHashMap<>();
+        sourceConfig = new Configuration();
         StreamProxy testStreamProxy = getTestStreamProxy();
         Supplier<PollingKinesisShardSplitReader> splitReaderSupplier =
-                () -> new PollingKinesisShardSplitReader(testStreamProxy, shardMetricGroupMap);
+                () ->
+                        new PollingKinesisShardSplitReader(
+                                testStreamProxy, shardMetricGroupMap, sourceConfig);
 
         testingReaderContext =
                 KinesisContextProvider.KinesisTestingContext.getKinesisTestingContext(
