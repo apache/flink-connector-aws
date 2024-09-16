@@ -93,13 +93,17 @@ public class KinesisStreamProxy implements StreamProxy {
 
     @Override
     public GetRecordsResponse getRecords(
-            String streamArn, String shardId, StartingPosition startingPosition) {
+            String streamArn,
+            String shardId,
+            StartingPosition startingPosition,
+            int maxRecordsToGet) {
         String shardIterator =
                 shardIdToIteratorStore.computeIfAbsent(
                         shardId, (s) -> getShardIterator(streamArn, s, startingPosition));
 
         try {
-            GetRecordsResponse getRecordsResponse = getRecords(streamArn, shardIterator);
+            GetRecordsResponse getRecordsResponse =
+                    getRecords(streamArn, shardIterator, maxRecordsToGet);
             if (getRecordsResponse.nextShardIterator() != null) {
                 shardIdToIteratorStore.put(shardId, getRecordsResponse.nextShardIterator());
             }
@@ -107,7 +111,8 @@ public class KinesisStreamProxy implements StreamProxy {
         } catch (ExpiredIteratorException e) {
             // Eagerly retry getRecords() if the iterator is expired
             shardIterator = getShardIterator(streamArn, shardId, startingPosition);
-            GetRecordsResponse getRecordsResponse = getRecords(streamArn, shardIterator);
+            GetRecordsResponse getRecordsResponse =
+                    getRecords(streamArn, shardIterator, maxRecordsToGet);
             if (getRecordsResponse.nextShardIterator() != null) {
                 shardIdToIteratorStore.put(shardId, getRecordsResponse.nextShardIterator());
             }
@@ -152,11 +157,13 @@ public class KinesisStreamProxy implements StreamProxy {
         return kinesisClient.getShardIterator(requestBuilder.build()).shardIterator();
     }
 
-    private GetRecordsResponse getRecords(String streamArn, String shardIterator) {
+    private GetRecordsResponse getRecords(
+            String streamArn, String shardIterator, int maxRecordsToGet) {
         return kinesisClient.getRecords(
                 GetRecordsRequest.builder()
                         .streamARN(streamArn)
                         .shardIterator(shardIterator)
+                        .limit(maxRecordsToGet)
                         .build());
     }
 

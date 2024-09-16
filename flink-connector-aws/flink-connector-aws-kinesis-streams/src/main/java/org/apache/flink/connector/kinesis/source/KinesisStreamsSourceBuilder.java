@@ -20,11 +20,15 @@ package org.apache.flink.connector.kinesis.source;
 
 import org.apache.flink.annotation.Experimental;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
+import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions;
 import org.apache.flink.connector.kinesis.source.enumerator.KinesisShardAssigner;
 import org.apache.flink.connector.kinesis.source.enumerator.assigner.ShardAssignerFactory;
 import org.apache.flink.connector.kinesis.source.enumerator.assigner.UniformShardAssigner;
 import org.apache.flink.connector.kinesis.source.serialization.KinesisDeserializationSchema;
+
+import java.time.Duration;
 
 /**
  * Builder to construct the {@link KinesisStreamsSource}.
@@ -52,10 +56,17 @@ import org.apache.flink.connector.kinesis.source.serialization.KinesisDeserializ
 @Experimental
 public class KinesisStreamsSourceBuilder<T> {
     private String streamArn;
-    private Configuration sourceConfig;
     private KinesisDeserializationSchema<T> deserializationSchema;
     private KinesisShardAssigner kinesisShardAssigner = ShardAssignerFactory.uniformShardAssigner();
     private boolean preserveShardOrder = true;
+    private Duration retryStrategyMinDelay;
+    private Duration retryStrategyMaxDelay;
+    private Integer retryStrategyMaxAttempts;
+    private final Configuration configuration;
+
+    public KinesisStreamsSourceBuilder() {
+        this.configuration = new Configuration();
+    }
 
     public KinesisStreamsSourceBuilder<T> setStreamArn(String streamArn) {
         this.streamArn = streamArn;
@@ -63,7 +74,7 @@ public class KinesisStreamsSourceBuilder<T> {
     }
 
     public KinesisStreamsSourceBuilder<T> setSourceConfig(Configuration sourceConfig) {
-        this.sourceConfig = sourceConfig;
+        this.configuration.addAll(sourceConfig);
         return this;
     }
 
@@ -90,12 +101,47 @@ public class KinesisStreamsSourceBuilder<T> {
         return this;
     }
 
+    public KinesisStreamsSourceBuilder<T> setRetryStrategyMinDelay(Duration retryStrategyMinDelay) {
+        this.retryStrategyMinDelay = retryStrategyMinDelay;
+        return this;
+    }
+
+    public KinesisStreamsSourceBuilder<T> setRetryStrategyMaxDelay(Duration retryStrategyMaxDelay) {
+        this.retryStrategyMaxDelay = retryStrategyMaxDelay;
+        return this;
+    }
+
+    public KinesisStreamsSourceBuilder<T> setRetryStrategyMaxAttempts(
+            Integer retryStrategyMaxAttempts) {
+        this.retryStrategyMaxAttempts = retryStrategyMaxAttempts;
+        return this;
+    }
+
     public KinesisStreamsSource<T> build() {
+        setSourceConfigurations();
         return new KinesisStreamsSource<>(
                 streamArn,
-                sourceConfig,
+                configuration,
                 deserializationSchema,
                 kinesisShardAssigner,
                 preserveShardOrder);
+    }
+
+    private void setSourceConfigurations() {
+        overrideIfExists(
+                KinesisSourceConfigOptions.RETRY_STRATEGY_MIN_DELAY_OPTION,
+                this.retryStrategyMinDelay);
+        overrideIfExists(
+                KinesisSourceConfigOptions.RETRY_STRATEGY_MAX_DELAY_OPTION,
+                this.retryStrategyMaxDelay);
+        overrideIfExists(
+                KinesisSourceConfigOptions.RETRY_STRATEGY_MAX_ATTEMPTS_OPTION,
+                this.retryStrategyMaxAttempts);
+    }
+
+    private <E> void overrideIfExists(ConfigOption<E> configOption, E value) {
+        if (value != null) {
+            this.configuration.set(configOption, value);
+        }
     }
 }
