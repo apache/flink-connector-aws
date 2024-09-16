@@ -80,10 +80,9 @@ public class KinesisStreamsSourceConfigConstants {
             ConfigOptions.key("efo.consumer.lifecycle")
                     .enumType(ConsumerLifecycle.class)
                     .defaultValue(ConsumerLifecycle.JOB_MANAGED)
-                    .withDescription("Setting to control whether the lifecycle of EFO consumer is managed by the Flink job. If JOB_MANAGED, then the Flink job will register the consumer on startup and deregister it on shutdown.");
+                    .withDescription(
+                            "Setting to control whether the lifecycle of EFO consumer is managed by the Flink job. If JOB_MANAGED, then the Flink job will register the consumer on startup and deregister it on shutdown.");
 
     public static final ConfigOption<String> EFO_CONSUMER_NAME =
-            ConfigOptions.key("efo.consumer.name")
-                    .stringType()
-                    .noDefaultValue();
+            ConfigOptions.key("efo.consumer.name").stringType().noDefaultValue();
 }

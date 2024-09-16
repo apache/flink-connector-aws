@@ -184,32 +184,43 @@ public class KinesisStreamsSourceEnumerator
         streamProxy.close();
     }
 
-    private void efoConsumerStartSetup(Configuration sourceConfig, StreamConsumerRegistrar streamConsumerRegistrar, StreamProxy streamProxy, String streamArn) {
+    private void efoConsumerStartSetup(
+            Configuration sourceConfig,
+            StreamConsumerRegistrar streamConsumerRegistrar,
+            StreamProxy streamProxy,
+            String streamArn) {
         if (sourceConfig.get(READER_TYPE) != EFO) {
             return;
         }
 
         String consumerName = sourceConfig.get(EFO_CONSUMER_NAME);
-        Preconditions.checkNotNull(consumerName, "For EFO reader type, EFO consumer name must be specified.");
-        Preconditions.checkArgument(!consumerName.isEmpty(), "For EFO reader type, EFO consumer name cannot be empty.");
+        Preconditions.checkNotNull(
+                consumerName, "For EFO reader type, EFO consumer name must be specified.");
+        Preconditions.checkArgument(
+                !consumerName.isEmpty(), "For EFO reader type, EFO consumer name cannot be empty.");
 
         if (sourceConfig.get(EFO_CONSUMER_LIFECYCLE) == JOB_MANAGED) {
             try {
                 streamConsumerRegistrar.registerStreamConsumer(streamArn, consumerName);
             } catch (ResourceInUseException e) {
-                LOG.warn("Found existing consumer {} on stream {}. Proceeding to read from consumer.", consumerName, streamArn, e);
+                LOG.warn(
+                        "Found existing consumer {} on stream {}. Proceeding to read from consumer.",
+                        consumerName,
+                        streamArn,
+                        e);
             }
         } else {
             // This helps the job to fail fast if the EFO consumer requested does not exist.
-            DescribeStreamConsumerResponse response = streamProxy.describeStreamConsumer(streamArn, consumerName);
+            DescribeStreamConsumerResponse response =
+                    streamProxy.describeStreamConsumer(streamArn, consumerName);
             LOG.info("Discovered stream consumer - {}", response);
         }
     }
 
-
-
-    private void efoConsumerCleanup(Configuration sourceConfig, StreamConsumerRegistrar streamConsumerRegistrar) {
-        if (sourceConfig.get(READER_TYPE) == EFO && sourceConfig.get(EFO_CONSUMER_LIFECYCLE) == JOB_MANAGED) {
+    private void efoConsumerCleanup(
+            Configuration sourceConfig, StreamConsumerRegistrar streamConsumerRegistrar) {
+        if (sourceConfig.get(READER_TYPE) == EFO
+                && sourceConfig.get(EFO_CONSUMER_LIFECYCLE) == JOB_MANAGED) {
             streamConsumerRegistrar.deregisterStreamConsumer();
         }
     }

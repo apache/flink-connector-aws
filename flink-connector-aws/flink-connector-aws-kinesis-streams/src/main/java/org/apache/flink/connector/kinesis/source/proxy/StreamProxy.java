@@ -72,7 +72,8 @@ public interface StreamProxy extends Closeable {
      * @param consumerName the consumerName
      * @return the register stream consumer response
      */
-    RegisterStreamConsumerResponse registerStreamConsumer(final String streamArn, final String consumerName);
+    RegisterStreamConsumerResponse registerStreamConsumer(
+            final String streamArn, final String consumerName);
 
     /**
      * De-registers an enhanced fan-out consumer against the stream.
@@ -83,11 +84,12 @@ public interface StreamProxy extends Closeable {
     DeregisterStreamConsumerResponse deregisterStreamConsumer(final String consumerArn);
 
     /**
-     * Describe stream consumer
+     * Describe stream consumer.
      *
      * @param streamArn the ARN of the Kinesis stream
      * @param consumerName the name of the Kinesis consumer
      * @return the describe stream consumer response
      */
-    DescribeStreamConsumerResponse describeStreamConsumer(final String streamArn, final String consumerName);
+    DescribeStreamConsumerResponse describeStreamConsumer(
+            final String streamArn, final String consumerName);
 }

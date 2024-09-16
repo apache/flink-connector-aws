@@ -17,19 +17,24 @@ public class KinesisAsyncStreamProxy implements AsyncStreamProxy {
     private final KinesisAsyncClient kinesisAsyncClient;
     private final SdkAsyncHttpClient asyncHttpClient;
 
-    public KinesisAsyncStreamProxy(KinesisAsyncClient kinesisAsyncClient, SdkAsyncHttpClient asyncHttpClient) {
+    public KinesisAsyncStreamProxy(
+            KinesisAsyncClient kinesisAsyncClient, SdkAsyncHttpClient asyncHttpClient) {
         this.kinesisAsyncClient = kinesisAsyncClient;
         this.asyncHttpClient = asyncHttpClient;
     }
 
-
     @Override
-    public CompletableFuture<Void> subscribeToShard(String consumerArn, String shardId, StartingPosition startingPosition, SubscribeToShardResponseHandler responseHandler) {
-        SubscribeToShardRequest request = SubscribeToShardRequest.builder()
-                .consumerARN(consumerArn)
-                .shardId(shardId)
-                .startingPosition(startingPosition.getSdkStartingPosition())
-                .build();
+    public CompletableFuture<Void> subscribeToShard(
+            String consumerArn,
+            String shardId,
+            StartingPosition startingPosition,
+            SubscribeToShardResponseHandler responseHandler) {
+        SubscribeToShardRequest request =
+                SubscribeToShardRequest.builder()
+                        .consumerARN(consumerArn)
+                        .shardId(shardId)
+                        .startingPosition(startingPosition.getSdkStartingPosition())
+                        .build();
         return kinesisAsyncClient.subscribeToShard(request, responseHandler);
     }
 

@@ -129,7 +129,8 @@ public abstract class KinesisShardSplitReaderBase
      * Main method implementations must implement to fetch records from Kinesis.
      *
      * @param splitState split to fetch records for
-     * @return RecordBatch containing the fetched records and metadata. Returns null if there are no records but fetching should be retried at a later time.
+     * @return RecordBatch containing the fetched records and metadata. Returns null if there are no
+     *     records but fetching should be retried at a later time.
      */
     protected abstract RecordBatch fetchRecords(KinesisShardSplitState splitState);
 

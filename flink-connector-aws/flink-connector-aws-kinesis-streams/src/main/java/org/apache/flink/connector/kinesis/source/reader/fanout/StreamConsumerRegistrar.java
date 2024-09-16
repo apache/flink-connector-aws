@@ -18,16 +18,13 @@
 package org.apache.flink.connector.kinesis.source.reader.fanout;
 
 import org.apache.flink.annotation.Internal;
-import org.apache.flink.connector.kinesis.source.proxy.KinesisStreamProxy;
 import org.apache.flink.connector.kinesis.source.proxy.StreamProxy;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.model.RegisterStreamConsumerResponse;
 
-/**
- * Responsible for registering and deregistering EFO stream consumers.
- */
+/** Responsible for registering and deregistering EFO stream consumers. */
 @Internal
 public class StreamConsumerRegistrar {
 
@@ -42,7 +39,8 @@ public class StreamConsumerRegistrar {
     }
 
     /**
-     * Register stream consumer against specified stream. Method does not wait until consumer to become active.
+     * Register stream consumer against specified stream. Method does not wait until consumer to
+     * become active.
      *
      * @param streamArn Kinesis stream to register consumer against.
      * @param streamConsumerName stream consumer name
@@ -50,20 +48,24 @@ public class StreamConsumerRegistrar {
      */
     public String registerStreamConsumer(final String streamArn, final String streamConsumerName) {
         LOG.info("Registering stream consumer - {}::{}", streamArn, streamConsumerName);
-        RegisterStreamConsumerResponse response = kinesisStreamProxy.registerStreamConsumer(streamArn, streamConsumerName);
+        RegisterStreamConsumerResponse response =
+                kinesisStreamProxy.registerStreamConsumer(streamArn, streamConsumerName);
         consumerArn = response.consumer().consumerARN();
-        LOG.info("Registered stream consumer - {}::{}", streamArn, response.consumer().consumerARN());
+        LOG.info(
+                "Registered stream consumer - {}::{}",
+                streamArn,
+                response.consumer().consumerARN());
         return consumerArn;
     }
 
     public void deregisterStreamConsumer() {
         LOG.info("De-registering stream consumer - {}", consumerArn);
         if (consumerArn == null) {
-            LOG.warn("Unable to deregister stream consumer as there was no consumer ARN stored in the StreamConsumerRegistrar. There may be leaked EFO consumers on the Kinesis stream.");
+            LOG.warn(
+                    "Unable to deregister stream consumer as there was no consumer ARN stored in the StreamConsumerRegistrar. There may be leaked EFO consumers on the Kinesis stream.");
             return;
         }
         kinesisStreamProxy.deregisterStreamConsumer(consumerArn);
         LOG.info("De-registered stream consumer - {}", consumerArn);
     }
-
 }

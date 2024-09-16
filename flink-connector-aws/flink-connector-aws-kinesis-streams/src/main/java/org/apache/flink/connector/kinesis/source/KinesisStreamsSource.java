@@ -144,7 +144,8 @@ public class KinesisStreamsSource<T>
         KinesisStreamsRecordEmitter<T> recordEmitter =
                 new KinesisStreamsRecordEmitter<>(deserializationSchema);
         return new KinesisStreamsSourceReader<>(
-                new SingleThreadFetcherManager<>(getKinesisShardSplitReaderSupplier(sourceConfig, shardMetricGroupMap)),
+                new SingleThreadFetcherManager<>(
+                        getKinesisShardSplitReaderSupplier(sourceConfig, shardMetricGroupMap)),
                 recordEmitter,
                 sourceConfig,
                 readerContext,
@@ -185,8 +186,7 @@ public class KinesisStreamsSource<T>
     }
 
     private Supplier<SplitReader<Record, KinesisShardSplit>> getKinesisShardSplitReaderSupplier(
-            Configuration sourceConfig,
-            Map<String, KinesisShardMetrics> shardMetricGroupMap) {
+            Configuration sourceConfig, Map<String, KinesisShardMetrics> shardMetricGroupMap) {
         KinesisStreamsSourceConfigConstants.ReaderType readerType = sourceConfig.get(READER_TYPE);
         switch (readerType) {
             case POLLING:
@@ -198,45 +198,64 @@ public class KinesisStreamsSource<T>
         }
     }
 
-    private Supplier<SplitReader<Record, KinesisShardSplit>> getPollingKinesisShardSplitReaderSupplier(
-            Configuration sourceConfig,
-            Map<String, KinesisShardMetrics> shardMetricGroupMap) {
-        // We create a new stream proxy for each split reader since they have their own independent lifecycle.
-        return () -> new PollingKinesisShardSplitReader(
-                createKinesisStreamProxy(sourceConfig), shardMetricGroupMap);
+    private Supplier<SplitReader<Record, KinesisShardSplit>>
+            getPollingKinesisShardSplitReaderSupplier(
+                    Configuration sourceConfig,
+                    Map<String, KinesisShardMetrics> shardMetricGroupMap) {
+        // We create a new stream proxy for each split reader since they have their own independent
+        // lifecycle.
+        return () ->
+                new PollingKinesisShardSplitReader(
+                        createKinesisStreamProxy(sourceConfig), shardMetricGroupMap);
     }
 
-    private Supplier<SplitReader<Record, KinesisShardSplit>> getFanOutKinesisShardSplitReaderSupplier(
-            Configuration sourceConfig,
-            Map<String, KinesisShardMetrics> shardMetricGroupMap) {
+    private Supplier<SplitReader<Record, KinesisShardSplit>>
+            getFanOutKinesisShardSplitReaderSupplier(
+                    Configuration sourceConfig,
+                    Map<String, KinesisShardMetrics> shardMetricGroupMap) {
         String consumerArn = getConsumerArn(streamArn, sourceConfig.get(EFO_CONSUMER_NAME));
 
-        // We create a new stream proxy for each split reader since they have their own independent lifecycle.
-        return () -> new FanOutKinesisShardSplitReader(createKinesisAsyncStreamProxy(sourceConfig), consumerArn, shardMetricGroupMap);
+        // We create a new stream proxy for each split reader since they have their own independent
+        // lifecycle.
+        return () ->
+                new FanOutKinesisShardSplitReader(
+                        createKinesisAsyncStreamProxy(sourceConfig),
+                        consumerArn,
+                        shardMetricGroupMap);
     }
 
     private String getConsumerArn(final String streamArn, final String consumerName) {
         try (StreamProxy streamProxy = createKinesisStreamProxy(sourceConfig)) {
-            DescribeStreamConsumerResponse response = streamProxy.describeStreamConsumer(streamArn, consumerName);
+            DescribeStreamConsumerResponse response =
+                    streamProxy.describeStreamConsumer(streamArn, consumerName);
             return response.consumerDescription().consumerARN();
         } catch (IOException e) {
-            throw new KinesisStreamsSourceException("Unable to lookup consumer ARN for stream " + streamArn + " and consumer " + consumerName, e);
+            throw new KinesisStreamsSourceException(
+                    "Unable to lookup consumer ARN for stream "
+                            + streamArn
+                            + " and consumer "
+                            + consumerName,
+                    e);
         }
     }
 
     private KinesisAsyncStreamProxy createKinesisAsyncStreamProxy(Configuration consumerConfig) {
-        SdkAsyncHttpClient asyncHttpClient = AWSGeneralUtil.createAsyncHttpClient(AttributeMap.builder().build(), NettyNioAsyncHttpClient.builder());
-        String region = AWSGeneralUtil.getRegionFromArn(streamArn)
-                .orElseThrow(
-                        () ->
-                                new IllegalStateException(
-                                        "Unable to determine region from stream arn"));
+        SdkAsyncHttpClient asyncHttpClient =
+                AWSGeneralUtil.createAsyncHttpClient(
+                        AttributeMap.builder().build(), NettyNioAsyncHttpClient.builder());
+        String region =
+                AWSGeneralUtil.getRegionFromArn(streamArn)
+                        .orElseThrow(
+                                () ->
+                                        new IllegalStateException(
+                                                "Unable to determine region from stream arn"));
         Properties kinesisClientProperties = new Properties();
         sourceConfig.addAllToProperties(kinesisClientProperties);
         kinesisClientProperties.put(AWSConfigConstants.AWS_REGION, region);
 
         KinesisAsyncClient kinesisAsyncClient =
-                AWSClientUtil.createAwsAsyncClient(kinesisClientProperties,
+                AWSClientUtil.createAwsAsyncClient(
+                        kinesisClientProperties,
                         asyncHttpClient,
                         KinesisAsyncClient.builder(),
                         KinesisStreamsConfigConstants.BASE_KINESIS_USER_AGENT_PREFIX_FORMAT,

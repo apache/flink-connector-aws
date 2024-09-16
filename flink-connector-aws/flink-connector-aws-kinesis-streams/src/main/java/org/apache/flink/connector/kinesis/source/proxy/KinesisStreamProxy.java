@@ -169,28 +169,30 @@ public class KinesisStreamProxy implements StreamProxy {
     // Enhanced Fan-Out Consumer - related methods
 
     @Override
-    public RegisterStreamConsumerResponse registerStreamConsumer(String streamArn, String consumerName) {
-        return kinesisClient.registerStreamConsumer(RegisterStreamConsumerRequest.builder()
+    public RegisterStreamConsumerResponse registerStreamConsumer(
+            String streamArn, String consumerName) {
+        return kinesisClient.registerStreamConsumer(
+                RegisterStreamConsumerRequest.builder()
                         .streamARN(streamArn)
                         .consumerName(consumerName)
-                .build());
+                        .build());
     }
 
     @Override
     public DeregisterStreamConsumerResponse deregisterStreamConsumer(String consumerArn) {
-        return kinesisClient.deregisterStreamConsumer(DeregisterStreamConsumerRequest.builder()
-                .consumerARN(consumerArn)
-                .build());
+        return kinesisClient.deregisterStreamConsumer(
+                DeregisterStreamConsumerRequest.builder().consumerARN(consumerArn).build());
     }
 
     @Override
-    public DescribeStreamConsumerResponse describeStreamConsumer(String streamArn, String consumerName) {
-        return kinesisClient.describeStreamConsumer(DescribeStreamConsumerRequest.builder()
+    public DescribeStreamConsumerResponse describeStreamConsumer(
+            String streamArn, String consumerName) {
+        return kinesisClient.describeStreamConsumer(
+                DescribeStreamConsumerRequest.builder()
                         .streamARN(streamArn)
                         .consumerName(consumerName)
-                .build());
+                        .build());
     }
-
 
     @Override
     public void close() throws IOException {

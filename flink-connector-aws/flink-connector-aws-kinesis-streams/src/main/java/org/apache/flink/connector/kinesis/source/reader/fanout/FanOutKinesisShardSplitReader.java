@@ -42,7 +42,10 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
 
     private final Map<String, FanOutKinesisShardSubscription> splitSubscriptions = new HashMap<>();
 
-    public FanOutKinesisShardSplitReader(KinesisAsyncStreamProxy asyncStreamProxy, String consumerArn, Map<String, KinesisShardMetrics> shardMetricGroupMap) {
+    public FanOutKinesisShardSplitReader(
+            KinesisAsyncStreamProxy asyncStreamProxy,
+            String consumerArn,
+            Map<String, KinesisShardMetrics> shardMetricGroupMap) {
         super(shardMetricGroupMap);
         this.asyncStreamProxy = asyncStreamProxy;
         this.consumerArn = consumerArn;
@@ -50,7 +53,8 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
 
     @Override
     protected RecordBatch fetchRecords(KinesisShardSplitState splitState) {
-        FanOutKinesisShardSubscription subscription = splitSubscriptions.get(splitState.getShardId());
+        FanOutKinesisShardSubscription subscription =
+                splitSubscriptions.get(splitState.getShardId());
 
         SubscribeToShardEvent event = subscription.nextEvent();
         if (event == null) {
@@ -68,13 +72,17 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
     public void handleSplitsChanges(SplitsChange<KinesisShardSplit> splitsChanges) {
         super.handleSplitsChanges(splitsChanges);
         for (KinesisShardSplit split : splitsChanges.splits()) {
-            FanOutKinesisShardSubscription subscription = new FanOutKinesisShardSubscription(asyncStreamProxy, consumerArn, split.getShardId(), split.getStartingPosition());
+            FanOutKinesisShardSubscription subscription =
+                    new FanOutKinesisShardSubscription(
+                            asyncStreamProxy,
+                            consumerArn,
+                            split.getShardId(),
+                            split.getStartingPosition());
             subscription.activateSubscription();
             splitSubscriptions.put(split.splitId(), subscription);
         }
     }
 
     @Override
-    public void close() throws Exception {
-    }
+    public void close() throws Exception {}
 }
