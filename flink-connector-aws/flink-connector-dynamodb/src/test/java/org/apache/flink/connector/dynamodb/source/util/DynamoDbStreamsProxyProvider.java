@@ -58,7 +58,6 @@ public class DynamoDbStreamsProxyProvider {
         // List shards configuration
         private final List<Shard> shards = new ArrayList<>();
         private Supplier<Exception> listShardsExceptionSupplier;
-        private String lastProvidedLastSeenShardId;
 
         // GetRecords configuration
         private Supplier<RuntimeException> getRecordsExceptionSupplier;
@@ -68,8 +67,6 @@ public class DynamoDbStreamsProxyProvider {
 
         @Override
         public ListShardsResult listShards(String streamArn, @Nullable String lastSeenShardId) {
-            this.lastProvidedLastSeenShardId = lastSeenShardId;
-
             if (listShardsExceptionSupplier != null) {
                 try {
                     throw listShardsExceptionSupplier.get();
@@ -79,7 +76,16 @@ public class DynamoDbStreamsProxyProvider {
             }
 
             ListShardsResult listShardsResult = new ListShardsResult();
-            List<Shard> results = new ArrayList<>(shards);
+            List<Shard> results =
+                    shards.stream()
+                            .filter(
+                                    shard -> {
+                                        if (lastSeenShardId == null) {
+                                            return true;
+                                        }
+                                        return shard.shardId().compareTo(lastSeenShardId) > 0;
+                                    })
+                            .collect(Collectors.toList());
             listShardsResult.addShards(results);
             return listShardsResult;
         }

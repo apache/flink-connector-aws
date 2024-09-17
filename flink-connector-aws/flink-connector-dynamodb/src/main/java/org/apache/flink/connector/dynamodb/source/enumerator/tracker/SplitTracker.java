@@ -30,6 +30,7 @@ import org.apache.flink.connector.dynamodb.source.util.ShardUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.services.dynamodb.model.SequenceNumberRange;
 import software.amazon.awssdk.services.dynamodb.model.Shard;
 
 import java.util.Collection;
@@ -185,7 +186,8 @@ public class SplitTracker {
                             if (!parentChildSplitMap.containsKey(splitId)) {
                                 LOG.warn(
                                         "splitId: {} is not present in parent-child relationship map. "
-                                                + "This indicates that there might be some data loss in the application",
+                                                + "This indicates that either there might be some data loss in the "
+                                                + "application or the child shard hasn't been discovered yet",
                                         splitId);
                             }
                             return parentChildSplitMap.containsKey(splitId);
@@ -248,6 +250,24 @@ public class SplitTracker {
     @VisibleForTesting
     public Set<String> getKnownSplitIds() {
         return knownSplits.keySet();
+    }
+
+    public List<Shard> getKnownShards() {
+        return knownSplits
+                .values()
+                .parallelStream()
+                .filter(
+                        split ->
+                                !ShardUtils.isShardOlderThanInconsistencyDetectionRetentionPeriod(
+                                        split.splitId()))
+                .map(
+                        split ->
+                                Shard.builder()
+                                        .shardId(split.splitId())
+                                        .parentShardId(split.getParentShardId())
+                                        .sequenceNumberRange(SequenceNumberRange.builder().build())
+                                        .build())
+                .collect(Collectors.toList());
     }
 
     /**

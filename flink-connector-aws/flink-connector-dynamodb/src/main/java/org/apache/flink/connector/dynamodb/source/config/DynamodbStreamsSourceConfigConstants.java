@@ -45,6 +45,12 @@ public class DynamodbStreamsSourceConfigConstants {
                     .defaultValue(Duration.ofSeconds(60))
                     .withDescription("The interval between each attempt to discover new shards.");
 
+    public static final ConfigOption<Duration> INCREMENTAL_SHARD_DISCOVERY_INTERVAL =
+            ConfigOptions.key("flink.shard.incremental.discovery.intervalmillis")
+                    .durationType()
+                    .defaultValue(Duration.ofSeconds(60))
+                    .withDescription("The interval between each attempt to discover new shards.");
+
     public static final ConfigOption<Integer> DESCRIBE_STREAM_INCONSISTENCY_RESOLUTION_RETRY_COUNT =
             ConfigOptions.key("flink.describestream.inconsistencyresolution.retries")
                     .intType()

@@ -36,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 public class SplitGraphInconsistencyTrackerTest {
     @Test
-    public void testShardGraphTrackerHappyCase() {
+    public void testSplitGraphInconsistencyTrackerHappyCase() {
         List<Shard> shards =
                 Arrays.asList(
                         // shards which don't have a parent
@@ -51,6 +51,16 @@ public class SplitGraphInconsistencyTrackerTest {
         assertThat(splitGraphInconsistencyTracker.inconsistencyDetected()).isFalse();
         assertThat(splitGraphInconsistencyTracker.getNodes())
                 .containsExactlyInAnyOrderElementsOf(shards);
+        assertThat(splitGraphInconsistencyTracker.getLatestLeafNode())
+                .isEqualTo(generateShardId(3));
+    }
+
+    @Test
+    public void testSplitGraphInconsistencyTrackerWhenThereIsNoShardTracked() {
+        SplitGraphInconsistencyTracker splitGraphInconsistencyTracker =
+                new SplitGraphInconsistencyTracker();
+        assertThat(splitGraphInconsistencyTracker.inconsistencyDetected()).isFalse();
+        assertThat(splitGraphInconsistencyTracker.getLatestLeafNode()).isEqualTo(null);
     }
 
     @Test
@@ -73,6 +83,8 @@ public class SplitGraphInconsistencyTrackerTest {
                 .isEqualTo(generateShardId(secondShardIdTimestamp));
         assertThat(splitGraphInconsistencyTracker.getNodes())
                 .containsExactlyInAnyOrderElementsOf(shards);
+        assertThat(splitGraphInconsistencyTracker.getLatestLeafNode())
+                .isEqualTo(generateShardId(secondShardIdTimestamp));
     }
 
     @Test
@@ -92,5 +104,7 @@ public class SplitGraphInconsistencyTrackerTest {
         assertThat(splitGraphInconsistencyTracker.inconsistencyDetected()).isFalse();
         assertThat(splitGraphInconsistencyTracker.getNodes())
                 .containsExactlyInAnyOrder(shards.get(0), shards.get(2));
+        assertThat(splitGraphInconsistencyTracker.getLatestLeafNode())
+                .isEqualTo(generateShardId(secondShardIdTimestamp));
     }
 }

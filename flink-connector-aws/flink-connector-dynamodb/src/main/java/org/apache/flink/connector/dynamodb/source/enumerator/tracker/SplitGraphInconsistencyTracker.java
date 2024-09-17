@@ -40,6 +40,7 @@ import java.util.TreeSet;
  */
 public class SplitGraphInconsistencyTracker {
     private final TreeSet<String> closedLeafNodes;
+    private final TreeSet<String> leafNodes;
     private final Map<String, Shard> nodes;
     private static final Logger LOG =
             LoggerFactory.getLogger(DynamoDbStreamsSourceEnumerator.class);
@@ -47,6 +48,7 @@ public class SplitGraphInconsistencyTracker {
     public SplitGraphInconsistencyTracker() {
         nodes = new HashMap<>();
         closedLeafNodes = new TreeSet<>();
+        leafNodes = new TreeSet<>();
     }
 
     /**
@@ -68,11 +70,13 @@ public class SplitGraphInconsistencyTracker {
     private void removeParentFromClosedLeafNodes(Shard shard) {
         if (shard.parentShardId() != null) {
             closedLeafNodes.remove(shard.parentShardId());
+            leafNodes.remove(shard.parentShardId());
         }
     }
 
     private void addNode(Shard shard) {
         nodes.put(shard.shardId(), shard);
+        leafNodes.add(shard.shardId());
         if (shard.sequenceNumberRange().endingSequenceNumber() != null) {
             closedLeafNodes.add(shard.shardId());
         }
@@ -99,6 +103,13 @@ public class SplitGraphInconsistencyTracker {
 
     public String getEarliestClosedLeafNode() {
         return closedLeafNodes.first();
+    }
+
+    public String getLatestLeafNode() {
+        if (leafNodes.isEmpty()) {
+            return null;
+        }
+        return leafNodes.last();
     }
 
     public Collection<Shard> getNodes() {
