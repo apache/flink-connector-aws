@@ -25,6 +25,7 @@ import org.apache.flink.connector.kinesis.source.event.SplitsFinishedEvent;
 import org.apache.flink.connector.kinesis.source.metrics.KinesisShardMetrics;
 import org.apache.flink.connector.kinesis.source.model.TestData;
 import org.apache.flink.connector.kinesis.source.proxy.StreamProxy;
+import org.apache.flink.connector.kinesis.source.reader.polling.PollingKinesisShardSplitReader;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplitState;
 import org.apache.flink.connector.kinesis.source.util.KinesisContextProvider;

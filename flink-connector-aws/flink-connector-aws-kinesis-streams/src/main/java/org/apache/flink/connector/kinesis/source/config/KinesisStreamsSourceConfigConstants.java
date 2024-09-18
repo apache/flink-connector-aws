@@ -32,6 +32,18 @@ public class KinesisStreamsSourceConfigConstants {
         AT_TIMESTAMP
     }
 
+    /** Defines mechanism used to consume records from Kinesis stream. */
+    public enum ReaderType {
+        POLLING,
+        EFO
+    }
+
+    /** Defines lifecycle management of EFO consumer on Kinesis stream. */
+    public enum ConsumerLifecycle {
+        JOB_MANAGED,
+        SELF_MANAGED
+    }
+
     public static final ConfigOption<InitialPosition> STREAM_INITIAL_POSITION =
             ConfigOptions.key("flink.stream.initpos")
                     .enumType(InitialPosition.class)
@@ -57,4 +69,20 @@ public class KinesisStreamsSourceConfigConstants {
                     .longType()
                     .defaultValue(10000L)
                     .withDescription("The interval between each attempt to discover new shards.");
+
+    public static final ConfigOption<ReaderType> READER_TYPE =
+            ConfigOptions.key("type")
+                    .enumType(ReaderType.class)
+                    .defaultValue(ReaderType.POLLING)
+                    .withDescription("The type of reader used to read from the Kinesis stream.");
+
+    public static final ConfigOption<ConsumerLifecycle> EFO_CONSUMER_LIFECYCLE =
+            ConfigOptions.key("efo.consumer.lifecycle")
+                    .enumType(ConsumerLifecycle.class)
+                    .defaultValue(ConsumerLifecycle.JOB_MANAGED)
+                    .withDescription(
+                            "Setting to control whether the lifecycle of EFO consumer is managed by the Flink job. If JOB_MANAGED, then the Flink job will register the consumer on startup and deregister it on shutdown.");
+
+    public static final ConfigOption<String> EFO_CONSUMER_NAME =
+            ConfigOptions.key("efo.consumer.name").stringType().noDefaultValue();
 }

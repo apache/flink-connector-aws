@@ -24,9 +24,12 @@ import org.apache.flink.connector.kinesis.source.split.StartingPosition;
 
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
+import software.amazon.awssdk.services.kinesis.model.DeregisterStreamConsumerResponse;
+import software.amazon.awssdk.services.kinesis.model.DescribeStreamConsumerResponse;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.awssdk.services.kinesis.model.HashKeyRange;
 import software.amazon.awssdk.services.kinesis.model.Record;
+import software.amazon.awssdk.services.kinesis.model.RegisterStreamConsumerResponse;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.awssdk.services.kinesis.model.ShardFilter;
 import software.amazon.awssdk.services.kinesis.model.ShardFilterType;
@@ -133,6 +136,23 @@ public class KinesisStreamProxyProvider {
                     .nextShardIterator(shouldCompleteNextShard ? null : "some-shard-iterator")
                     .millisBehindLatest(TestUtil.MILLIS_BEHIND_LATEST_TEST_VALUE)
                     .build();
+        }
+
+        @Override
+        public RegisterStreamConsumerResponse registerStreamConsumer(
+                String streamArn, String consumerName) {
+            return null;
+        }
+
+        @Override
+        public DeregisterStreamConsumerResponse deregisterStreamConsumer(String consumerArn) {
+            return null;
+        }
+
+        @Override
+        public DescribeStreamConsumerResponse describeStreamConsumer(
+                String streamArn, String consumerName) {
+            return null;
         }
 
         public void setStreamSummary(Instant creationTimestamp, int retentionPeriodHours) {

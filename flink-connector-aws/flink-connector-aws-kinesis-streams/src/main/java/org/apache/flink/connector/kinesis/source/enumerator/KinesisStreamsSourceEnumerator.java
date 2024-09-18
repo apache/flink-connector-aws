@@ -32,12 +32,16 @@ import org.apache.flink.connector.kinesis.source.event.SplitsFinishedEvent;
 import org.apache.flink.connector.kinesis.source.exception.KinesisStreamsSourceException;
 import org.apache.flink.connector.kinesis.source.proxy.ListShardsStartingPosition;
 import org.apache.flink.connector.kinesis.source.proxy.StreamProxy;
+import org.apache.flink.connector.kinesis.source.reader.fanout.StreamConsumerRegistrar;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.connector.kinesis.source.split.StartingPosition;
+import org.apache.flink.util.Preconditions;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.services.kinesis.model.DescribeStreamConsumerResponse;
 import software.amazon.awssdk.services.kinesis.model.InvalidArgumentException;
+import software.amazon.awssdk.services.kinesis.model.ResourceInUseException;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.awssdk.services.kinesis.model.StreamDescriptionSummary;
 
@@ -56,6 +60,11 @@ import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.ConsumerLifecycle.JOB_MANAGED;
+import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.EFO_CONSUMER_LIFECYCLE;
+import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.EFO_CONSUMER_NAME;
+import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.READER_TYPE;
+import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.ReaderType.EFO;
 import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.SHARD_DISCOVERY_INTERVAL_MILLIS;
 import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.STREAM_INITIAL_POSITION;
 import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigUtil.parseStreamTimestampStartingPosition;
@@ -81,6 +90,7 @@ public class KinesisStreamsSourceEnumerator
     private final Map<Integer, Set<KinesisShardSplit>> splitAssignment = new HashMap<>();
 
     private String lastSeenShardId;
+    private StreamConsumerRegistrar streamConsumerRegistrar;
 
     public KinesisStreamsSourceEnumerator(
             SplitEnumeratorContext<KinesisShardSplit> context,
@@ -103,10 +113,17 @@ public class KinesisStreamsSourceEnumerator
             this.lastSeenShardId = state.getLastSeenShardId();
             this.splitTracker = new SplitTracker(preserveShardOrder, state.getKnownSplits());
         }
+
+        // If EFO, register a stream consumer registrar
+        if (sourceConfig.get(READER_TYPE) == EFO) {
+            this.streamConsumerRegistrar = new StreamConsumerRegistrar(streamProxy);
+        }
     }
 
     @Override
     public void start() {
+        efoConsumerStartSetup(sourceConfig, streamConsumerRegistrar, streamProxy, streamArn);
+
         if (lastSeenShardId == null) {
             context.callAsync(this::initialDiscoverSplits, this::processDiscoveredSplits);
         }
@@ -163,7 +180,49 @@ public class KinesisStreamsSourceEnumerator
 
     @Override
     public void close() throws IOException {
+        efoConsumerCleanup(sourceConfig, streamConsumerRegistrar);
         streamProxy.close();
+    }
+
+    private void efoConsumerStartSetup(
+            Configuration sourceConfig,
+            StreamConsumerRegistrar streamConsumerRegistrar,
+            StreamProxy streamProxy,
+            String streamArn) {
+        if (sourceConfig.get(READER_TYPE) != EFO) {
+            return;
+        }
+
+        String consumerName = sourceConfig.get(EFO_CONSUMER_NAME);
+        Preconditions.checkNotNull(
+                consumerName, "For EFO reader type, EFO consumer name must be specified.");
+        Preconditions.checkArgument(
+                !consumerName.isEmpty(), "For EFO reader type, EFO consumer name cannot be empty.");
+
+        if (sourceConfig.get(EFO_CONSUMER_LIFECYCLE) == JOB_MANAGED) {
+            try {
+                streamConsumerRegistrar.registerStreamConsumer(streamArn, consumerName);
+            } catch (ResourceInUseException e) {
+                LOG.warn(
+                        "Found existing consumer {} on stream {}. Proceeding to read from consumer.",
+                        consumerName,
+                        streamArn,
+                        e);
+            }
+        } else {
+            // This helps the job to fail fast if the EFO consumer requested does not exist.
+            DescribeStreamConsumerResponse response =
+                    streamProxy.describeStreamConsumer(streamArn, consumerName);
+            LOG.info("Discovered stream consumer - {}", response);
+        }
+    }
+
+    private void efoConsumerCleanup(
+            Configuration sourceConfig, StreamConsumerRegistrar streamConsumerRegistrar) {
+        if (sourceConfig.get(READER_TYPE) == EFO
+                && sourceConfig.get(EFO_CONSUMER_LIFECYCLE) == JOB_MANAGED) {
+            streamConsumerRegistrar.deregisterStreamConsumer();
+        }
     }
 
     @VisibleForTesting
