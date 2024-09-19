@@ -183,9 +183,10 @@ public class SplitTracker {
                 .filter(
                         splitId -> {
                             if (!parentChildSplitMap.containsKey(splitId)) {
-                                LOG.warn(
+                                LOG.debug(
                                         "splitId: {} is not present in parent-child relationship map. "
-                                                + "This indicates that there might be some data loss in the application",
+                                                + "This indicates that there might be some data loss in the "
+                                                + "application or the child shard has not been discovered yet",
                                         splitId);
                             }
                             return parentChildSplitMap.containsKey(splitId);
