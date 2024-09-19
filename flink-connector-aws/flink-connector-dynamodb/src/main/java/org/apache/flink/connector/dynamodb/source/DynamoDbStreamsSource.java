@@ -49,9 +49,8 @@ import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.UserCodeClassLoader;
 
-import software.amazon.awssdk.awscore.exception.AwsServiceException;
-import software.amazon.awssdk.awscore.internal.AwsErrorCode;
 import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
+import software.amazon.awssdk.core.internal.retry.SdkDefaultRetryStrategy;
 import software.amazon.awssdk.http.SdkHttpClient;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.retries.AdaptiveRetryStrategy;
@@ -202,7 +201,7 @@ public class DynamoDbStreamsSource<T>
         consumerConfig.addAllToProperties(dynamoDbStreamsClientProperties);
 
         AWSGeneralUtil.validateAwsCredentials(dynamoDbStreamsClientProperties);
-        int maxDescribeStreamCallAttempts = sourceConfig.get(DYNAMODB_STREAMS_RETRY_COUNT);
+        int maxApiCallAttempts = sourceConfig.get(DYNAMODB_STREAMS_RETRY_COUNT);
         Duration minDescribeStreamDelay =
                 sourceConfig.get(DYNAMODB_STREAMS_EXPONENTIAL_BACKOFF_MIN_DELAY);
         Duration maxDescribeStreamDelay =
@@ -210,32 +209,11 @@ public class DynamoDbStreamsSource<T>
         BackoffStrategy backoffStrategy =
                 BackoffStrategy.exponentialDelay(minDescribeStreamDelay, maxDescribeStreamDelay);
         AdaptiveRetryStrategy adaptiveRetryStrategy =
-                AdaptiveRetryStrategy.builder()
-                        .maxAttempts(maxDescribeStreamCallAttempts)
+                SdkDefaultRetryStrategy.adaptiveRetryStrategy()
+                        .toBuilder()
+                        .maxAttempts(maxApiCallAttempts)
                         .backoffStrategy(backoffStrategy)
                         .throttlingBackoffStrategy(backoffStrategy)
-                        .retryOnException(
-                                throwable -> {
-                                    if (throwable instanceof AwsServiceException) {
-                                        AwsServiceException exception =
-                                                (AwsServiceException) throwable;
-                                        return (AwsErrorCode.RETRYABLE_ERROR_CODES.contains(
-                                                        exception.awsErrorDetails().errorCode()))
-                                                || (AwsErrorCode.THROTTLING_ERROR_CODES.contains(
-                                                        exception.awsErrorDetails().errorCode()));
-                                    }
-                                    return false;
-                                })
-                        .treatAsThrottling(
-                                throwable -> {
-                                    if (throwable instanceof AwsServiceException) {
-                                        AwsServiceException exception =
-                                                (AwsServiceException) throwable;
-                                        return AwsErrorCode.THROTTLING_ERROR_CODES.contains(
-                                                exception.awsErrorDetails().errorCode());
-                                    }
-                                    return false;
-                                })
                         .build();
         DynamoDbStreamsClient dynamoDbStreamsClient =
                 AWSClientUtil.createAwsSyncClient(
