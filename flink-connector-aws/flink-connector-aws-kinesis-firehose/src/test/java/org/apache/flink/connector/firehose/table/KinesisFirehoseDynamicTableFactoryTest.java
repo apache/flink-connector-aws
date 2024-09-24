@@ -148,9 +148,8 @@ class KinesisFirehoseDynamicTableFactoryTest {
             {
                 setProperty("aws.region", "us-west-2");
                 setProperty("aws.credentials.provider", "BASIC");
-                setProperty("aws.credentials.provider.basic.accesskeyid", "ververicka");
-                setProperty(
-                        "aws.credentials.provider.basic.secretkey", "SuperSecretSecretSquirrel");
+                setProperty("aws.credentials.basic.accesskeyid", "ververicka");
+                setProperty("aws.credentials.basic.secretkey", "SuperSecretSecretSquirrel");
             }
         };
     }

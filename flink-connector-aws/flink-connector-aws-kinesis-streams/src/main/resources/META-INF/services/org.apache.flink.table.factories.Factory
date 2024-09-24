@@ -13,4 +13,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-org.apache.flink.connector.kinesis.table.KinesisDynamicTableSinkFactory
+org.apache.flink.connector.kinesis.table.KinesisDynamicTableFactory

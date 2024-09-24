@@ -46,7 +46,7 @@ import static org.apache.flink.table.factories.FactoryUtil.FORMAT;
 /** Factory for creating {@link KinesisDynamicSource}. */
 @Internal
 public class KinesisDynamicTableFactory implements DynamicTableSourceFactory {
-    public static final String IDENTIFIER = "kinesis";
+    public static final String IDENTIFIER = "kinesis-legacy";
 
     @Override
     public DynamicTableSource createDynamicTableSource(Context context) {

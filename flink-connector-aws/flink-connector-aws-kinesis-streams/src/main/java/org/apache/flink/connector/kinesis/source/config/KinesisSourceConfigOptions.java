@@ -38,33 +38,33 @@ public class KinesisSourceConfigOptions extends AWSConfigOptions {
     }
 
     public static final ConfigOption<InitialPosition> STREAM_INITIAL_POSITION =
-            ConfigOptions.key("kinesis.stream.init.position")
+            ConfigOptions.key("source.init.position")
                     .enumType(InitialPosition.class)
                     .defaultValue(InitialPosition.LATEST)
                     .withDescription("The initial position to start reading Kinesis streams.");
 
     public static final ConfigOption<String> STREAM_INITIAL_TIMESTAMP =
-            ConfigOptions.key("kinesis.stream.init.timestamp")
+            ConfigOptions.key("source.init.timestamp")
                     .stringType()
                     .noDefaultValue()
                     .withDescription(
                             "The initial timestamp at which to start reading from the Kinesis stream. This is used when AT_TIMESTAMP is configured for the STREAM_INITIAL_POSITION.");
 
     public static final ConfigOption<String> STREAM_TIMESTAMP_DATE_FORMAT =
-            ConfigOptions.key("kinesis.stream.init.timestamp.format")
+            ConfigOptions.key("source.init.timestamp.format")
                     .stringType()
                     .defaultValue("yyyy-MM-dd'T'HH:mm:ss.SSSXXX")
                     .withDescription(
                             "The date format used to parse the initial timestamp at which to start reading from the Kinesis stream. This is used when AT_TIMESTAMP is configured for the STREAM_INITIAL_POSITION.");
 
     public static final ConfigOption<Duration> SHARD_DISCOVERY_INTERVAL =
-            ConfigOptions.key("kinesis.shard.discovery.interval")
+            ConfigOptions.key("source.shard.discovery.interval")
                     .durationType()
                     .defaultValue(Duration.ofSeconds(10))
                     .withDescription("The interval between each attempt to discover new shards.");
 
     public static final ConfigOption<Integer> SHARD_GET_RECORDS_MAX =
-            ConfigOptions.key("kinesis.shard.get-records.max-record-count")
+            ConfigOptions.key("source.shard.get-records.max-record-count")
                     .intType()
                     .defaultValue(10000)
                     .withDescription(

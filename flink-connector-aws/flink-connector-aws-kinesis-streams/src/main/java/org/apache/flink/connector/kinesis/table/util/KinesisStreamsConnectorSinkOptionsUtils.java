@@ -51,7 +51,7 @@ import static org.apache.flink.connector.base.table.AsyncSinkConnectorOptions.MA
 import static org.apache.flink.connector.kinesis.table.KinesisConnectorOptions.SINK_FAIL_ON_ERROR;
 import static org.apache.flink.connector.kinesis.table.KinesisConnectorOptions.SINK_PARTITIONER;
 import static org.apache.flink.connector.kinesis.table.KinesisConnectorOptions.SINK_PARTITIONER_FIELD_DELIMITER;
-import static org.apache.flink.connector.kinesis.table.KinesisConnectorOptions.STREAM;
+import static org.apache.flink.connector.kinesis.table.KinesisConnectorOptions.STREAM_ARN;
 
 /**
  * Class for handling kinesis table options, including key mapping and validations and property
@@ -59,11 +59,11 @@ import static org.apache.flink.connector.kinesis.table.KinesisConnectorOptions.S
  * for handling each specified set of options.
  */
 @Internal
-public class KinesisStreamsConnectorOptionsUtils {
+public class KinesisStreamsConnectorSinkOptionsUtils {
     /** Key for accessing kinesisAsyncClient properties. */
     public static final String KINESIS_CLIENT_PROPERTIES_KEY = "sink.client.properties";
 
-    public static final String CONSUMER_PREFIX = "scan.";
+    public static final String CONSUMER_PREFIX = "source.";
 
     private final AsyncClientOptionsUtils asyncClientOptionsUtils;
     private final AsyncSinkConfigurationValidator asyncSinkconfigurationValidator;
@@ -82,7 +82,7 @@ public class KinesisStreamsConnectorOptionsUtils {
                 CONSUMER_PREFIX
             };
 
-    public KinesisStreamsConnectorOptionsUtils(
+    public KinesisStreamsConnectorSinkOptionsUtils(
             Map<String, String> options,
             ReadableConfig tableOptions,
             RowType physicalType,
@@ -102,7 +102,7 @@ public class KinesisStreamsConnectorOptionsUtils {
 
     public Properties getValidatedSinkConfigurations() {
         Properties properties = asyncSinkconfigurationValidator.getValidatedConfigurations();
-        properties.put(STREAM.key(), tableOptions.get(STREAM));
+        properties.put(STREAM_ARN.key(), tableOptions.get(STREAM_ARN));
         Properties kinesisClientProps = asyncClientOptionsUtils.getValidatedConfigurations();
 
         properties.put(KINESIS_CLIENT_PROPERTIES_KEY, kinesisClientProps);
@@ -168,7 +168,8 @@ public class KinesisStreamsConnectorOptionsUtils {
 
         public ReadableConfig mapDeprecatedTableOptions() {
             Configuration mappedConfig = new Configuration();
-            mappedConfig.set(STREAM, tableOptions.get(STREAM));
+            mappedConfig.set(STREAM_ARN, tableOptions.get(STREAM_ARN));
+
             tableOptions
                     .getOptional(FLUSH_BUFFER_SIZE)
                     .ifPresent(val -> mappedConfig.set(FLUSH_BUFFER_SIZE, val));
