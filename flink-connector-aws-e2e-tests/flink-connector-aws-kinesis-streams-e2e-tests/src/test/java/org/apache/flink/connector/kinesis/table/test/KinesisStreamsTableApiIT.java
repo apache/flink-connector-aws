@@ -24,6 +24,7 @@ import org.apache.flink.connector.aws.util.AWSGeneralUtil;
 import org.apache.flink.connector.testframe.container.FlinkContainers;
 import org.apache.flink.connector.testframe.container.TestcontainersSettings;
 import org.apache.flink.connectors.kinesis.testutils.KinesaliteContainer;
+import org.apache.flink.connectors.kinesis.testutils.TestUtil;
 import org.apache.flink.test.resources.ResourceTestUtils;
 import org.apache.flink.test.util.SQLJobSubmission;
 import org.apache.flink.util.DockerImageVersions;
@@ -35,7 +36,6 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.google.common.collect.ImmutableList;
-import org.assertj.core.api.Assertions;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -71,6 +71,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /** End-to-end test for Kinesis Streams Table API Sink using Kinesalite. */
 public class KinesisStreamsTableApiIT {
@@ -137,17 +138,22 @@ public class KinesisStreamsTableApiIT {
 
     @Test
     public void testTableApiSourceAndSink() throws Exception {
-        executeSqlStatements(readSqlFile("send-orders.sql"));
+        List<Order> smallOrders = ImmutableList.of(new Order("A", 5), new Order("B", 10));
+
+        // filter-large-orders.sql is supposed to preserve orders with quantity > 10
         List<Order> expected =
-                ImmutableList.of(
-                        new Order("A", 10),
-                        new Order("B", 12),
-                        new Order("C", 14),
-                        new Order("D", 16),
-                        new Order("E", 18));
+                ImmutableList.of(new Order("C", 15), new Order("D", 20), new Order("E", 25));
+
+        smallOrders.forEach(
+                order -> TestUtil.sendMessage(ORDERS_STREAM, kinesisClient, toJson(order)));
+        expected.forEach(
+                order -> TestUtil.sendMessage(ORDERS_STREAM, kinesisClient, toJson(order)));
+
+        executeSqlStatements(readSqlFile("filter-large-orders.sql"));
+
         // result order is not guaranteed
         List<Order> result = readAllOrdersFromKinesis();
-        Assertions.assertThat(result).containsAll(expected);
+        assertThat(result).contains(expected.toArray(new Order[0]));
     }
 
     private void prepareStream(String streamName) throws Exception {
@@ -234,6 +240,14 @@ public class KinesisStreamsTableApiIT {
         return messages;
     }
 
+    private <T> String toJson(final T object) {
+        try {
+            return OBJECT_MAPPER.writeValueAsString(object);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Test Failure.", e);
+        }
+    }
+
     /** POJO class for orders used by e2e test. */
     public static class Order {
         private final String code;
@@ -257,6 +271,14 @@ public class KinesisStreamsTableApiIT {
 
             Order order = (Order) o;
             return quantity == order.quantity && Objects.equals(code, order.code);
+        }
+
+        public String getCode() {
+            return code;
+        }
+
+        public int getQuantity() {
+            return quantity;
         }
 
         @Override
