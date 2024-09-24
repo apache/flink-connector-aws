@@ -33,7 +33,7 @@ import java.util.Map;
 public class KinesisStreamsConnectorSourceOptionsUtils extends AWSOptionUtils {
     private final Map<String, String> resolvedOptions;
     private final String streamArn;
-    public static final String SOURCE_PREFIX = "source"; // TODO: change
+    public static final String SOURCE_PREFIX = "source";
 
     public KinesisStreamsConnectorSourceOptionsUtils(
             Map<String, String> resolvedOptions, String streamArn) {

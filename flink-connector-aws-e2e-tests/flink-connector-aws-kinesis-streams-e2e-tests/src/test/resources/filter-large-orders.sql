@@ -22,7 +22,8 @@ CREATE TABLE orders
     `quantity` BIGINT
 ) WITH (
       'connector' = 'kinesis',
-      'stream.arn' = 'arn:aws:kinesis:region:us-east-1:stream/orders',
+      'stream.arn' = 'arn:aws:kinesis:us-east-1:112233445566:stream/large-orders',
+      'aws.region' = 'us-east-1',
       'aws.endpoint' = 'https://kinesalite:4567',
       'aws.credentials.provider' = 'BASIC',
       'aws.credentials.basic.accesskeyid' = 'access key',
@@ -38,7 +39,7 @@ CREATE TABLE large_orders
     `quantity` BIGINT
 ) WITH (
       'connector' = 'kinesis',
-      'stream.arn' = 'arn:aws:kinesis:region:us-east-1:stream/large-orders',
+      'stream.arn' = 'arn:aws:kinesis:us-east-1:112233445566:stream/large-orders',
       'aws.region' = 'us-east-1',
       'aws.endpoint' = 'https://kinesalite:4567',
       'aws.credentials.provider' = 'BASIC',

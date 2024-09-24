@@ -110,6 +110,11 @@ public class KinesisDynamicTableFactory extends AsyncDynamicTableSinkFactory
                 new KinesisStreamsConnectorSourceOptionsUtils(
                         catalogTable.getOptions(), tableOptions.get(STREAM_ARN));
 
+        helper.validateExcept(
+                kinesisStreamsConnectorSourceOptionsUtil
+                        .getNonValidatedPrefixes()
+                        .toArray(new String[0]));
+
         Configuration sourceConfig =
                 kinesisStreamsConnectorSourceOptionsUtil.getValidatedSourceConfigurations();
 

@@ -63,7 +63,7 @@ public class KinesisStreamsConnectorSinkOptionsUtils {
     /** Key for accessing kinesisAsyncClient properties. */
     public static final String KINESIS_CLIENT_PROPERTIES_KEY = "sink.client.properties";
 
-    public static final String CONSUMER_PREFIX = "scan.";
+    public static final String CONSUMER_PREFIX = "source.";
 
     private final AsyncClientOptionsUtils asyncClientOptionsUtils;
     private final AsyncSinkConfigurationValidator asyncSinkconfigurationValidator;

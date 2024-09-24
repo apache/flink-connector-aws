@@ -79,6 +79,7 @@ public class KinesisStreamsTableApiIT {
     private static final Logger LOGGER = LoggerFactory.getLogger(KinesisStreamsTableApiIT.class);
 
     private static final String ORDERS_STREAM = "orders";
+    private static final String LARGE_ORDERS_STREAM = "large-orders";
     private static final String INTER_CONTAINER_KINESALITE_ALIAS = "kinesalite";
     private static final String DEFAULT_FIRST_SHARD_NAME = "shardId-000000000000";
     private static final ObjectMapper OBJECT_MAPPER = createObjectMapper();
@@ -128,6 +129,7 @@ public class KinesisStreamsTableApiIT {
         httpClient = AWSServicesTestUtils.createHttpClient();
         kinesisClient = KINESALITE.createHostClient(httpClient);
         prepareStream(ORDERS_STREAM);
+        prepareStream(LARGE_ORDERS_STREAM);
     }
 
     @After
@@ -193,7 +195,8 @@ public class KinesisStreamsTableApiIT {
         do {
             orders =
                     readMessagesFromStream(
-                            recordBytes -> fromJson(new String(recordBytes), Order.class));
+                            recordBytes -> fromJson(new String(recordBytes), Order.class),
+                            LARGE_ORDERS_STREAM);
 
         } while (deadline.hasTimeLeft() && orders.size() < 5);
 
@@ -219,14 +222,15 @@ public class KinesisStreamsTableApiIT {
         }
     }
 
-    private <T> List<T> readMessagesFromStream(Function<byte[], T> deserialiser) throws Exception {
+    private <T> List<T> readMessagesFromStream(Function<byte[], T> deserialiser, String streamName)
+            throws Exception {
         String shardIterator =
                 kinesisClient
                         .getShardIterator(
                                 GetShardIteratorRequest.builder()
                                         .shardId(DEFAULT_FIRST_SHARD_NAME)
                                         .shardIteratorType(ShardIteratorType.TRIM_HORIZON)
-                                        .streamName(KinesisStreamsTableApiIT.ORDERS_STREAM)
+                                        .streamName(streamName)
                                         .build())
                         .shardIterator();
 

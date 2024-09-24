@@ -300,9 +300,9 @@ class KinesisDynamicTableSinkFactoryTest {
 
     private TableOptionsBuilder defaultTableOptionsWithSinkAndConsumerOptions() {
         return defaultTableOptionsWithSinkOptions()
-                .withTableOption("scan.stream.initpos", "AT_TIMESTAMP")
-                .withTableOption("scan.stream.initpos-timestamp-format", "yyyy-MM-dd'T'HH:mm:ss")
-                .withTableOption("scan.stream.initpos-timestamp", "2022-10-22T12:00:00");
+                .withTableOption("source.init.position", "AT_TIMESTAMP")
+                .withTableOption("source.init.timestamp.format", "yyyy-MM-dd'T'HH:mm:ss")
+                .withTableOption("source.init.timestamp", "2022-10-22T12:00:00");
     }
 
     private TableOptionsBuilder defaultTableOptionsWithDeprecatedOptions() {
