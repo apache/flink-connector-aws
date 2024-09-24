@@ -20,13 +20,14 @@ package org.apache.flink.connector.kinesis.table.test;
 
 import org.apache.flink.api.common.time.Deadline;
 import org.apache.flink.connector.aws.testutils.AWSServicesTestUtils;
+import org.apache.flink.connector.aws.testutils.LocalstackContainer;
 import org.apache.flink.connector.aws.util.AWSGeneralUtil;
 import org.apache.flink.connector.testframe.container.FlinkContainers;
 import org.apache.flink.connector.testframe.container.TestcontainersSettings;
-import org.apache.flink.connectors.kinesis.testutils.KinesaliteContainer;
+import org.apache.flink.connectors.kinesis.testutils.TestUtil;
+import org.apache.flink.test.junit5.MiniClusterExtension;
 import org.apache.flink.test.resources.ResourceTestUtils;
 import org.apache.flink.test.util.SQLJobSubmission;
-import org.apache.flink.util.DockerImageVersions;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -35,19 +36,21 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.google.common.collect.ImmutableList;
-import org.assertj.core.api.Assertions;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.rules.Timeout;
 import org.rnorth.ducttape.ratelimits.RateLimiter;
 import org.rnorth.ducttape.ratelimits.RateLimiterBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.Network;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 import software.amazon.awssdk.core.SdkSystemSetting;
 import software.amazon.awssdk.http.SdkHttpClient;
@@ -71,14 +74,18 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /** End-to-end test for Kinesis Streams Table API Sink using Kinesalite. */
+@Testcontainers
+@ExtendWith(MiniClusterExtension.class)
 public class KinesisStreamsTableApiIT {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(KinesisStreamsTableApiIT.class);
+    private static final String LOCALSTACK_DOCKER_IMAGE_VERSION = "localstack/localstack:3.7.2";
 
     private static final String ORDERS_STREAM = "orders";
-    private static final String INTER_CONTAINER_KINESALITE_ALIAS = "kinesalite";
+    private static final String LARGE_ORDERS_STREAM = "large_orders";
     private static final String DEFAULT_FIRST_SHARD_NAME = "shardId-000000000000";
     private static final ObjectMapper OBJECT_MAPPER = createObjectMapper();
 
@@ -91,11 +98,16 @@ public class KinesisStreamsTableApiIT {
 
     @ClassRule public static final Timeout TIMEOUT = new Timeout(10, TimeUnit.MINUTES);
 
-    @ClassRule
-    public static final KinesaliteContainer KINESALITE =
-            new KinesaliteContainer(DockerImageName.parse(DockerImageVersions.KINESALITE))
+    @Container
+    public static final LocalstackContainer LOCALSTACK_CONTAINER =
+            new LocalstackContainer(DockerImageName.parse(LOCALSTACK_DOCKER_IMAGE_VERSION))
+                    .withEnv("AWS_CBOR_DISABLE", "1")
+                    .withEnv(
+                            "FLINK_ENV_JAVA_OPTS",
+                            "-Dorg.apache.flink.kinesis-streams.shaded.com.amazonaws.sdk.disableCertChecking -Daws.cborEnabled=false")
+                    .withLogConsumer((log) -> LOGGER.info(log.getUtf8String()))
                     .withNetwork(network)
-                    .withNetworkAliases(INTER_CONTAINER_KINESALITE_ALIAS);
+                    .withNetworkAliases("localstack");
 
     public static final TestcontainersSettings TESTCONTAINERS_SETTINGS =
             TestcontainersSettings.builder()
@@ -105,7 +117,7 @@ public class KinesisStreamsTableApiIT {
                             "-Dorg.apache.flink.kinesis-streams.shaded.com.amazonaws.sdk.disableCertChecking -Daws.cborEnabled=false")
                     .network(network)
                     .logger(LOGGER)
-                    .dependsOn(KINESALITE)
+                    .dependsOn(LOCALSTACK_CONTAINER)
                     .build();
 
     public static final FlinkContainers FLINK =
@@ -125,8 +137,11 @@ public class KinesisStreamsTableApiIT {
     public void setUp() throws Exception {
         System.setProperty(SdkSystemSetting.CBOR_ENABLED.property(), "false");
         httpClient = AWSServicesTestUtils.createHttpClient();
-        kinesisClient = KINESALITE.createHostClient(httpClient);
+        kinesisClient =
+                AWSServicesTestUtils.createAwsSyncClient(
+                        LOCALSTACK_CONTAINER.getEndpoint(), httpClient, KinesisClient.builder());
         prepareStream(ORDERS_STREAM);
+        prepareStream(LARGE_ORDERS_STREAM);
     }
 
     @After
@@ -137,17 +152,22 @@ public class KinesisStreamsTableApiIT {
 
     @Test
     public void testTableApiSourceAndSink() throws Exception {
-        executeSqlStatements(readSqlFile("send-orders.sql"));
+        List<Order> smallOrders = ImmutableList.of(new Order("A", 5), new Order("B", 10));
+
+        // filter-large-orders.sql is supposed to preserve orders with quantity > 10
         List<Order> expected =
-                ImmutableList.of(
-                        new Order("A", 10),
-                        new Order("B", 12),
-                        new Order("C", 14),
-                        new Order("D", 16),
-                        new Order("E", 18));
+                ImmutableList.of(new Order("C", 15), new Order("D", 20), new Order("E", 25));
+
+        smallOrders.forEach(
+                order -> TestUtil.sendMessage(ORDERS_STREAM, kinesisClient, toJson(order)));
+        expected.forEach(
+                order -> TestUtil.sendMessage(ORDERS_STREAM, kinesisClient, toJson(order)));
+
+        executeSqlStatements(readSqlFile("filter-large-orders.sql"));
+
         // result order is not guaranteed
         List<Order> result = readAllOrdersFromKinesis();
-        Assertions.assertThat(result).containsAll(expected);
+        assertThat(result).contains(expected.toArray(new Order[0]));
     }
 
     private void prepareStream(String streamName) throws Exception {
@@ -185,11 +205,13 @@ public class KinesisStreamsTableApiIT {
         Deadline deadline = Deadline.fromNow(Duration.ofSeconds(10));
         List<Order> orders;
         do {
+            Thread.sleep(1000);
             orders =
                     readMessagesFromStream(
-                            recordBytes -> fromJson(new String(recordBytes), Order.class));
+                            recordBytes -> fromJson(new String(recordBytes), Order.class),
+                            LARGE_ORDERS_STREAM);
 
-        } while (deadline.hasTimeLeft() && orders.size() < 5);
+        } while (deadline.hasTimeLeft() && orders.size() < 3);
 
         return orders;
     }
@@ -213,14 +235,16 @@ public class KinesisStreamsTableApiIT {
         }
     }
 
-    private <T> List<T> readMessagesFromStream(Function<byte[], T> deserialiser) throws Exception {
+    private <T> List<T> readMessagesFromStream(Function<byte[], T> deserialiser, String streamName)
+            throws Exception {
+
         String shardIterator =
                 kinesisClient
                         .getShardIterator(
                                 GetShardIteratorRequest.builder()
                                         .shardId(DEFAULT_FIRST_SHARD_NAME)
                                         .shardIteratorType(ShardIteratorType.TRIM_HORIZON)
-                                        .streamName(KinesisStreamsTableApiIT.ORDERS_STREAM)
+                                        .streamName(streamName)
                                         .build())
                         .shardIterator();
 
@@ -232,6 +256,14 @@ public class KinesisStreamsTableApiIT {
         List<T> messages = new ArrayList<>();
         records.forEach(record -> messages.add(deserialiser.apply(record.data().asByteArray())));
         return messages;
+    }
+
+    private <T> String toJson(final T object) {
+        try {
+            return OBJECT_MAPPER.writeValueAsString(object);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Test Failure.", e);
+        }
     }
 
     /** POJO class for orders used by e2e test. */
@@ -257,6 +289,14 @@ public class KinesisStreamsTableApiIT {
 
             Order order = (Order) o;
             return quantity == order.quantity && Objects.equals(code, order.code);
+        }
+
+        public String getCode() {
+            return code;
+        }
+
+        public int getQuantity() {
+            return quantity;
         }
 
         @Override

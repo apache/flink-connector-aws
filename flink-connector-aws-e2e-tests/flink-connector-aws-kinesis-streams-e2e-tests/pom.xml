@@ -50,6 +50,13 @@
 
         <dependency>
             <groupId>org.apache.flink</groupId>
+            <artifactId>flink-sql-connector-aws-kinesis-streams</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.flink</groupId>
             <artifactId>flink-connector-aws-base</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
@@ -99,6 +106,19 @@
             <artifactId>jackson-datatype-jdk8</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>localstack</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <scope>test</scope>
+        </dependency>
+
     </dependencies>
 
     <build>

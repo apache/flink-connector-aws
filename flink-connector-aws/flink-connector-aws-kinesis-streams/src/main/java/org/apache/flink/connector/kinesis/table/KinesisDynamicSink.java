@@ -52,7 +52,7 @@ public class KinesisDynamicSink extends AsyncDynamicTableSink<PutRecordsRequestE
     private final DataType consumedDataType;
 
     /** The Kinesis stream to write to. */
-    private final String stream;
+    private final String streamArn;
 
     /** Properties for the Kinesis DataStream Sink. */
     private final Properties kinesisClientProperties;
@@ -73,7 +73,7 @@ public class KinesisDynamicSink extends AsyncDynamicTableSink<PutRecordsRequestE
             @Nullable Long maxTimeInBufferMS,
             @Nullable Boolean failOnError,
             @Nullable DataType consumedDataType,
-            String stream,
+            String streamArn,
             @Nullable Properties kinesisClientProperties,
             EncodingFormat<SerializationSchema<RowData>> encodingFormat,
             PartitionKeyGenerator<RowData> partitioner) {
@@ -87,7 +87,8 @@ public class KinesisDynamicSink extends AsyncDynamicTableSink<PutRecordsRequestE
         this.kinesisClientProperties = kinesisClientProperties;
         this.consumedDataType =
                 Preconditions.checkNotNull(consumedDataType, "Consumed data type must not be null");
-        this.stream = Preconditions.checkNotNull(stream, "Kinesis stream name must not be null");
+        this.streamArn =
+                Preconditions.checkNotNull(streamArn, "Kinesis streamArn name must not be null");
         this.encodingFormat =
                 Preconditions.checkNotNull(encodingFormat, "Encoding format must not be null");
         this.partitioner =
@@ -110,7 +111,7 @@ public class KinesisDynamicSink extends AsyncDynamicTableSink<PutRecordsRequestE
                         .setSerializationSchema(serializationSchema)
                         .setPartitionKeyGenerator(partitioner)
                         .setKinesisClientProperties(kinesisClientProperties)
-                        .setStreamName(stream);
+                        .setStreamArn(streamArn);
 
         Optional.ofNullable(failOnError).ifPresent(builder::setFailOnError);
         addAsyncOptionsToSinkBuilder(builder);
@@ -128,7 +129,7 @@ public class KinesisDynamicSink extends AsyncDynamicTableSink<PutRecordsRequestE
                 maxTimeInBufferMS,
                 failOnError,
                 consumedDataType,
-                stream,
+                streamArn,
                 kinesisClientProperties,
                 encodingFormat,
                 partitioner);
@@ -174,7 +175,7 @@ public class KinesisDynamicSink extends AsyncDynamicTableSink<PutRecordsRequestE
         KinesisDynamicSink that = (KinesisDynamicSink) o;
         return super.equals(o)
                 && Objects.equals(consumedDataType, that.consumedDataType)
-                && Objects.equals(stream, that.stream)
+                && Objects.equals(streamArn, that.streamArn)
                 && Objects.equals(kinesisClientProperties, that.kinesisClientProperties)
                 && Objects.equals(encodingFormat, that.encodingFormat)
                 && Objects.equals(partitioner, that.partitioner)
@@ -186,7 +187,7 @@ public class KinesisDynamicSink extends AsyncDynamicTableSink<PutRecordsRequestE
         return Objects.hash(
                 super.hashCode(),
                 consumedDataType,
-                stream,
+                streamArn,
                 kinesisClientProperties,
                 encodingFormat,
                 partitioner,
@@ -200,7 +201,7 @@ public class KinesisDynamicSink extends AsyncDynamicTableSink<PutRecordsRequestE
                     PutRecordsRequestEntry, KinesisDynamicTableSinkBuilder> {
 
         private DataType consumedDataType = null;
-        private String stream = null;
+        private String streamArn = null;
         private Properties kinesisClientProperties = null;
         private EncodingFormat<SerializationSchema<RowData>> encodingFormat = null;
         private PartitionKeyGenerator<RowData> partitioner = null;
@@ -211,8 +212,13 @@ public class KinesisDynamicSink extends AsyncDynamicTableSink<PutRecordsRequestE
             return this;
         }
 
-        public KinesisDynamicTableSinkBuilder setStream(String stream) {
-            this.stream = stream;
+        public KinesisDynamicTableSinkBuilder setStreamArn(String streamArn) {
+            this.streamArn = streamArn;
+            return this;
+        }
+
+        public KinesisDynamicTableSinkBuilder setStream(String streamArn) {
+            this.streamArn = streamArn;
             return this;
         }
 
@@ -249,7 +255,7 @@ public class KinesisDynamicSink extends AsyncDynamicTableSink<PutRecordsRequestE
                     getMaxTimeInBufferMS(),
                     failOnError,
                     consumedDataType,
-                    stream,
+                    streamArn,
                     kinesisClientProperties,
                     encodingFormat,
                     partitioner);
