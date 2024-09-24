@@ -50,12 +50,10 @@ import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.UserCodeClassLoader;
 
-import software.amazon.awssdk.awscore.exception.AwsServiceException;
-import software.amazon.awssdk.awscore.internal.AwsErrorCode;
 import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
+import software.amazon.awssdk.core.internal.retry.SdkDefaultRetryStrategy;
 import software.amazon.awssdk.http.SdkHttpClient;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
-import software.amazon.awssdk.retries.StandardRetryStrategy;
 import software.amazon.awssdk.retries.api.BackoffStrategy;
 import software.amazon.awssdk.retries.api.RetryStrategy;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
@@ -254,31 +252,10 @@ public class KinesisStreamsSource<T>
         final BackoffStrategy backoffStrategy =
                 BackoffStrategy.exponentialDelayHalfJitter(initialDelay, maxDelay);
 
-        return StandardRetryStrategy.builder()
+        return SdkDefaultRetryStrategy.standardRetryStrategyBuilder()
                 .backoffStrategy(backoffStrategy)
                 .throttlingBackoffStrategy(backoffStrategy)
                 .maxAttempts(maxAttempts)
-                .retryOnException(
-                        throwable -> {
-                            if (throwable instanceof AwsServiceException) {
-                                AwsServiceException exception = (AwsServiceException) throwable;
-                                return (AwsErrorCode.RETRYABLE_ERROR_CODES.contains(
-                                                exception.awsErrorDetails().errorCode()))
-                                        || (AwsErrorCode.THROTTLING_ERROR_CODES.contains(
-                                                exception.awsErrorDetails().errorCode()));
-                            }
-                            return false;
-                        })
-                .treatAsThrottling(
-                        throwable -> {
-                            if (throwable instanceof AwsServiceException) {
-                                AwsServiceException exception = (AwsServiceException) throwable;
-                                return AwsErrorCode.THROTTLING_ERROR_CODES.contains(
-                                        exception.awsErrorDetails().errorCode());
-                            }
-                            return false;
-                        })
-                .circuitBreakerEnabled(false)
                 .build();
     }
 }
