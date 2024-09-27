@@ -57,7 +57,6 @@ import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.retries.api.BackoffStrategy;
 import software.amazon.awssdk.retries.api.RetryStrategy;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
-import software.amazon.awssdk.utils.AttributeMap;
 
 import java.time.Duration;
 import java.util.Map;
@@ -193,10 +192,6 @@ public class KinesisStreamsSource<T>
     }
 
     private KinesisStreamProxy createKinesisStreamProxy(Configuration consumerConfig) {
-        SdkHttpClient httpClient =
-                AWSGeneralUtil.createSyncHttpClient(
-                        AttributeMap.builder().build(), ApacheHttpClient.builder());
-
         String region =
                 AWSGeneralUtil.getRegionFromArn(streamArn)
                         .orElseThrow(
@@ -218,6 +213,10 @@ public class KinesisStreamsSource<T>
                                         sourceConfig.get(
                                                 AWSConfigOptions
                                                         .RETRY_STRATEGY_MAX_ATTEMPTS_OPTION)));
+
+        SdkHttpClient httpClient =
+                AWSGeneralUtil.createSyncHttpClient(
+                        kinesisClientProperties, ApacheHttpClient.builder());
 
         AWSGeneralUtil.validateAwsCredentials(kinesisClientProperties);
         KinesisClient kinesisClient =

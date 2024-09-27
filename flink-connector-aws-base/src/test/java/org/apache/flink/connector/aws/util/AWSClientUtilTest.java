@@ -17,6 +17,8 @@
 
 package org.apache.flink.connector.aws.util;
 
+import org.apache.flink.connector.aws.config.AWSConfigConstants;
+
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
@@ -28,7 +30,9 @@ import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.core.client.config.SdkAdvancedClientOption;
 import software.amazon.awssdk.core.client.config.SdkClientConfiguration;
 import software.amazon.awssdk.core.client.config.SdkClientOption;
+import software.amazon.awssdk.http.Protocol;
 import software.amazon.awssdk.http.SdkHttpClient;
+import software.amazon.awssdk.http.SdkHttpConfigurationOption;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
@@ -50,6 +54,7 @@ import java.util.Properties;
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.AWS_ENDPOINT;
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.AWS_REGION;
 import static org.apache.flink.connector.aws.util.AWSClientUtil.formatFlinkUserAgentPrefix;
+import static org.apache.flink.connector.aws.util.AWSGeneralUtil.getSdkHttpConfigurationOptions;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -202,6 +207,21 @@ class AWSClientUtilTest {
                                 .advancedOption(SdkAdvancedClientOption.USER_AGENT_PREFIX)
                                 .isPresent())
                 .isTrue();
+    }
+
+    @Test
+    void testGetSdkHttpConfigurationOptions() {
+        Properties properties = TestUtil.properties(AWS_REGION, "eu-west-2");
+        properties.setProperty(AWSConfigConstants.TRUST_ALL_CERTIFICATES, "true");
+        properties.setProperty(AWSConfigConstants.HTTP_PROTOCOL_VERSION, "HTTP1_1");
+        AttributeMap options = getSdkHttpConfigurationOptions(properties);
+
+        assertThat(options.get(SdkHttpConfigurationOption.TCP_KEEPALIVE).booleanValue()).isTrue();
+        assertThat(options.containsKey(SdkHttpConfigurationOption.MAX_CONNECTIONS)).isFalse();
+        assertThat(options.containsKey(SdkHttpConfigurationOption.READ_TIMEOUT)).isFalse();
+        assertThat(options.get(SdkHttpConfigurationOption.TRUST_ALL_CERTIFICATES).booleanValue())
+                .isTrue();
+        assertThat(options.get(SdkHttpConfigurationOption.PROTOCOL)).isEqualTo(Protocol.HTTP1_1);
     }
 
     @Test

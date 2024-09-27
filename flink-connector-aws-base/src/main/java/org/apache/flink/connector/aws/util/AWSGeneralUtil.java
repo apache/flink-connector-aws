@@ -297,9 +297,8 @@ public class AWSGeneralUtil {
         return createAsyncHttpClient(configProperties, NettyNioAsyncHttpClient.builder());
     }
 
-    public static SdkAsyncHttpClient createAsyncHttpClient(
-            final Properties configProperties,
-            final NettyNioAsyncHttpClient.Builder httpClientBuilder) {
+    @VisibleForTesting
+    static AttributeMap getSdkHttpConfigurationOptions(final Properties configProperties) {
         final AttributeMap.Builder clientConfiguration =
                 AttributeMap.builder().put(SdkHttpConfigurationOption.TCP_KEEPALIVE, true);
 
@@ -335,7 +334,15 @@ public class AWSGeneralUtil {
                         protocol ->
                                 clientConfiguration.put(
                                         SdkHttpConfigurationOption.PROTOCOL, protocol));
-        return createAsyncHttpClient(clientConfiguration.build(), httpClientBuilder);
+
+        return clientConfiguration.build();
+    }
+
+    public static SdkAsyncHttpClient createAsyncHttpClient(
+            final Properties configProperties,
+            final NettyNioAsyncHttpClient.Builder httpClientBuilder) {
+        return createAsyncHttpClient(
+                getSdkHttpConfigurationOptions(configProperties), httpClientBuilder);
     }
 
     public static SdkAsyncHttpClient createAsyncHttpClient(
@@ -353,6 +360,12 @@ public class AWSGeneralUtil {
                                 .initialWindowSize(INITIAL_WINDOW_SIZE_BYTES)
                                 .build());
         return httpClientBuilder.buildWithDefaults(config.merge(HTTP_CLIENT_DEFAULTS));
+    }
+
+    public static SdkHttpClient createSyncHttpClient(
+            final Properties configProperties, final ApacheHttpClient.Builder httpClientBuilder) {
+        return createSyncHttpClient(
+                getSdkHttpConfigurationOptions(configProperties), httpClientBuilder);
     }
 
     public static SdkHttpClient createSyncHttpClient(
