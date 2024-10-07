@@ -129,7 +129,10 @@ public class PollingKinesisShardSplitReader implements SplitReader<Record, Kines
                                 .get(getRecordsResponse.records().size() - 1)
                                 .sequenceNumber()));
 
-        assignedSplits.add(splitState);
+        if (!isComplete) {
+            assignedSplits.add(splitState);
+        }
+
         return new KinesisRecordsWithSplitIds(
                 getRecordsResponse.records().iterator(), splitState.getSplitId(), isComplete);
     }
