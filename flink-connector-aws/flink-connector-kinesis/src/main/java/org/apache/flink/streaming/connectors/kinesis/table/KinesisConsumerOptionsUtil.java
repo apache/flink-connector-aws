@@ -20,7 +20,7 @@ package org.apache.flink.streaming.connectors.kinesis.table;
 
 import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.connector.aws.table.util.AWSOptionUtils;
-import org.apache.flink.connector.kinesis.table.util.KinesisStreamsConnectorOptionsUtils;
+import org.apache.flink.connector.kinesis.table.util.KinesisStreamsConnectorSinkOptionsUtils;
 import org.apache.flink.streaming.connectors.kinesis.util.KinesisConfigUtil;
 
 import java.util.Arrays;
@@ -64,7 +64,8 @@ public class KinesisConsumerOptionsUtil extends AWSOptionUtils {
         return Arrays.asList(
                 AWS_PROPERTIES_PREFIX,
                 CONSUMER_PREFIX,
-                KinesisStreamsConnectorOptionsUtils.KinesisProducerOptionsMapper.PRODUCER_PREFIX);
+                KinesisStreamsConnectorSinkOptionsUtils.KinesisProducerOptionsMapper
+                        .PRODUCER_PREFIX);
     }
 
     @Override

@@ -18,6 +18,7 @@
 
 package org.apache.flink.streaming.connectors.kinesis.table;
 
+import org.apache.flink.connector.kinesis.source.util.TestUtil;
 import org.apache.flink.connector.kinesis.table.KinesisConnectorOptions;
 import org.apache.flink.connector.kinesis.table.KinesisDynamicSink;
 import org.apache.flink.connector.kinesis.table.RowDataFieldsKinesisPartitionKeyGenerator;
@@ -169,7 +170,7 @@ public class KinesisDynamicTableFactoryTest extends TestLogger {
                 (KinesisDynamicSink)
                         new KinesisDynamicSink.KinesisDynamicTableSinkBuilder()
                                 .setConsumedDataType(physicalDataType)
-                                .setStream(STREAM_NAME)
+                                .setStreamArn(TestUtil.STREAM_ARN)
                                 .setKinesisClientProperties(defaultProducerProperties())
                                 .setEncodingFormat(new TestFormatFactory.EncodingFormatMock(","))
                                 .setPartitioner(
@@ -348,11 +349,11 @@ public class KinesisDynamicTableFactoryTest extends TestLogger {
     }
 
     private TableOptionsBuilder defaultSinkTableOptions() {
-        String connector = KinesisDynamicTableFactory.IDENTIFIER;
+        String connector = "kinesis";
         String format = TestFormatFactory.IDENTIFIER;
         return new TableOptionsBuilder(connector, format)
                 // default table options
-                .withTableOption(KinesisConnectorOptions.STREAM, STREAM_NAME)
+                .withTableOption(KinesisConnectorOptions.STREAM_ARN, TestUtil.STREAM_ARN)
                 .withTableOption("aws.region", "us-west-2")
                 .withTableOption("aws.credentials.provider", "BASIC")
                 .withTableOption("aws.credentials.basic.accesskeyid", "ververicka")
