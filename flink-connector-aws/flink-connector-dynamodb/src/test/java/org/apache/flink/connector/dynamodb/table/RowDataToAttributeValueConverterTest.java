@@ -62,6 +62,19 @@ public class RowDataToAttributeValueConverterTest {
     }
 
     @Test
+    void testCharNull() {
+        String key = "key";
+
+        DataType dataType = DataTypes.ROW(DataTypes.FIELD(key, DataTypes.CHAR(9)));
+        RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
+                new RowDataToAttributeValueConverter(dataType, true);
+        Map<String, AttributeValue> actualResult =
+                rowDataToAttributeValueConverter.convertRowData(createElement(null));
+
+        assertThat(actualResult.isEmpty()).isEqualTo(true);
+    }
+
+    @Test
     void testVarChar() {
         String key = "key";
         String value = "some_var_char";
