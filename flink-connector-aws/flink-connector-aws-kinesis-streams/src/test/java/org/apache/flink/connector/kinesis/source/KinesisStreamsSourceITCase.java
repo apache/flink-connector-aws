@@ -8,6 +8,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.aws.testutils.AWSServicesTestUtils;
 import org.apache.flink.connector.aws.testutils.LocalstackContainer;
 import org.apache.flink.connector.aws.util.AWSGeneralUtil;
+import org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.test.junit5.MiniClusterExtension;
 
@@ -35,10 +36,13 @@ import software.amazon.awssdk.services.kinesis.model.PutRecordsRequest;
 import software.amazon.awssdk.services.kinesis.model.PutRecordsRequestEntry;
 import software.amazon.awssdk.services.kinesis.model.PutRecordsResponse;
 import software.amazon.awssdk.services.kinesis.model.PutRecordsResultEntry;
+import software.amazon.awssdk.services.kinesis.model.ScalingType;
 import software.amazon.awssdk.services.kinesis.model.StreamStatus;
+import software.amazon.awssdk.services.kinesis.model.UpdateShardCountRequest;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -49,8 +53,12 @@ import static org.apache.flink.connector.aws.config.AWSConfigConstants.AWS_REGIO
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.AWS_SECRET_ACCESS_KEY;
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.HTTP_PROTOCOL_VERSION;
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.TRUST_ALL_CERTIFICATES;
+import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.STREAM_INITIAL_POSITION;
 
-/** IT cases for using {@code KinesisStreamsSource} using a localstack container. */
+/**
+ * IT cases for using {@code KinesisStreamsSource} using a localstack container. StopWithSavepoint
+ * IT cases have not been added because it is not exposed in the new source API.
+ */
 @Testcontainers
 @ExtendWith(MiniClusterExtension.class)
 public class KinesisStreamsSourceITCase {
@@ -100,11 +108,33 @@ public class KinesisStreamsSourceITCase {
     }
 
     @Test
-    void validStreamIsConsumed() throws Exception {
+    void singleShardStreamIsConsumed() throws Exception {
         new Scenario()
-                .localstackStreamName("valid-stream")
+                .localstackStreamName("single-shard-stream")
+                .shardCount(1)
                 .withSourceConnectionStreamArn(
-                        "arn:aws:kinesis:ap-southeast-1:000000000000:stream/valid-stream")
+                        "arn:aws:kinesis:ap-southeast-1:000000000000:stream/single-shard-stream")
+                .runScenario();
+    }
+
+    @Test
+    void multipleShardStreamIsConsumed() throws Exception {
+        new Scenario()
+                .localstackStreamName("multiple-shard-stream")
+                .shardCount(4)
+                .withSourceConnectionStreamArn(
+                        "arn:aws:kinesis:ap-southeast-1:000000000000:stream/multiple-shard-stream")
+                .runScenario();
+    }
+
+    @Test
+    void reshardedStreamIsConsumed() throws Exception {
+        new Scenario()
+                .localstackStreamName("resharded-stream")
+                .shardCount(1)
+                .reshardStream(2)
+                .withSourceConnectionStreamArn(
+                        "arn:aws:kinesis:ap-southeast-1:000000000000:stream/resharded-stream")
                 .runScenario();
     }
 
@@ -116,12 +146,17 @@ public class KinesisStreamsSourceITCase {
         configuration.setString(AWS_REGION, Region.AP_SOUTHEAST_1.toString());
         configuration.setString(TRUST_ALL_CERTIFICATES, "true");
         configuration.setString(HTTP_PROTOCOL_VERSION, "HTTP1_1");
+        configuration.set(
+                STREAM_INITIAL_POSITION, KinesisSourceConfigOptions.InitialPosition.TRIM_HORIZON);
         return configuration;
     }
 
     private class Scenario {
         private final int expectedElements = 1000;
         private String localstackStreamName = null;
+        private int shardCount = 1;
+        private boolean shouldReshardStream = false;
+        private int targetReshardCount = -1;
         private String sourceConnectionStreamArn;
         private final Configuration configuration =
                 KinesisStreamsSourceITCase.this.getDefaultConfiguration();
@@ -131,7 +166,7 @@ public class KinesisStreamsSourceITCase {
                 prepareStream(localstackStreamName);
             }
 
-            putRecords(localstackStreamName, expectedElements);
+            putRecordsWithReshard(localstackStreamName, expectedElements);
 
             KinesisStreamsSource<String> kdsSource =
                     KinesisStreamsSource.<String>builder()
@@ -158,6 +193,17 @@ public class KinesisStreamsSourceITCase {
             return this;
         }
 
+        public Scenario shardCount(int shardCount) {
+            this.shardCount = shardCount;
+            return this;
+        }
+
+        public Scenario reshardStream(int targetShardCount) {
+            this.shouldReshardStream = true;
+            this.targetReshardCount = targetShardCount;
+            return this;
+        }
+
         private void prepareStream(String streamName) throws Exception {
             final RateLimiter rateLimiter =
                     RateLimiterBuilder.newBuilder()
@@ -166,7 +212,10 @@ public class KinesisStreamsSourceITCase {
                             .build();
 
             kinesisClient.createStream(
-                    CreateStreamRequest.builder().streamName(streamName).shardCount(1).build());
+                    CreateStreamRequest.builder()
+                            .streamName(streamName)
+                            .shardCount(shardCount)
+                            .build());
 
             Deadline deadline = Deadline.fromNow(Duration.ofMinutes(1));
             while (!rateLimiter.getWhenReady(() -> streamExists(streamName))) {
@@ -176,9 +225,18 @@ public class KinesisStreamsSourceITCase {
             }
         }
 
-        private void putRecords(String streamName, int numRecords) {
+        private void putRecordsWithReshard(String name, int numRecords) {
+            int midpoint = numRecords / 2;
+            putRecords(name, 0, midpoint);
+            if (shouldReshardStream) {
+                reshard(name);
+            }
+            putRecords(name, midpoint, numRecords);
+        }
+
+        private void putRecords(String streamName, int startInclusive, int endInclusive) {
             List<byte[]> messages =
-                    IntStream.range(0, numRecords)
+                    IntStream.range(startInclusive, endInclusive)
                             .mapToObj(String::valueOf)
                             .map(String::getBytes)
                             .collect(Collectors.toList());
@@ -189,7 +247,7 @@ public class KinesisStreamsSourceITCase {
                                 .map(
                                         msg ->
                                                 PutRecordsRequestEntry.builder()
-                                                        .partitionKey("fakePartitionKey")
+                                                        .partitionKey(UUID.randomUUID().toString())
                                                         .data(SdkBytes.fromByteArray(msg))
                                                         .build())
                                 .collect(Collectors.toList());
@@ -200,6 +258,15 @@ public class KinesisStreamsSourceITCase {
                     LOG.debug("Added record: {}", result.sequenceNumber());
                 }
             }
+        }
+
+        private void reshard(String streamName) {
+            kinesisClient.updateShardCount(
+                    UpdateShardCountRequest.builder()
+                            .streamName(streamName)
+                            .targetShardCount(targetReshardCount)
+                            .scalingType(ScalingType.UNIFORM_SCALING)
+                            .build());
         }
 
         private boolean streamExists(final String streamName) {
