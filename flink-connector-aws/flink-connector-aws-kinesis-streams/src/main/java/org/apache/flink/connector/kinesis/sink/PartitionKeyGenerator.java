@@ -23,7 +23,7 @@ import java.io.Serializable;
 import java.util.function.Function;
 
 /**
- * This is a serializable function whose {@code accept()} method specifies how to convert from an
+ * This is a serializable function whose {@code apply()} method specifies how to convert from an
  * input element to the partition key, a string.
  */
 @PublicEvolving
