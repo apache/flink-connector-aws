@@ -42,6 +42,7 @@ import software.amazon.awssdk.services.dynamodb.model.StreamStatus;
 import javax.annotation.Nullable;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -75,6 +76,7 @@ public class DynamoDbStreamsSourceEnumerator
     private final DynamoDbStreamsShardAssigner shardAssigner;
     private final ShardAssignerContext shardAssignerContext;
     private final SplitTracker splitTracker;
+    private final Instant startTimestamp;
 
     private final Map<Integer, Set<DynamoDbStreamsShardSplit>> splitAssignment = new HashMap<>();
 
@@ -93,10 +95,16 @@ public class DynamoDbStreamsSourceEnumerator
         this.shardAssignerContext = new ShardAssignerContext(splitAssignment, context);
         InitialPosition initialPosition = sourceConfig.get(STREAM_INITIAL_POSITION);
         if (state == null) {
-            this.splitTracker = new SplitTracker(streamArn, initialPosition);
+            this.startTimestamp = Instant.now();
+            this.splitTracker = new SplitTracker(streamArn, initialPosition, this.startTimestamp);
         } else {
             this.splitTracker =
-                    new SplitTracker(state.getKnownSplits(), streamArn, initialPosition);
+                    new SplitTracker(
+                            state.getKnownSplits(),
+                            streamArn,
+                            initialPosition,
+                            state.getStartTimestamp());
+            this.startTimestamp = state.getStartTimestamp();
         }
     }
 
@@ -231,7 +239,7 @@ public class DynamoDbStreamsSourceEnumerator
     public DynamoDbStreamsSourceEnumeratorState snapshotState(long checkpointId) throws Exception {
         List<DynamoDBStreamsShardSplitWithAssignmentStatus> splitStates =
                 splitTracker.snapshotState(checkpointId);
-        return new DynamoDbStreamsSourceEnumeratorState(splitStates);
+        return new DynamoDbStreamsSourceEnumeratorState(splitStates, startTimestamp);
     }
 
     @Override

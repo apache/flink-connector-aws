@@ -32,15 +32,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.dynamodb.model.Shard;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.InitialPosition.LATEST;
 import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.InitialPosition.TRIM_HORIZON;
 import static org.apache.flink.connector.dynamodb.source.enumerator.SplitAssignmentStatus.ASSIGNED;
 import static org.apache.flink.connector.dynamodb.source.enumerator.SplitAssignmentStatus.FINISHED;
@@ -57,18 +60,21 @@ public class SplitTracker {
     private final Set<String> finishedSplits = new HashSet<>();
     private final String streamArn;
     private final InitialPosition initialPosition;
+    private final Instant startTimestamp;
     private static final Logger LOG = LoggerFactory.getLogger(SplitTracker.class);
 
-    public SplitTracker(String streamArn, InitialPosition initialPosition) {
-        this(Collections.emptyList(), streamArn, initialPosition);
+    public SplitTracker(String streamArn, InitialPosition initialPosition, Instant startTimestamp) {
+        this(Collections.emptyList(), streamArn, initialPosition, startTimestamp);
     }
 
     public SplitTracker(
             List<DynamoDBStreamsShardSplitWithAssignmentStatus> initialState,
             String streamArn,
-            DynamodbStreamsSourceConfigConstants.InitialPosition initialPosition) {
+            DynamodbStreamsSourceConfigConstants.InitialPosition initialPosition,
+            Instant startTimestamp) {
         this.streamArn = streamArn;
         this.initialPosition = initialPosition;
+        this.startTimestamp = startTimestamp;
         initialState.forEach(
                 splitWithStatus -> {
                     DynamoDbStreamsShardSplit currentSplit = splitWithStatus.split();
@@ -89,13 +95,71 @@ public class SplitTracker {
      * @param shardsToAdd collection of splits to add to tracking
      */
     public void addSplits(Collection<Shard> shardsToAdd) {
-        Set<String> discoveredShardIds =
-                shardsToAdd.stream().map(Shard::shardId).collect(Collectors.toSet());
+        if (TRIM_HORIZON.equals(initialPosition)) {
+            addSplitsForTrimHorizon(shardsToAdd);
+            return;
+        }
+        addSplitsForLatest(shardsToAdd);
+    }
+
+    private void addSplitsForLatest(Collection<Shard> shardsToAdd) {
+        List<Shard> openShards =
+                shardsToAdd.stream()
+                        .filter(shard -> shard.sequenceNumberRange().endingSequenceNumber() == null)
+                        .collect(Collectors.toList());
+        Map<String, Shard> shardIdToShardMap =
+                shardsToAdd.stream().collect(Collectors.toMap(Shard::shardId, shard -> shard));
+        for (Shard shard : openShards) {
+            String shardId = shard.shardId();
+            if (knownSplits.containsKey(shardId)) {
+                continue;
+            }
+            String firstShardIdBeforeTimestamp =
+                    findFirstShardIdBeforeTimestamp(shardId, shardIdToShardMap);
+            putAllAncestorShardsTillFirstShardId(
+                    shardId, firstShardIdBeforeTimestamp, shardIdToShardMap);
+        }
+    }
+
+    private void putAllAncestorShardsTillFirstShardId(
+            String shardId,
+            String firstShardIdBeforeTimestamp,
+            Map<String, Shard> shardIdToShardMap) {
+        String currentShardId = shardId;
+        while (currentShardId != null
+                && shardIdToShardMap.containsKey(currentShardId)
+                && !knownSplits.containsKey(currentShardId)) {
+            Shard currentShard = shardIdToShardMap.get(currentShardId);
+            if (Objects.equals(currentShardId, firstShardIdBeforeTimestamp)) {
+                DynamoDbStreamsShardSplit newSplit = mapToSplit(currentShard, LATEST);
+                knownSplits.putIfAbsent(currentShardId, newSplit);
+                break;
+            } else {
+                DynamoDbStreamsShardSplit newSplit = mapToSplit(currentShard, TRIM_HORIZON);
+                knownSplits.putIfAbsent(currentShardId, newSplit);
+            }
+            currentShardId = currentShard.parentShardId();
+        }
+    }
+
+    private String findFirstShardIdBeforeTimestamp(
+            String shardIdToStartWith, Map<String, Shard> shardIdToShardMap) {
+        String shardId = shardIdToStartWith;
+        while (shardId != null && shardIdToShardMap.containsKey(shardId)) {
+            Shard shard = shardIdToShardMap.get(shardId);
+            if (ShardUtils.isShardCreatedBeforeTimestamp(shardId, startTimestamp)) {
+                return shardId;
+            }
+            shardId = shard.parentShardId();
+        }
+        return null;
+    }
+
+    private void addSplitsForTrimHorizon(Collection<Shard> shardsToAdd) {
         for (Shard shard : shardsToAdd) {
             String shardId = shard.shardId();
             if (!knownSplits.containsKey(shardId)) {
-                DynamoDbStreamsShardSplit newSplit =
-                        mapToSplit(shard, getStartingPosition(shard, discoveredShardIds));
+                DynamoDbStreamsShardSplit newSplit = mapToSplit(shard, TRIM_HORIZON);
                 knownSplits.put(shardId, newSplit);
                 addSplitToMapping(newSplit);
             }
@@ -109,27 +173,6 @@ public class SplitTracker {
         parentChildSplitMap
                 .computeIfAbsent(split.getParentShardId(), k -> new HashSet<>())
                 .add(split.splitId());
-    }
-
-    /**
-     * If there is no parent in knownSplits of the current shard, that means that the parent has
-     * been read already, so we start the current shard with the specified initial position. We do
-     * this because we can't really differentiate the case of read from an expired snapshot where
-     * there is a node with parent which was trimmed but a grandparent vs a happy case where there
-     * is a node with no parent. This means that for cases when we are reading from an expired
-     * snapshot, we'll start the first node in the lineage with LATEST shard iterator type.
-     *
-     * @param shard Shard whose starting position has to be determined.
-     */
-    private InitialPosition getStartingPosition(Shard shard, Set<String> discoveredShardIds) {
-        if (shard.parentShardId() == null) {
-            return initialPosition;
-        }
-        if (!knownSplits.containsKey(shard.parentShardId())
-                && !discoveredShardIds.contains(shard.parentShardId())) {
-            return initialPosition;
-        }
-        return TRIM_HORIZON;
     }
 
     private DynamoDbStreamsShardSplit mapToSplit(
@@ -249,6 +292,11 @@ public class SplitTracker {
     @VisibleForTesting
     public Set<String> getKnownSplitIds() {
         return knownSplits.keySet();
+    }
+
+    @VisibleForTesting
+    public Map<String, DynamoDbStreamsShardSplit> getKnownSplits() {
+        return knownSplits;
     }
 
     /**

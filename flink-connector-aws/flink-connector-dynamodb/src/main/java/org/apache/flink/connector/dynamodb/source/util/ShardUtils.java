@@ -78,4 +78,14 @@ public class ShardUtils {
                                 .plus(
                                         DDB_STREAMS_MAX_RETENTION_PERIOD_FOR_RESOLVING_INCONSISTENCIES));
     }
+
+    /**
+     * Returns true if the shard was created before the given timestamp.
+     *
+     * @param shardId
+     * @param startTimestamp
+     */
+    public static boolean isShardCreatedBeforeTimestamp(String shardId, Instant startTimestamp) {
+        return getShardCreationTime(shardId).isBefore(startTimestamp);
+    }
 }
