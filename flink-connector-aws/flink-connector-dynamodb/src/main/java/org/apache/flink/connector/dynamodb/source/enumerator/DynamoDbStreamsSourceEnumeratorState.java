@@ -20,6 +20,7 @@ package org.apache.flink.connector.dynamodb.source.enumerator;
 
 import org.apache.flink.annotation.Internal;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -29,13 +30,20 @@ import java.util.List;
 @Internal
 public class DynamoDbStreamsSourceEnumeratorState {
     private final List<DynamoDBStreamsShardSplitWithAssignmentStatus> knownSplits;
+    private final Instant startTimestamp;
 
     public DynamoDbStreamsSourceEnumeratorState(
-            List<DynamoDBStreamsShardSplitWithAssignmentStatus> knownSplits) {
+            final List<DynamoDBStreamsShardSplitWithAssignmentStatus> knownSplits,
+            final Instant startTimestamp) {
         this.knownSplits = knownSplits;
+        this.startTimestamp = startTimestamp;
     }
 
     public List<DynamoDBStreamsShardSplitWithAssignmentStatus> getKnownSplits() {
         return knownSplits;
+    }
+
+    public Instant getStartTimestamp() {
+        return startTimestamp;
     }
 }

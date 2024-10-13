@@ -29,6 +29,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -66,6 +67,7 @@ public class DynamoDbStreamsSourceEnumeratorStateSerializer
                 out.write(serializedSplit);
                 out.writeInt(split.assignmentStatus().getStatusCode());
             }
+            out.writeLong(dynamoDbStreamsSourceEnumeratorState.getStartTimestamp().toEpochMilli());
 
             out.flush();
 
@@ -109,11 +111,12 @@ public class DynamoDbStreamsSourceEnumeratorStateSerializer
                 }
             }
 
+            Instant startTimestamp = Instant.ofEpochMilli(in.readLong());
             if (in.available() > 0) {
                 throw new IOException("Unexpected trailing bytes when deserializing.");
             }
 
-            return new DynamoDbStreamsSourceEnumeratorState(knownSplits);
+            return new DynamoDbStreamsSourceEnumeratorState(knownSplits, startTimestamp);
         }
     }
 }
