@@ -293,7 +293,7 @@ class RowDataFieldsKinesisPartitionKeyGeneratorTest {
     }
 
     private TableOptionsBuilder defaultTableOptions() {
-        String connector = KinesisDynamicTableSinkFactory.IDENTIFIER;
+        String connector = KinesisDynamicTableFactory.IDENTIFIER;
         String format = TestFormatFactory.IDENTIFIER;
         return new TableOptionsBuilder(connector, format)
                 // default table options

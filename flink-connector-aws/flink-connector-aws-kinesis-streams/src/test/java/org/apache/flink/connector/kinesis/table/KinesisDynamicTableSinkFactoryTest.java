@@ -20,6 +20,7 @@ package org.apache.flink.connector.kinesis.table;
 
 import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.connector.kinesis.sink.KinesisStreamsSink;
+import org.apache.flink.connector.kinesis.source.util.TestUtil;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.catalog.Column;
@@ -50,7 +51,7 @@ import static org.apache.flink.connector.kinesis.table.KinesisConnectorOptions.S
 import static org.apache.flink.table.factories.utils.FactoryMocks.createTableSink;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** Test for {@link KinesisDynamicSink} created by {@link KinesisDynamicTableSinkFactory}. */
+/** Test for {@link KinesisDynamicSink} created by {@link KinesisDynamicTableFactory}. */
 class KinesisDynamicTableSinkFactoryTest {
     private static final String STREAM_NAME = "myStream";
 
@@ -67,17 +68,16 @@ class KinesisDynamicTableSinkFactoryTest {
 
         // Construct expected DynamicTableSink using factory under test
         KinesisDynamicSink expectedSink =
-                (KinesisDynamicSink)
-                        new KinesisDynamicSink.KinesisDynamicTableSinkBuilder()
-                                .setConsumedDataType(physicalDataType)
-                                .setStream(STREAM_NAME)
-                                .setKinesisClientProperties(defaultProducerProperties())
-                                .setEncodingFormat(new TestFormatFactory.EncodingFormatMock(","))
-                                .setPartitioner(
-                                        new RowDataFieldsKinesisPartitionKeyGenerator(
-                                                (RowType) physicalDataType.getLogicalType(),
-                                                sinkPartitionKeys))
-                                .build();
+                new KinesisDynamicSink.KinesisDynamicTableSinkBuilder()
+                        .setConsumedDataType(physicalDataType)
+                        .setStreamArn(TestUtil.STREAM_ARN)
+                        .setKinesisClientProperties(defaultProducerProperties())
+                        .setEncodingFormat(new TestFormatFactory.EncodingFormatMock(","))
+                        .setPartitioner(
+                                new RowDataFieldsKinesisPartitionKeyGenerator(
+                                        (RowType) physicalDataType.getLogicalType(),
+                                        sinkPartitionKeys))
+                        .build();
         // verify that the constructed DynamicTableSink is as expected
         Assertions.assertThat(actualSink).isEqualTo(expectedSink);
 
@@ -101,17 +101,16 @@ class KinesisDynamicTableSinkFactoryTest {
 
         // Construct expected DynamicTableSink using factory under test
         KinesisDynamicSink expectedSink =
-                (KinesisDynamicSink)
-                        new KinesisDynamicSink.KinesisDynamicTableSinkBuilder()
-                                .setConsumedDataType(physicalDataType)
-                                .setStream(STREAM_NAME)
-                                .setKinesisClientProperties(defaultProducerProperties())
-                                .setEncodingFormat(new TestFormatFactory.EncodingFormatMock(","))
-                                .setPartitioner(
-                                        new RowDataFieldsKinesisPartitionKeyGenerator(
-                                                (RowType) physicalDataType.getLogicalType(),
-                                                sinkPartitionKeys))
-                                .build();
+                new KinesisDynamicSink.KinesisDynamicTableSinkBuilder()
+                        .setConsumedDataType(physicalDataType)
+                        .setStreamArn(TestUtil.STREAM_ARN)
+                        .setKinesisClientProperties(defaultProducerProperties())
+                        .setEncodingFormat(new TestFormatFactory.EncodingFormatMock(","))
+                        .setPartitioner(
+                                new RowDataFieldsKinesisPartitionKeyGenerator(
+                                        (RowType) physicalDataType.getLogicalType(),
+                                        sinkPartitionKeys))
+                        .build();
         Assertions.assertThat(actualSink).isEqualTo(expectedSink.copy());
         Assertions.assertThat(expectedSink).isNotSameAs(expectedSink.copy());
     }
@@ -130,7 +129,7 @@ class KinesisDynamicTableSinkFactoryTest {
                 (KinesisDynamicSink)
                         new KinesisDynamicSink.KinesisDynamicTableSinkBuilder()
                                 .setConsumedDataType(sinkSchema.toPhysicalRowDataType())
-                                .setStream(STREAM_NAME)
+                                .setStreamArn(TestUtil.STREAM_ARN)
                                 .setKinesisClientProperties(defaultProducerProperties())
                                 .setEncodingFormat(new TestFormatFactory.EncodingFormatMock(","))
                                 .setPartitioner(new RandomKinesisPartitionKeyGenerator<>())
@@ -159,7 +158,7 @@ class KinesisDynamicTableSinkFactoryTest {
                 (KinesisDynamicSink)
                         getDefaultSinkBuilder()
                                 .setConsumedDataType(sinkSchema.toPhysicalRowDataType())
-                                .setStream(STREAM_NAME)
+                                .setStreamArn(TestUtil.STREAM_ARN)
                                 .setKinesisClientProperties(defaultProducerProperties())
                                 .setEncodingFormat(new TestFormatFactory.EncodingFormatMock(","))
                                 .setPartitioner(new RandomKinesisPartitionKeyGenerator<>())
@@ -187,7 +186,7 @@ class KinesisDynamicTableSinkFactoryTest {
         KinesisDynamicSink expectedSink =
                 getDefaultSinkBuilder()
                         .setConsumedDataType(sinkSchema.toPhysicalRowDataType())
-                        .setStream(STREAM_NAME)
+                        .setStreamArn(TestUtil.STREAM_ARN)
                         .setKinesisClientProperties(defaultProducerProperties())
                         .setEncodingFormat(new TestFormatFactory.EncodingFormatMock(","))
                         .setPartitioner(new RandomKinesisPartitionKeyGenerator<>())
@@ -232,7 +231,7 @@ class KinesisDynamicTableSinkFactoryTest {
                                 .setMaxInFlightRequests(100)
                                 .setMaxTimeInBufferMS(1000)
                                 .setConsumedDataType(sinkSchema.toPhysicalRowDataType())
-                                .setStream(STREAM_NAME)
+                                .setStreamArn(TestUtil.STREAM_ARN)
                                 .setKinesisClientProperties(defaultProducerProperties())
                                 .setEncodingFormat(new TestFormatFactory.EncodingFormatMock(","))
                                 .setPartitioner(new RandomKinesisPartitionKeyGenerator<>())
@@ -301,9 +300,9 @@ class KinesisDynamicTableSinkFactoryTest {
 
     private TableOptionsBuilder defaultTableOptionsWithSinkAndConsumerOptions() {
         return defaultTableOptionsWithSinkOptions()
-                .withTableOption("scan.stream.initpos", "AT_TIMESTAMP")
-                .withTableOption("scan.stream.initpos-timestamp-format", "yyyy-MM-dd'T'HH:mm:ss")
-                .withTableOption("scan.stream.initpos-timestamp", "2022-10-22T12:00:00");
+                .withTableOption("source.init.position", "AT_TIMESTAMP")
+                .withTableOption("source.init.timestamp.format", "yyyy-MM-dd'T'HH:mm:ss")
+                .withTableOption("source.init.timestamp", "2022-10-22T12:00:00");
     }
 
     private TableOptionsBuilder defaultTableOptionsWithDeprecatedOptions() {
@@ -315,11 +314,11 @@ class KinesisDynamicTableSinkFactoryTest {
     }
 
     private TableOptionsBuilder defaultTableOptions() {
-        String connector = KinesisDynamicTableSinkFactory.IDENTIFIER;
+        String connector = KinesisDynamicTableFactory.IDENTIFIER;
         String format = TestFormatFactory.IDENTIFIER;
         return new TableOptionsBuilder(connector, format)
                 // default table options
-                .withTableOption(KinesisConnectorOptions.STREAM, STREAM_NAME)
+                .withTableOption(KinesisConnectorOptions.STREAM_ARN, TestUtil.STREAM_ARN)
                 .withTableOption("aws.region", "us-west-2")
                 .withTableOption("aws.credentials.provider", "BASIC")
                 .withTableOption("aws.credentials.basic.accesskeyid", "ververicka")

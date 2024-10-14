@@ -84,7 +84,6 @@ class AWSOptionsUtilTest {
     void testMissingAWSCredentials() {
         Map<String, String> defaultProperties = getDefaultAWSConfigurations();
         defaultProperties.remove("aws.credentials.basic.accesskeyid");
-
         AWSOptionUtils awsOptionUtils = new AWSOptionUtils(defaultProperties);
 
         Assertions.assertThatExceptionOfType(IllegalArgumentException.class)
