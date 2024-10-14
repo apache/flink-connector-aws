@@ -52,6 +52,7 @@ public class DynamoDbDynamicSinkFactory extends AsyncDynamicTableSinkFactory {
                 DynamoDbDynamicSink.builder()
                         .setTableName(dynamoDbConfiguration.getTableName())
                         .setFailOnError(dynamoDbConfiguration.getFailOnError())
+                        .setIgnoreNulls(dynamoDbConfiguration.getIgnoreNulls())
                         .setPhysicalDataType(
                                 catalogTable.getResolvedSchema().toPhysicalRowDataType())
                         .setOverwriteByPartitionKeys(new HashSet<>(catalogTable.getPartitionKeys()))
