@@ -25,6 +25,7 @@ import org.apache.flink.core.io.VersionMismatchException;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -32,7 +33,6 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.copyOf;
-import static org.apache.flink.connector.dynamodb.source.util.TestUtil.generateShardId;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatExceptionOfType;
 
@@ -45,8 +45,21 @@ class DynamoDbStreamsSourceEnumeratorStateSerializerTest {
                         IntStream.rangeClosed(0, 3),
                         IntStream.rangeClosed(4, 10),
                         IntStream.rangeClosed(11, 15));
+        Instant startTimestamp = Instant.now();
+        DynamoDbStreamsSourceEnumeratorState deserializedState =
+                getDynamoDbStreamsSourceEnumeratorState(splitsToStore, startTimestamp);
+
+        assertThat(deserializedState.getKnownSplits()).isEqualTo(splitsToStore);
+        assertThat(deserializedState.getStartTimestamp().toEpochMilli())
+                .isEqualTo(startTimestamp.toEpochMilli());
+    }
+
+    private static DynamoDbStreamsSourceEnumeratorState getDynamoDbStreamsSourceEnumeratorState(
+            List<DynamoDBStreamsShardSplitWithAssignmentStatus> splitsToStore,
+            Instant startTimestamp)
+            throws IOException {
         DynamoDbStreamsSourceEnumeratorState initialState =
-                new DynamoDbStreamsSourceEnumeratorState(splitsToStore);
+                new DynamoDbStreamsSourceEnumeratorState(splitsToStore, startTimestamp);
 
         DynamoDbStreamsShardSplitSerializer splitSerializer =
                 new DynamoDbStreamsShardSplitSerializer();
@@ -54,10 +67,7 @@ class DynamoDbStreamsSourceEnumeratorStateSerializerTest {
                 new DynamoDbStreamsSourceEnumeratorStateSerializer(splitSerializer);
 
         byte[] serialized = serializer.serialize(initialState);
-        DynamoDbStreamsSourceEnumeratorState deserializedState =
-                serializer.deserialize(serializer.getVersion(), serialized);
-
-        assertThat(deserializedState).usingRecursiveComparison().isEqualTo(initialState);
+        return serializer.deserialize(serializer.getVersion(), serialized);
     }
 
     @Test
@@ -67,10 +77,10 @@ class DynamoDbStreamsSourceEnumeratorStateSerializerTest {
                         IntStream.rangeClosed(0, 3),
                         IntStream.rangeClosed(4, 10),
                         IntStream.rangeClosed(11, 15));
-        String lastSeenShardId = generateShardId(15);
+        Instant startTimestamp = Instant.now();
 
         DynamoDbStreamsSourceEnumeratorState initialState =
-                new DynamoDbStreamsSourceEnumeratorState(splitsToStore);
+                new DynamoDbStreamsSourceEnumeratorState(splitsToStore, startTimestamp);
         DynamoDbStreamsShardSplitSerializer splitSerializer =
                 new DynamoDbStreamsShardSplitSerializer();
         DynamoDbStreamsSourceEnumeratorStateSerializer serializer =
@@ -98,8 +108,9 @@ class DynamoDbStreamsSourceEnumeratorStateSerializerTest {
                         IntStream.rangeClosed(0, 3),
                         IntStream.rangeClosed(4, 10),
                         IntStream.rangeClosed(11, 15));
+        Instant startTimestamp = Instant.now();
         DynamoDbStreamsSourceEnumeratorState initialState =
-                new DynamoDbStreamsSourceEnumeratorState(splitsToStore);
+                new DynamoDbStreamsSourceEnumeratorState(splitsToStore, startTimestamp);
 
         DynamoDbStreamsShardSplitSerializer splitSerializer =
                 new DynamoDbStreamsShardSplitSerializer();
@@ -127,8 +138,9 @@ class DynamoDbStreamsSourceEnumeratorStateSerializerTest {
                         IntStream.rangeClosed(0, 3),
                         IntStream.rangeClosed(4, 10),
                         IntStream.rangeClosed(11, 15));
+        Instant startTimestamp = Instant.now();
         DynamoDbStreamsSourceEnumeratorState initialState =
-                new DynamoDbStreamsSourceEnumeratorState(splitsToStore);
+                new DynamoDbStreamsSourceEnumeratorState(splitsToStore, startTimestamp);
 
         DynamoDbStreamsShardSplitSerializer splitSerializer =
                 new DynamoDbStreamsShardSplitSerializer();

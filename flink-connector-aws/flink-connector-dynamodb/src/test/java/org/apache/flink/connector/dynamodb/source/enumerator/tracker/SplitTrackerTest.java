@@ -29,6 +29,7 @@ import software.amazon.awssdk.services.dynamodb.model.Shard;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -48,12 +49,14 @@ class SplitTrackerTest {
 
     @Test
     public void testSplitsWithoutParentsAreAvailableToAssign() {
-        SplitTracker splitTracker = new SplitTracker(STREAM_ARN, InitialPosition.TRIM_HORIZON);
+        Instant startTime = Instant.now();
+        SplitTracker splitTracker =
+                new SplitTracker(STREAM_ARN, InitialPosition.TRIM_HORIZON, startTime);
         Shard shard = generateShard(0, "1200", null, null);
         splitTracker.addSplits(Collections.singletonList(shard));
         List<String> pendingSplitIds =
                 splitTracker.splitsAvailableForAssignment().stream()
-                        .map(split -> split.splitId())
+                        .map(DynamoDbStreamsShardSplit::splitId)
                         .collect(Collectors.toList());
         assertThat(pendingSplitIds).containsExactly(shard.shardId());
     }
@@ -102,7 +105,9 @@ class SplitTrackerTest {
                                                 split, SplitAssignmentStatus.UNASSIGNED))
                         .collect(Collectors.toList()));
 
-        SplitTracker splitTracker = new SplitTracker(STREAM_ARN, InitialPosition.TRIM_HORIZON);
+        Instant startTime = Instant.now();
+        SplitTracker splitTracker =
+                new SplitTracker(STREAM_ARN, InitialPosition.TRIM_HORIZON, startTime);
         splitTracker.addSplits(
                 Stream.of(assignedShards, unassignedShards, finishedShards)
                         .flatMap(Collection::stream)
@@ -145,8 +150,9 @@ class SplitTrackerTest {
         List<DynamoDBStreamsShardSplitWithAssignmentStatus> initialState =
                 Stream.concat(assignedSplits, unassignedSplits).collect(Collectors.toList());
 
+        Instant startTime = Instant.now();
         SplitTracker splitTracker =
-                new SplitTracker(initialState, STREAM_ARN, InitialPosition.TRIM_HORIZON);
+                new SplitTracker(initialState, STREAM_ARN, InitialPosition.TRIM_HORIZON, startTime);
 
         // Verify that produced state is the same
         assertThat(splitTracker.snapshotState(0)).containsExactlyInAnyOrderElementsOf(initialState);
@@ -169,8 +175,9 @@ class SplitTrackerTest {
                                                 split, SplitAssignmentStatus.UNASSIGNED))
                         .collect(Collectors.toList());
 
+        Instant startTime = Instant.now();
         SplitTracker splitTracker =
-                new SplitTracker(initialState, STREAM_ARN, InitialPosition.TRIM_HORIZON);
+                new SplitTracker(initialState, STREAM_ARN, InitialPosition.TRIM_HORIZON, startTime);
         List<DynamoDbStreamsShardSplit> splitsToAssign =
                 Collections.singletonList(getTestSplit(generateShardId(0)));
 
@@ -192,8 +199,9 @@ class SplitTrackerTest {
                                                 split, SplitAssignmentStatus.UNASSIGNED))
                         .collect(Collectors.toList());
 
+        Instant startTime = Instant.now();
         SplitTracker splitTracker =
-                new SplitTracker(initialState, STREAM_ARN, InitialPosition.TRIM_HORIZON);
+                new SplitTracker(initialState, STREAM_ARN, InitialPosition.TRIM_HORIZON, startTime);
         List<String> splitIdsToFinish = Collections.singletonList(generateShardId(0));
 
         assertThatNoException().isThrownBy(() -> splitTracker.markAsFinished(splitIdsToFinish));
@@ -217,7 +225,9 @@ class SplitTrackerTest {
                         generateShard(4, "4000", null, generateShardId(1)),
                         generateShard(5, "5000", null, generateShardId(1)));
 
-        SplitTracker splitTracker = new SplitTracker(STREAM_ARN, InitialPosition.TRIM_HORIZON);
+        Instant startTime = Instant.now();
+        SplitTracker splitTracker =
+                new SplitTracker(STREAM_ARN, InitialPosition.TRIM_HORIZON, startTime);
         splitTracker.addSplits(
                 Stream.of(shardWithParents, shardsWithoutParents)
                         .flatMap(Collection::stream)
@@ -245,7 +255,9 @@ class SplitTrackerTest {
                 Arrays.asList(
                         generateShard(8, "8000", null, null), generateShard(9, "9000", null, null));
 
-        SplitTracker splitTracker = new SplitTracker(STREAM_ARN, InitialPosition.TRIM_HORIZON);
+        Instant startTime = Instant.now();
+        SplitTracker splitTracker =
+                new SplitTracker(STREAM_ARN, InitialPosition.TRIM_HORIZON, startTime);
         splitTracker.addSplits(
                 Stream.of(finishedParentShards, shardsWithParents, shardsWithParents)
                         .flatMap(Collection::stream)
@@ -287,7 +299,9 @@ class SplitTrackerTest {
                 Arrays.asList(
                         generateShard(8, "8000", null, null), generateShard(9, "9000", null, null));
 
-        SplitTracker splitTracker = new SplitTracker(STREAM_ARN, InitialPosition.TRIM_HORIZON);
+        Instant startTime = Instant.now();
+        SplitTracker splitTracker =
+                new SplitTracker(STREAM_ARN, InitialPosition.TRIM_HORIZON, startTime);
         splitTracker.addSplits(
                 Stream.of(finishedParentShards, shardsWithParents, shardsWithParents)
                         .flatMap(Collection::stream)
@@ -327,7 +341,9 @@ class SplitTrackerTest {
         List<DynamoDbStreamsShardSplit> splits =
                 shards.stream().map(this::getSplitFromShard).collect(Collectors.toList());
 
-        SplitTracker splitTracker = new SplitTracker(STREAM_ARN, InitialPosition.TRIM_HORIZON);
+        Instant startTime = Instant.now();
+        SplitTracker splitTracker =
+                new SplitTracker(STREAM_ARN, InitialPosition.TRIM_HORIZON, startTime);
         splitTracker.addSplits(shards);
 
         splitTracker.markAsAssigned(splits.subList(0, 3));
@@ -356,7 +372,9 @@ class SplitTrackerTest {
                         generateShard(4, "4400", null, generateShardId(1)),
                         generateShard(secondShardId, "4100", null, firstShardId));
 
-        SplitTracker splitTracker = new SplitTracker(STREAM_ARN, InitialPosition.TRIM_HORIZON);
+        Instant startTime = Instant.now();
+        SplitTracker splitTracker =
+                new SplitTracker(STREAM_ARN, InitialPosition.TRIM_HORIZON, startTime);
         splitTracker.addSplits(shards);
 
         splitTracker.markAsFinished(Arrays.asList(firstShardId, secondShardId));
@@ -374,6 +392,147 @@ class SplitTrackerTest {
         // second shard has been finished but was created 23 hours ago, so it should not get cleaned
         // up.
         assertThat(splitTracker.getKnownSplitIds()).contains(secondShardId);
+    }
+
+    @Test
+    public void testSplitTrackWithLatestShardIteratorAndTimestampWithoutSnapshot() {
+        Instant currentTimestamp = Instant.now();
+        // shards produced by splitting parent shard
+        List<Shard> shards =
+                Arrays.asList(
+                        generateShard(
+                                currentTimestamp.minus(Duration.ofHours(1)).toEpochMilli(),
+                                "1000",
+                                "1500",
+                                null),
+                        generateShard(
+                                currentTimestamp.minus(Duration.ofMinutes(30)).toEpochMilli(),
+                                "1200",
+                                "1300",
+                                null),
+                        generateShard(
+                                currentTimestamp.minus(Duration.ofMinutes(20)).toEpochMilli(),
+                                "2000",
+                                null,
+                                null),
+                        // shards produced by splitting parent shard
+                        generateShard(
+                                currentTimestamp.plus(Duration.ofMinutes(10)).toEpochMilli(),
+                                "3100",
+                                null,
+                                generateShardId(
+                                        currentTimestamp
+                                                .minus(Duration.ofHours(1))
+                                                .toEpochMilli())),
+                        generateShard(
+                                currentTimestamp.plus(Duration.ofMinutes(30)).toEpochMilli(),
+                                "4400",
+                                null,
+                                generateShardId(
+                                        currentTimestamp
+                                                .minus(Duration.ofMinutes(30))
+                                                .toEpochMilli())));
+        SplitTracker splitTracker =
+                new SplitTracker(STREAM_ARN, InitialPosition.LATEST, currentTimestamp);
+        splitTracker.addSplits(shards);
+        assertThat(splitTracker.getKnownSplits())
+                .containsExactlyInAnyOrderEntriesOf(
+                        shards.stream()
+                                .map(
+                                        shard ->
+                                                new DynamoDbStreamsShardSplit(
+                                                        STREAM_ARN,
+                                                        shard.shardId(),
+                                                        shard.parentShardId() == null
+                                                                ? StartingPosition.latest()
+                                                                : StartingPosition.fromStart(),
+                                                        shard.parentShardId()))
+                                .collect(
+                                        Collectors.toMap(
+                                                DynamoDbStreamsShardSplit::splitId,
+                                                split -> split)));
+    }
+
+    @Test
+    public void testSplitTrackWithLatestShardIteratorAndTimestampWithSnapshot() {
+        Instant currentTimestamp = Instant.now();
+        // shards produced by splitting parent shard
+        List<Shard> shards =
+                Arrays.asList(
+                        generateShard(
+                                currentTimestamp.minus(Duration.ofHours(1)).toEpochMilli(),
+                                "1000",
+                                "1500",
+                                null),
+                        generateShard(
+                                currentTimestamp.minus(Duration.ofMinutes(30)).toEpochMilli(),
+                                "1200",
+                                "1300",
+                                null),
+                        generateShard(
+                                currentTimestamp.minus(Duration.ofMinutes(20)).toEpochMilli(),
+                                "2000",
+                                null,
+                                null),
+                        // shards produced by splitting parent shard
+                        generateShard(
+                                currentTimestamp.minus(Duration.ofMinutes(10)).toEpochMilli(),
+                                "3100",
+                                null,
+                                generateShardId(
+                                        currentTimestamp
+                                                .minus(Duration.ofHours(1))
+                                                .toEpochMilli())));
+        List<DynamoDBStreamsShardSplitWithAssignmentStatus> splitWithAssignmentStatuses =
+                shards.stream()
+                        .map(
+                                shard -> {
+                                    DynamoDbStreamsShardSplit split =
+                                            new DynamoDbStreamsShardSplit(
+                                                    STREAM_ARN,
+                                                    shard.shardId(),
+                                                    StartingPosition.fromStart(),
+                                                    shard.parentShardId());
+                                    return new DynamoDBStreamsShardSplitWithAssignmentStatus(
+                                            split, SplitAssignmentStatus.ASSIGNED);
+                                })
+                        .collect(Collectors.toList());
+        SplitTracker splitTracker =
+                new SplitTracker(
+                        splitWithAssignmentStatuses,
+                        STREAM_ARN,
+                        InitialPosition.LATEST,
+                        currentTimestamp);
+        List<Shard> shardsToAdd =
+                Arrays.asList(
+                        generateShard(
+                                currentTimestamp.plus(Duration.ofMinutes(10)).toEpochMilli(),
+                                "4400",
+                                null,
+                                shards.get(2).shardId()),
+                        generateShard(
+                                currentTimestamp.plus(Duration.ofMinutes(30)).toEpochMilli(),
+                                "5100",
+                                null,
+                                shards.get(0).shardId()));
+        splitTracker.addSplits(shardsToAdd);
+        List<Shard> allShards = new ArrayList<>();
+        allShards.addAll(shards);
+        allShards.addAll(shardsToAdd);
+        assertThat(splitTracker.getKnownSplits())
+                .containsExactlyInAnyOrderEntriesOf(
+                        allShards.stream()
+                                .map(
+                                        shard ->
+                                                new DynamoDbStreamsShardSplit(
+                                                        STREAM_ARN,
+                                                        shard.shardId(),
+                                                        StartingPosition.fromStart(),
+                                                        shard.parentShardId()))
+                                .collect(
+                                        Collectors.toMap(
+                                                DynamoDbStreamsShardSplit::splitId,
+                                                split -> split)));
     }
 
     private DynamoDbStreamsShardSplit getSplitFromShard(Shard shard) {
