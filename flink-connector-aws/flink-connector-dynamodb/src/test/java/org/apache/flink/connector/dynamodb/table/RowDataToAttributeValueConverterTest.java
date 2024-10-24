@@ -19,6 +19,7 @@
 package org.apache.flink.connector.dynamodb.table;
 
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.api.TableException;
 import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.GenericArrayData;
 import org.apache.flink.table.data.GenericRowData;
@@ -26,6 +27,7 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.types.DataType;
+import org.apache.flink.types.RowKind;
 
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
@@ -34,12 +36,17 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /** Test for {@link RowDataToAttributeValueConverter}. */
 public class RowDataToAttributeValueConverterTest {
@@ -547,9 +554,173 @@ public class RowDataToAttributeValueConverterTest {
         assertThat(actualResult).containsAllEntriesOf(expectedResult);
     }
 
+    @Test
+    void testDeleteExceptionWhenNoPrimaryKey() {
+        String key = "key";
+        String value = "some_string";
+        String otherField = "other_field";
+        String otherValue = "other_value";
+        Set<String> primaryKeys = Collections.emptySet();
+
+        // Create a Row with two fields - "key" and "otherField".  "key" is the single primary key.
+        DataType dataType =
+                DataTypes.ROW(
+                        DataTypes.FIELD(key, DataTypes.STRING()),
+                        DataTypes.FIELD(otherField, DataTypes.STRING()));
+        RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
+                new RowDataToAttributeValueConverter(dataType, primaryKeys);
+        RowData rowData =
+                createElementWithMultipleFields(
+                        StringData.fromString(value), StringData.fromString(otherValue));
+        rowData.setRowKind(RowKind.DELETE);
+
+        assertThrows(
+                TableException.class,
+                () -> {
+                    rowDataToAttributeValueConverter.convertRowData(rowData);
+                });
+    }
+
+    void testDeleteOnlyPrimaryKey() {
+        String key = "key";
+        String value = "some_string";
+        String otherField = "other_field";
+        String otherValue = "other_value";
+        Set<String> primaryKeys = new HashSet<>(Collections.singletonList(key));
+
+        // Create a Row with two fields - "key" and "otherField".  "key" is the single primary key.
+        // For a Delete request, only "key" should be included in the expectedResult, and not
+        // "otherField".
+        DataType dataType =
+                DataTypes.ROW(
+                        DataTypes.FIELD(key, DataTypes.STRING()),
+                        DataTypes.FIELD(otherField, DataTypes.STRING()));
+        RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
+                new RowDataToAttributeValueConverter(dataType, primaryKeys);
+        RowData rowData =
+                createElementWithMultipleFields(
+                        StringData.fromString(value), StringData.fromString(otherValue));
+        rowData.setRowKind(RowKind.DELETE);
+
+        Map<String, AttributeValue> actualResult =
+                rowDataToAttributeValueConverter.convertRowData(rowData);
+        Map<String, AttributeValue> expectedResult =
+                singletonMap(key, AttributeValue.builder().s(value).build());
+
+        assertThat(actualResult).containsExactlyInAnyOrderEntriesOf(expectedResult);
+    }
+
+    @Test
+    void testDeleteOnlyPrimaryKeys() {
+        String key = "key";
+        String value = "some_string";
+        String additionalKey = "additional_key";
+        String additionalValue = "additional_value";
+        String otherField = "other_field";
+        String otherValue = "other_value";
+        Set<String> primaryKeys = new HashSet<>();
+        primaryKeys.add(key);
+        primaryKeys.add(additionalKey);
+
+        // Create a Row with three fields - "key", "additional_key", and "otherField".
+        // "key" and "additional_key" make up the composite primary key.
+        // For a Delete request, only "key" and "additional_key" should be included in the
+        // expectedResult, and not "otherField".
+        DataType dataType =
+                DataTypes.ROW(
+                        DataTypes.FIELD(key, DataTypes.STRING()),
+                        DataTypes.FIELD(additionalKey, DataTypes.STRING()),
+                        DataTypes.FIELD(otherField, DataTypes.STRING()));
+        RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
+                new RowDataToAttributeValueConverter(dataType, primaryKeys);
+        RowData rowData =
+                createElementWithMultipleFields(
+                        StringData.fromString(value),
+                        StringData.fromString(additionalValue),
+                        StringData.fromString(otherValue));
+        rowData.setRowKind(RowKind.DELETE);
+
+        Map<String, AttributeValue> actualResult =
+                rowDataToAttributeValueConverter.convertRowData(rowData);
+        Map<String, AttributeValue> expectedResult = new HashMap<>();
+        expectedResult.put(key, AttributeValue.builder().s(value).build());
+        expectedResult.put(additionalKey, AttributeValue.builder().s(additionalValue).build());
+
+        assertThat(actualResult).containsExactlyInAnyOrderEntriesOf(expectedResult);
+    }
+
+    @Test
+    void testPKIgnoredForInsert() {
+        String key = "key";
+        String value = "some_string";
+        String otherField = "other_field";
+        String otherValue = "other_value";
+        Set<String> primaryKeys = new HashSet<>(Collections.singletonList(key));
+
+        // Create a Row with two fields - "key" and "otherField".  "key" is the primary key.
+        // For an Insert request, all fields should be included regardless of the Primary Key.
+        DataType dataType =
+                DataTypes.ROW(
+                        DataTypes.FIELD(key, DataTypes.STRING()),
+                        DataTypes.FIELD(otherField, DataTypes.STRING()));
+        RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
+                new RowDataToAttributeValueConverter(dataType, primaryKeys);
+        RowData rowData =
+                createElementWithMultipleFields(
+                        StringData.fromString(value), StringData.fromString(otherValue));
+        rowData.setRowKind(RowKind.INSERT);
+
+        Map<String, AttributeValue> actualResult =
+                rowDataToAttributeValueConverter.convertRowData(rowData);
+        Map<String, AttributeValue> expectedResult = new HashMap<>();
+        expectedResult.put(key, AttributeValue.builder().s(value).build());
+        expectedResult.put(otherField, AttributeValue.builder().s(otherValue).build());
+
+        assertThat(actualResult).containsExactlyInAnyOrderEntriesOf(expectedResult);
+    }
+
+    @Test
+    void testPKIgnoredForUpdateAfter() {
+        String key = "key";
+        String value = "some_string";
+        String otherField = "other_field";
+        String otherValue = "other_value";
+        Set<String> primaryKeys = Collections.singleton(key);
+
+        // Create a Row with two fields - "key" and "otherField".  "key" is the primary key.
+        // For an UPDATE_BEFORE request, all fields should be included regardless of the Primary
+        // Key.
+        DataType dataType =
+                DataTypes.ROW(
+                        DataTypes.FIELD(key, DataTypes.STRING()),
+                        DataTypes.FIELD(otherField, DataTypes.STRING()));
+        RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
+                new RowDataToAttributeValueConverter(dataType, primaryKeys);
+        RowData rowData =
+                createElementWithMultipleFields(
+                        StringData.fromString(value), StringData.fromString(otherValue));
+        rowData.setRowKind(RowKind.UPDATE_AFTER);
+
+        Map<String, AttributeValue> actualResult =
+                rowDataToAttributeValueConverter.convertRowData(rowData);
+        Map<String, AttributeValue> expectedResult = new HashMap<>();
+        expectedResult.put(key, AttributeValue.builder().s(value).build());
+        expectedResult.put(otherField, AttributeValue.builder().s(otherValue).build());
+
+        assertThat(actualResult).containsExactlyInAnyOrderEntriesOf(expectedResult);
+    }
+
     private RowData createElement(Object value) {
         GenericRowData element = new GenericRowData(1);
         element.setField(0, value);
+        return element;
+    }
+
+    private RowData createElementWithMultipleFields(Object... values) {
+        GenericRowData element = new GenericRowData(values.length);
+        for (int i = 0; i < values.length; i++) {
+            element.setField(i, values[i]);
+        }
         return element;
     }
 

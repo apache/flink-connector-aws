@@ -27,6 +27,8 @@ import org.apache.flink.table.api.TableException;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
 
+import java.util.Set;
+
 /**
  * Implementation of an {@link ElementConverter} for the DynamoDb Table sink. The element converter
  * maps the Flink internal type of {@link RowData} to a {@link DynamoDbWriteRequest} to be used by
@@ -36,19 +38,21 @@ import org.apache.flink.table.types.DataType;
 public class RowDataElementConverter implements ElementConverter<RowData, DynamoDbWriteRequest> {
 
     private final DataType physicalDataType;
+    private final Set<String> primaryKeys;
     private transient RowDataToAttributeValueConverter rowDataToAttributeValueConverter;
 
-    public RowDataElementConverter(DataType physicalDataType) {
+    public RowDataElementConverter(DataType physicalDataType, Set<String> primaryKeys) {
         this.physicalDataType = physicalDataType;
+        this.primaryKeys = primaryKeys;
         this.rowDataToAttributeValueConverter =
-                new RowDataToAttributeValueConverter(physicalDataType);
+                new RowDataToAttributeValueConverter(physicalDataType, primaryKeys);
     }
 
     @Override
     public DynamoDbWriteRequest apply(RowData element, SinkWriter.Context context) {
         if (rowDataToAttributeValueConverter == null) {
             rowDataToAttributeValueConverter =
-                    new RowDataToAttributeValueConverter(physicalDataType);
+                    new RowDataToAttributeValueConverter(physicalDataType, primaryKeys);
         }
 
         DynamoDbWriteRequest.Builder builder =
