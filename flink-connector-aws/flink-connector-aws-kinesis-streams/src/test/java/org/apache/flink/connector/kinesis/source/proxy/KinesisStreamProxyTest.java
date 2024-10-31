@@ -151,14 +151,14 @@ class KinesisStreamProxyTest {
                                 ListShardItem.builder()
                                         .validation(
                                                 getListShardRequestValidation(
-                                                        STREAM_ARN, null, "next-token-1"))
+                                                        null, null, "next-token-1"))
                                         .shards(expectedShards.subList(1, 2))
                                         .nextToken("next-token-2")
                                         .build(),
                                 ListShardItem.builder()
                                         .validation(
                                                 getListShardRequestValidation(
-                                                        STREAM_ARN, null, "next-token-2"))
+                                                        null, null, "next-token-2"))
                                         .shards(expectedShards.subList(2, 4))
                                         .nextToken(null)
                                         .build())
@@ -461,6 +461,9 @@ class KinesisStreamProxyTest {
                             .nextToken(nextToken)
                             .build();
             assertThat(req).isEqualTo(expectedReq);
+            if (nextToken != null) {
+                assertThat(streamArn).isNull();
+            }
         };
     }
 

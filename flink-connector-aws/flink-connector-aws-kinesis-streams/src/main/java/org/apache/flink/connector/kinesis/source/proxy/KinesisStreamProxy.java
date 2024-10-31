@@ -76,7 +76,7 @@ public class KinesisStreamProxy implements StreamProxy {
             listShardsResponse =
                     kinesisClient.listShards(
                             ListShardsRequest.builder()
-                                    .streamARN(streamArn)
+                                    .streamARN(nextToken == null ? streamArn : null)
                                     .shardFilter(
                                             nextToken == null
                                                     ? startingPosition.getShardFilter()
