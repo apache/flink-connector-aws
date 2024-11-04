@@ -31,7 +31,7 @@ under the License.
 
     <groupId>org.apache.flink</groupId>
     <artifactId>flink-connector-aws</artifactId>
-    <version>4.4-SNAPSHOT</version>
+    <version>5.0.0</version>
 
     <name>Flink : Connectors : AWS</name>
     <packaging>pom</packaging>
