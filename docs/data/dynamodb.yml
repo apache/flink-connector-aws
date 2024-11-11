@@ -16,7 +16,7 @@
 # limitations under the License.
 ################################################################################
 
-version: 4.4.0-SNAPSHOT
+version: 5.1-SNAPSHOT
 variants:
   - maven: flink-connector-dynamodb
     sql_url: https://repo.maven.apache.org/maven2/org/apache/flink/flink-sql-connector-dynamodb/$full_version/flink-sql-connector-dynamodb-$full_version.jar
