@@ -17,6 +17,6 @@
 ################################################################################
 
 version: 5.0.0
-flink_compatibility: [1.19, 1.20]
+flink_compatibility: ["1.19", "1.20"]
 variants:
   - maven: flink-connector-sqs
