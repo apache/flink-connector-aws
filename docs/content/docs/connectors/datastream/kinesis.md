@@ -161,7 +161,7 @@ the source does not fail, and will start reading from the earliest possible even
 
 If users want to restore a Flink job from an existing checkpoint or savepoint but want to respect the configured starting position of 
 the stream, users can change the `uid` of the `KinesisStreamsSource` operator to effectively restore this operator without state.
-This is in line with [Flink best practices]({{< ref "docs/ops/production_ready/#set-uuids-for-all-operators" >}}).
+This is in line with Flink best practices.
 
 ### Shard Assignment Strategy
 For most use cases, users would prefer a uniform distribution of records across parallel subtasks. This prevents data skew if data is evenly distributed in the Kinesis Data Stream.
