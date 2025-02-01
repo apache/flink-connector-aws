@@ -19,6 +19,7 @@
 package org.apache.flink.connector.kinesis.source.reader;
 
 import org.apache.flink.connector.kinesis.source.util.TestUtil;
+
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.kinesis.model.Record;
 

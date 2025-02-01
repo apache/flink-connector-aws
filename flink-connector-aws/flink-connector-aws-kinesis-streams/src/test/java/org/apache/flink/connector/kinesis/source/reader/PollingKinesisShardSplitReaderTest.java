@@ -35,6 +35,7 @@ import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -193,6 +194,37 @@ class PollingKinesisShardSplitReaderTest {
 
         // Then all records are fetched
         assertThat(fetchedRecords).containsExactlyInAnyOrderElementsOf(expectedRecords);
+    }
+
+    @Test
+    void testAggregatedRecordsAreDeaggregated() throws Exception {
+        // Given assigned split with aggregated records
+        testStreamProxy.addShards(TEST_SHARD_ID);
+        List<Record> inputRecords =
+                Stream.of(getTestRecord("data-1"), getTestRecord("data-2"), getTestRecord("data-3"))
+                        .collect(Collectors.toList());
+
+        KinesisClientRecord aggregatedRecord = TestUtil.createKinesisAggregatedRecord(inputRecords);
+        testStreamProxy.addRecords(
+                TestUtil.STREAM_ARN,
+                TEST_SHARD_ID,
+                Collections.singletonList(TestUtil.convertToRecord(aggregatedRecord)));
+
+        splitReader.handleSplitsChanges(
+                new SplitsAddition<>(Collections.singletonList(getTestSplit(TEST_SHARD_ID))));
+
+        List<ByteBuffer> expectedRecords = convertToKinesisClientRecord(inputRecords).stream()
+                .map(KinesisClientRecord::data)
+                .collect(Collectors.toList());
+
+        // When fetching records
+        List<KinesisClientRecord> fetchedRecords = readAllRecords(splitReader.fetch());
+
+        // Then all records are fetched
+        assertThat(fetchedRecords)
+                .allMatch(KinesisClientRecord::aggregated)
+                .allMatch(record -> record.explicitHashKey().equals(aggregatedRecord.explicitHashKey()))
+                .extracting("data").containsExactlyInAnyOrderElementsOf(expectedRecords);
     }
 
     @Test

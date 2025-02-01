@@ -18,8 +18,6 @@
 
 package org.apache.flink.connector.kinesis.source.util;
 
-import com.amazonaws.kinesis.agg.AggRecord;
-import com.amazonaws.kinesis.agg.RecordAggregator;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.connector.source.ReaderInfo;
 import org.apache.flink.connector.kinesis.source.metrics.MetricConstants;
@@ -29,6 +27,8 @@ import org.apache.flink.connector.kinesis.source.split.StartingPosition;
 import org.apache.flink.metrics.Gauge;
 import org.apache.flink.metrics.testutils.MetricListener;
 
+import com.amazonaws.kinesis.agg.AggRecord;
+import com.amazonaws.kinesis.agg.RecordAggregator;
 import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.kinesis.model.HashKeyRange;
@@ -37,6 +37,7 @@ import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
 import java.math.BigInteger;
+import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
@@ -166,6 +167,13 @@ public class TestUtil {
                 .build();
     }
 
+    public static Record convertToRecord(KinesisClientRecord record) {
+        return Record.builder()
+                .data(SdkBytes.fromByteBuffer(record.data()))
+                .approximateArrivalTimestamp(record.approximateArrivalTimestamp())
+                .build();
+    }
+
     public static List<KinesisClientRecord> convertToKinesisClientRecord(List<Record> records) {
         return records.stream()
                 .map(KinesisClientRecord::fromRecord)
@@ -173,6 +181,11 @@ public class TestUtil {
     }
 
     public static Record createAggregatedRecord(List<Record> records) {
+        KinesisClientRecord aggregatedRecord = createKinesisAggregatedRecord(records);
+        return convertToRecord(aggregatedRecord);
+    }
+
+    public static KinesisClientRecord createKinesisAggregatedRecord(List<Record> records) {
         RecordAggregator recordAggregator = new RecordAggregator();
 
         for (Record record : records) {
@@ -185,8 +198,10 @@ public class TestUtil {
 
         AggRecord aggRecord = recordAggregator.clearAndGet();
 
-        return Record.builder()
-                .data(SdkBytes.fromByteArray(aggRecord.toRecordBytes()))
+        return KinesisClientRecord.builder()
+                .data(ByteBuffer.wrap(aggRecord.toRecordBytes()))
+                .partitionKey(aggRecord.getPartitionKey())
+                .explicitHashKey(aggRecord.getExplicitHashKey())
                 .approximateArrivalTimestamp(Instant.now())
                 .build();
     }
