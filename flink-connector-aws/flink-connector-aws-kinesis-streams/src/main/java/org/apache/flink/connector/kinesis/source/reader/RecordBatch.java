@@ -25,8 +25,8 @@ import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.kinesis.retrieval.AggregatorUtil;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Dataclass to store a batch of Kinesis records with metadata. Used to pass Kinesis records
@@ -66,9 +66,10 @@ public class RecordBatch {
     private List<KinesisClientRecord> deaggregateRecords(
             final List<Record> records,
             final KinesisShardSplit subscribedShard) {
-        final List<KinesisClientRecord> kinesisClientRecords = records.stream()
-                .map(KinesisClientRecord::fromRecord)
-                .collect(Collectors.toList());
+        final List<KinesisClientRecord> kinesisClientRecords = new ArrayList<>();
+        for (Record record : records) {
+            kinesisClientRecords.add(KinesisClientRecord.fromRecord(record));
+        }
 
         final String startingHashKey = subscribedShard.getStartingHashKey();
         final String endingHashKey = subscribedShard.getEndingHashKey();
