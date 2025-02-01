@@ -26,7 +26,6 @@ import org.slf4j.LoggerFactory;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
-import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.core.SdkSystemSetting;
 import software.amazon.awssdk.http.SdkHttpClient;
 import software.amazon.awssdk.regions.Region;
@@ -308,12 +307,7 @@ public class KinesisStreamsSourceITCase {
             }
 
             AggRecord aggRecord = recordAggregator.clearAndGet();
-
-            return PutRecordsRequestEntry.builder()
-                    .data(SdkBytes.fromByteArray(aggRecord.toRecordBytes()))
-                    .partitionKey(aggRecord.getPartitionKey())
-                    .explicitHashKey(aggRecord.getExplicitHashKey())
-                    .build();
+            return aggRecord.toPutRecordsRequestEntry();
         }
 
         private void reshard(String streamName) {
