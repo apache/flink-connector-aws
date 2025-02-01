@@ -18,6 +18,8 @@
 
 package org.apache.flink.connector.kinesis.source.util;
 
+import com.amazonaws.kinesis.agg.AggRecord;
+import com.amazonaws.kinesis.agg.RecordAggregator;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.connector.source.ReaderInfo;
 import org.apache.flink.connector.kinesis.source.metrics.MetricConstants;
@@ -168,6 +170,25 @@ public class TestUtil {
         return records.stream()
                 .map(KinesisClientRecord::fromRecord)
                 .collect(Collectors.toList());
+    }
+
+    public static Record createAggregatedRecord(List<Record> records) {
+        RecordAggregator recordAggregator = new RecordAggregator();
+
+        for (Record record : records) {
+            try {
+                recordAggregator.addUserRecord("key", record.data().asByteArray());
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to add record to aggregator", e);
+            }
+        }
+
+        AggRecord aggRecord = recordAggregator.clearAndGet();
+
+        return Record.builder()
+                .data(SdkBytes.fromByteArray(aggRecord.toRecordBytes()))
+                .approximateArrivalTimestamp(Instant.now())
+                .build();
     }
 
     public static void assertMillisBehindLatest(

@@ -18,13 +18,10 @@
 
 package org.apache.flink.connector.kinesis.source.reader;
 
-import com.amazonaws.kinesis.agg.AggRecord;
-import com.amazonaws.kinesis.agg.RecordAggregator;
+import org.apache.flink.connector.kinesis.source.util.TestUtil;
 import org.junit.jupiter.api.Test;
-import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.kinesis.model.Record;
 
-import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -54,7 +51,7 @@ class RecordBatchTest {
                 Stream.of(getTestRecord("data-1"), getTestRecord("data-2"), getTestRecord("data-3"))
                         .collect(Collectors.toList());
 
-        Record aggregatedRecord = createAggregatedRecord(records);
+        Record aggregatedRecord = TestUtil.createAggregatedRecord(records);
 
         RecordBatch result =
                 new RecordBatch(Collections.singletonList(aggregatedRecord), getTestSplit(), 100L, true);
@@ -78,24 +75,5 @@ class RecordBatchTest {
                         Collections.singletonList(getTestRecord("data-1")), getTestSplit(), 100L, true);
 
         assertThat(result.isCompleted()).isTrue();
-    }
-
-    private static Record createAggregatedRecord(List<Record> records) {
-        RecordAggregator recordAggregator = new RecordAggregator();
-
-        for (Record record : records) {
-            try {
-                recordAggregator.addUserRecord("key", record.data().asByteArray());
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to add record to aggregator", e);
-            }
-        }
-
-        AggRecord aggRecord = recordAggregator.clearAndGet();
-
-        return Record.builder()
-                .data(SdkBytes.fromByteArray(aggRecord.toRecordBytes()))
-                .approximateArrivalTimestamp(Instant.now())
-                .build();
     }
 }
