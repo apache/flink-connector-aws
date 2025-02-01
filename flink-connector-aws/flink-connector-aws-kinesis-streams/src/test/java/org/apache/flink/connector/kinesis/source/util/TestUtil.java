@@ -32,12 +32,15 @@ import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.kinesis.model.HashKeyRange;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.services.kinesis.model.Shard;
+import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
 import java.math.BigInteger;
 import java.time.Instant;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -159,6 +162,12 @@ public class TestUtil {
                 .data(SdkBytes.fromByteArray(STRING_SCHEMA.serialize(data)))
                 .approximateArrivalTimestamp(Instant.now())
                 .build();
+    }
+
+    public static List<KinesisClientRecord> convertToKinesisClientRecord(List<Record> records) {
+        return records.stream()
+                .map(KinesisClientRecord::fromRecord)
+                .collect(Collectors.toList());
     }
 
     public static void assertMillisBehindLatest(

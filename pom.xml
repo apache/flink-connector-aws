@@ -348,6 +348,11 @@ under the License.
                 <version>1.14.8</version>
             </dependency>
             <dependency>
+                <groupId>software.amazon.kinesis</groupId>
+                <artifactId>amazon-kinesis-client</artifactId>
+                <version>3.0.1</version>
+            </dependency>
+            <dependency>
                 <groupId>com.squareup.okio</groupId>
                 <artifactId>okio</artifactId>
                 <version>3.4.0</version>

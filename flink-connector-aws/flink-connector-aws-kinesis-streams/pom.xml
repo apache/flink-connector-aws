@@ -53,6 +53,11 @@ under the License.
         </dependency>
 
         <dependency>
+            <groupId>software.amazon.kinesis</groupId>
+            <artifactId>amazon-kinesis-client</artifactId>
+        </dependency>
+
+        <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>arns</artifactId>
         </dependency>
