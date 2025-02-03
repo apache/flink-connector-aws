@@ -175,7 +175,7 @@ public class GlueTypeConverter {
      * @param structDefinition The struct definition string to parse.
      * @return The corresponding Flink ROW DataType.
      */
-    private DataType parseStructType(String structDefinition) {
+    public DataType parseStructType(String structDefinition) {
         String[] fields = splitStructFields(structDefinition);
         List<DataTypes.Field> flinkFields = new ArrayList<>();
 
@@ -198,7 +198,7 @@ public class GlueTypeConverter {
      * @param structDefinition The struct definition string to split.
      * @return An array of field definitions.
      */
-    private String[] splitStructFields(String structDefinition) {
+    public String[] splitStructFields(String structDefinition) {
         List<String> fields = new ArrayList<>();
         StringBuilder currentField = new StringBuilder();
         int nestedLevel = 0;

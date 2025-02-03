@@ -19,6 +19,9 @@ public class StreamingJobTest {
     private StreamExecutionEnvironment env;
     private StreamTableEnvironment tEnv;
     private GlueClient fakeGlueClient;
+    private GlueCatalog glueCatalog;
+    private String databaseName;
+    private String tableName;
 
     @Before
     public void setup() throws Exception {
@@ -34,6 +37,15 @@ public class StreamingJobTest {
 
         // Set up the StreamTableEnvironment
         tEnv = StreamTableEnvironment.create(env);
+        String region = "us-east-1";
+        String defaultDB = "default";
+        databaseName = "test";
+        tableName = "tableName";
+        glueCatalog = new GlueCatalog("glueCatalog",defaultDB,region,fakeGlueClient);
+
+        // Register the catalog in Flink
+        tEnv.registerCatalog("myGlueCatalog", glueCatalog);
+        tEnv.useCatalog("myGlueCatalog");
     }
 
     @After
@@ -46,16 +58,9 @@ public class StreamingJobTest {
     @Test
     public void testCreateDatabase() throws Exception {
         // Initialize GlueCatalog with necessary parameters
-        String region = "us-east-1";
-        String databaseName = "test";
 
-        GlueCatalog glueCatalog = new GlueCatalog("glueCatalog","default",region,fakeGlueClient);
-
-        // Register the catalog in Flink
-        tEnv.registerCatalog("myGlueCatalog", glueCatalog);
-        tEnv.useCatalog("myGlueCatalog");
-
-        tEnv.executeSql("CREATE DATABASE IF NOT EXISTS test").print();
+        String SQLStatement = String.format("CREATE DATABASE IF NOT EXISTS %s", databaseName);
+        tEnv.executeSql(SQLStatement).print();
         // Show the list of databases in the catalog
         assertTrue(glueCatalog.databaseExists(databaseName));
     }
@@ -63,39 +68,20 @@ public class StreamingJobTest {
     @Test
     public void testDropDatabase() throws Exception {
         // Initialize GlueCatalog with necessary parameters
-        String region = "us-east-1";
-        String databaseName = "test";
+        String SQLCreateDatabaseStatement = String.format("CREATE DATABASE IF NOT EXISTS %s", databaseName);
+        tEnv.executeSql(SQLCreateDatabaseStatement).print();
+        String SQLDropDatabaseStatement = String.format("DROP DATABASE %s", databaseName);
+        tEnv.executeSql(SQLDropDatabaseStatement).print();
 
-        GlueCatalog glueCatalog = new GlueCatalog("glueCatalog","default",region,fakeGlueClient);
-
-        // Register the catalog in Flink
-        tEnv.registerCatalog("myGlueCatalog", glueCatalog);
-        tEnv.useCatalog("myGlueCatalog");
-
-        tEnv.executeSql("CREATE DATABASE IF NOT EXISTS test").print();
-        tEnv.executeSql("DROP DATABASE test").print();
         // Show the list of databases in the catalog
         assertFalse(glueCatalog.databaseExists(databaseName));
     }
 
     @Test
     public void testCreateTable() throws Exception {
-        // Initialize GlueCatalog with necessary parameters
-        String region = "us-east-1";
-        String databaseName = "test";
-        String tableName = "kinesisTable";
-
-        GlueCatalog glueCatalog = new GlueCatalog("glueCatalog",databaseName,region,fakeGlueClient);
-
-        // Register the catalog in Flink
-        tEnv.registerCatalog("myGlueCatalog", glueCatalog);
-        tEnv.useCatalog("myGlueCatalog");
-
-        tEnv.executeSql("CREATE DATABASE IF NOT EXISTS test").print();
-        // Switch to the 'test' database
-        tEnv.executeSql("USE test").print();
-        // Create a new table 'fran' with specified schema and configuration
-        tEnv.executeSql("CREATE TABLE IF NOT EXISTS kinesisTable (" +
+        String SQLStatementCreateDatabase = String.format("CREATE DATABASE IF NOT EXISTS %s", databaseName);
+        String SQLStatementUseDatabase = String.format("USE %s", databaseName);
+        String SQLStatementCreateTable = String.format("CREATE TABLE IF NOT EXISTS %s (" +
                 "  `user_id` STRING," +
                 "  `productName` STRING," +
                 "  `color` STRING," +
@@ -111,7 +97,13 @@ public class StreamingJobTest {
                 "  'aws.region' = 'us-east-1'," +
                 "  'source.init.position' = 'TRIM_HORIZON'," +
                 "  'format' = 'json'" +
-                ");").print();
+                ");", tableName);
+
+        tEnv.executeSql(SQLStatementCreateDatabase).print();
+        // Switch to the 'test' database
+        tEnv.executeSql(SQLStatementUseDatabase).print();
+        // Create a new table 'fran' with specified schema and configuration
+        tEnv.executeSql(SQLStatementCreateTable).print();
         // Show the list of databases in the catalog
         ObjectPath objectPath = new ObjectPath(databaseName,tableName);
         assertTrue(glueCatalog.tableExists(objectPath));
@@ -119,22 +111,9 @@ public class StreamingJobTest {
 
     @Test
     public void testDropTable() throws Exception {
-        // Initialize GlueCatalog with necessary parameters
-        String region = "us-east-1";
-        String databaseName = "test";
-        String tableName = "kinesisTable";
-
-        GlueCatalog glueCatalog = new GlueCatalog("glueCatalog",databaseName,region,fakeGlueClient);
-
-        // Register the catalog in Flink
-        tEnv.registerCatalog("myGlueCatalog", glueCatalog);
-        tEnv.useCatalog("myGlueCatalog");
-
-        tEnv.executeSql("CREATE DATABASE IF NOT EXISTS test").print();
-        // Switch to the 'test' database
-        tEnv.executeSql("USE test").print();
-        // Create a new table 'fran' with specified schema and configuration
-        tEnv.executeSql("CREATE TABLE IF NOT EXISTS kinesisTable (" +
+        String SQLStatementCreateDatabase = String.format("CREATE DATABASE IF NOT EXISTS %s", databaseName);
+        String SQLStatementUseDatabase = String.format("USE %s", databaseName);
+        String SQLStatementCreateTable = String.format("CREATE TABLE IF NOT EXISTS %s (" +
                 "  `user_id` STRING," +
                 "  `productName` STRING," +
                 "  `color` STRING," +
@@ -150,12 +129,23 @@ public class StreamingJobTest {
                 "  'aws.region' = 'us-east-1'," +
                 "  'source.init.position' = 'TRIM_HORIZON'," +
                 "  'format' = 'json'" +
-                ");").print();
+                ");", tableName);
 
-        tEnv.executeSql("DROP TABLE kinesisTable").print();
+        String SQLStatementDropTable = String.format("DROP TABLE %s", tableName);
 
+
+        tEnv.executeSql(SQLStatementCreateDatabase).print();
+        // Switch to the 'test' database
+        tEnv.executeSql(SQLStatementUseDatabase).print();
+        // Create a new table 'fran' with specified schema and configuration
+        tEnv.executeSql(SQLStatementCreateTable).print();
         // Show the list of databases in the catalog
         ObjectPath objectPath = new ObjectPath(databaseName,tableName);
+
+        tEnv.executeSql(SQLStatementDropTable).print();
+
+        // Show the list of databases in the catalog
+
         assertFalse(glueCatalog.tableExists(objectPath));
     }
 
