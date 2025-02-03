@@ -64,7 +64,7 @@ public class StreamingJob {
                 ")" +
                 "WITH (" +
                 "  'connector' = 'kinesis'," +
-                "  'stream.arn' = 'arn:aws:kinesis:us-east-1:116394013621:stream/input'," +
+                "  'stream.arn' = 'arn:aws:kinesis:us-east-1:xxxx:stream/input'," +
                 "  'aws.region' = 'us-east-1'," +
                 "  'source.init.position' = 'TRIM_HORIZON'," +
                 "  'format' = 'json'" +
