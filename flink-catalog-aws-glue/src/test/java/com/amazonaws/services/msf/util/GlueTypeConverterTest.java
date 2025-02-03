@@ -1,11 +1,9 @@
 package com.amazonaws.services.msf.util;
 
-import com.amazonaws.services.msf.StreamingJob;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.DataType;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
 
 import static org.junit.jupiter.api.Assertions.*;
 
