@@ -135,6 +135,11 @@
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
                 <version>0.8.12</version>  <!-- Use the latest version -->
+                <configuration>
+                    <excludes>
+                        <exclude>com.amazonaws.services.msf.StreamingJob</exclude>
+                    </excludes>
+                </configuration>
                 <executions>
                     <execution>
                         <id>prepare-agent</id>
