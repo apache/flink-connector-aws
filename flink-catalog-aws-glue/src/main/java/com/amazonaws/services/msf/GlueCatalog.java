@@ -1,7 +1,9 @@
 package com.amazonaws.services.msf;
 
 import com.amazonaws.services.msf.operations.GlueDatabaseOperations;
+import com.amazonaws.services.msf.operations.GlueFunctionsOperations;
 import com.amazonaws.services.msf.operations.GlueTableOperations;
+import com.amazonaws.services.msf.util.GlueFunctionsUtil;
 import com.amazonaws.services.msf.util.GlueTableUtils;
 import com.amazonaws.services.msf.util.GlueTypeConverter;
 import org.apache.flink.table.api.Schema;
@@ -13,11 +15,14 @@ import org.apache.flink.table.expressions.Expression;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.glue.GlueClient;
 import software.amazon.awssdk.services.glue.model.*;
-
+import org.apache.flink.table.functions.FunctionIdentifier;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
 /**
  * GlueCatalog is an implementation of the Flink AbstractCatalog that interacts with AWS Glue.
  * This class allows Flink to perform various catalog operations such as creating, deleting, and retrieving
@@ -32,6 +37,8 @@ public class GlueCatalog extends AbstractCatalog {
     private final GlueTypeConverter glueTypeConverter = new GlueTypeConverter();
     private final GlueDatabaseOperations glueDatabaseOperations;
     private final GlueTableOperations glueTableOperations;
+    private final GlueFunctionsOperations glueFunctionsOperations;
+
     private final GlueTableUtils glueTableUtils;
 
     /**
@@ -57,6 +64,8 @@ public class GlueCatalog extends AbstractCatalog {
         this.glueTableUtils = new GlueTableUtils(glueTypeConverter);
         this.glueDatabaseOperations = new GlueDatabaseOperations(glueClient, getName());
         this.glueTableOperations = new GlueTableOperations(glueClient, getName());
+        this.glueFunctionsOperations = new GlueFunctionsOperations(glueClient, getName());
+
     }
 
     public GlueCatalog(String name, String defaultDatabase, String region) {
@@ -69,6 +78,8 @@ public class GlueCatalog extends AbstractCatalog {
         this.glueTableUtils = new GlueTableUtils(glueTypeConverter);
         this.glueDatabaseOperations = new GlueDatabaseOperations(glueClient, getName());
         this.glueTableOperations = new GlueTableOperations(glueClient, getName());
+        this.glueFunctionsOperations = new GlueFunctionsOperations(glueClient, getName());
+
     }
 
     /**
@@ -391,81 +402,118 @@ public class GlueCatalog extends AbstractCatalog {
         // Not supported yet
     }
 
+    public ObjectPath normalize(ObjectPath path) {
+        return new ObjectPath(
+                path.getDatabaseName(), FunctionIdentifier.normalizeName(path.getObjectName()));
+    }
+
     @Override
-    public List<String> listFunctions(String s) throws DatabaseNotExistException, CatalogException {
-        // Not supported yet
-        return List.of();
+    public List<String> listFunctions(String databaseName) throws DatabaseNotExistException, CatalogException {
+        if (!databaseExists(databaseName)) {
+            throw new DatabaseNotExistException(getName(), databaseName);
+        }
+        return glueFunctionsOperations.listGlueFunctions(databaseName);
     }
 
     @Override
     public CatalogFunction getFunction(ObjectPath objectPath) throws FunctionNotExistException, CatalogException {
-        // Not supported yet
-        return null;
+        ObjectPath functionPath = normalize(objectPath);
+        if (!functionExists(functionPath)) {
+            throw new FunctionNotExistException(getName(), functionPath);
+        } else {
+            return glueFunctionsOperations.getGlueFunction(functionPath);
+        }
     }
 
     @Override
     public boolean functionExists(ObjectPath objectPath) throws CatalogException {
-        // Not supported yet
-        return false;
+        ObjectPath functionPath = normalize(objectPath);
+        return databaseExists(functionPath.getDatabaseName())
+                && glueFunctionsOperations.glueFunctionExists(functionPath);
+    }
+
+
+    @Override
+    public void createFunction(ObjectPath objectPath, CatalogFunction catalogFunction, boolean ignoreIfExists) throws FunctionAlreadyExistException, DatabaseNotExistException, CatalogException {
+        ObjectPath functionPath = normalize(objectPath);
+        if (!databaseExists(functionPath.getDatabaseName())) {
+            throw new DatabaseNotExistException(getName(), functionPath.getDatabaseName());
+        }
+        if (!functionExists(functionPath)) {
+            glueFunctionsOperations.createGlueFunction(functionPath, catalogFunction);
+        } else {
+            if (!ignoreIfExists) {
+                throw new FunctionAlreadyExistException(getName(), functionPath);
+            }
+        }
     }
 
     @Override
-    public void createFunction(ObjectPath objectPath, CatalogFunction catalogFunction, boolean b) throws FunctionAlreadyExistException, DatabaseNotExistException, CatalogException {
-        // Not supported yet
+    public void alterFunction(ObjectPath objectPath, CatalogFunction catalogFunction, boolean ignoreIfNotExists) throws FunctionNotExistException, CatalogException {
+        ObjectPath functionPath = normalize(objectPath);
+        CatalogFunction existingFunction = getFunction(functionPath);
+        if (existingFunction != null) {
+            if (existingFunction.getClass() != catalogFunction.getClass()) {
+                throw new CatalogException(
+                        String.format(
+                                "Function types don't match. Existing function is '%s' and new function is '%s'.",
+                                existingFunction.getClass().getName(),
+                                catalogFunction.getClass().getName()));
+            }
+            glueFunctionsOperations.alterGlueFunction(functionPath, catalogFunction);
+        } else if (!ignoreIfNotExists) {
+            throw new FunctionNotExistException(getName(), functionPath);
+        }
     }
 
     @Override
-    public void alterFunction(ObjectPath objectPath, CatalogFunction catalogFunction, boolean b) throws FunctionNotExistException, CatalogException {
-        // Not supported yet
-    }
-
-    @Override
-    public void dropFunction(ObjectPath objectPath, boolean b) throws FunctionNotExistException, CatalogException {
-        // Not supported yet
+    public void dropFunction(ObjectPath objectPath, boolean ignoreIfNotExists) throws FunctionNotExistException, CatalogException {
+        ObjectPath functionPath = normalize(objectPath);
+        if (functionExists(functionPath)) {
+            glueFunctionsOperations.dropGlueFunction(functionPath);
+        } else if (!ignoreIfNotExists) {
+            throw new FunctionNotExistException(getName(), functionPath);
+        }
     }
 
     @Override
     public CatalogTableStatistics getTableStatistics(ObjectPath objectPath) throws TableNotExistException, CatalogException {
-        // Not supported yet
         return null;
     }
 
     @Override
     public CatalogColumnStatistics getTableColumnStatistics(ObjectPath objectPath) throws TableNotExistException, CatalogException {
-        // Not supported yet
         return null;
     }
 
     @Override
     public CatalogTableStatistics getPartitionStatistics(ObjectPath objectPath, CatalogPartitionSpec catalogPartitionSpec) throws PartitionNotExistException, CatalogException {
-        // Not supported yet
         return null;
     }
 
     @Override
     public CatalogColumnStatistics getPartitionColumnStatistics(ObjectPath objectPath, CatalogPartitionSpec catalogPartitionSpec) throws PartitionNotExistException, CatalogException {
-        // Not supported yet
         return null;
     }
 
     @Override
     public void alterTableStatistics(ObjectPath objectPath, CatalogTableStatistics catalogTableStatistics, boolean b) throws TableNotExistException, CatalogException {
-        // Not supported yet
+
     }
 
     @Override
     public void alterTableColumnStatistics(ObjectPath objectPath, CatalogColumnStatistics catalogColumnStatistics, boolean b) throws TableNotExistException, CatalogException, TablePartitionedException {
-        // Not supported yet
+
     }
 
     @Override
     public void alterPartitionStatistics(ObjectPath objectPath, CatalogPartitionSpec catalogPartitionSpec, CatalogTableStatistics catalogTableStatistics, boolean b) throws PartitionNotExistException, CatalogException {
-        // Not supported yet
+
     }
 
     @Override
     public void alterPartitionColumnStatistics(ObjectPath objectPath, CatalogPartitionSpec catalogPartitionSpec, CatalogColumnStatistics catalogColumnStatistics, boolean b) throws PartitionNotExistException, CatalogException {
-        // Not supported yet
+
     }
 }
 

@@ -43,48 +43,39 @@ public class StreamingJob {
                         "'default-database' = 'default' " +
                         ")"
         );
-//        tEnv.executeSql("USE CATALOG glue_catalog;").print();
+        tEnv.executeSql("USE CATALOG glue_catalog;").print();
 //
 //        // Example SQL statements to interact with the Glue catalog and databases
 //        // Drop the 'test' database if it exists and create it
-//        tEnv.executeSql("DROP DATABASE IF EXISTS test").print();
-//        tEnv.executeSql("CREATE DATABASE IF NOT EXISTS test").print();
+        tEnv.executeSql("DROP DATABASE IF EXISTS test").print();
+        tEnv.executeSql("CREATE DATABASE IF NOT EXISTS test").print();
 //
 //        // Show the list of databases in the catalog
-//        tEnv.executeSql("SHOW DATABASES").print();
+        tEnv.executeSql("SHOW DATABASES").print();
 //
 //        // Switch to the 'test' database
-//        tEnv.executeSql("USE test").print();
+        tEnv.executeSql("USE test").print();
 //
 //        // Show the list of tables in the 'test' database
-//        tEnv.executeSql("SHOW TABLES").print();
+        tEnv.executeSql("SHOW TABLES").print();
 //
 //        // Drop the 'fran' table if it exists and create it
-//        tEnv.executeSql("DROP TABLE IF EXISTS kinesisTable").print();
+        tEnv.executeSql("DROP TABLE IF EXISTS kinesisTable").print();
 //
 //        // Create a new table 'fran' with specified schema and configuration
-//        tEnv.executeSql("CREATE TABLE IF NOT EXISTS kinesisTable (" +
-//                "  `user_id` STRING," +
-//                "  `productName` STRING," +
-//                "  `color` STRING," +
-//                "  `department` STRING," +
-//                "  `product` STRING," +
-//                "  `campaign` STRING," +
-//                "  `price` DOUBLE," +
-//                "  `creationTimestamp` STRING" +
-//                ")" +
-//                "WITH (" +
-//                "  'connector' = 'kinesis'," +
-//                "  'stream.arn' = 'arn:aws:kinesis:us-east-1:xxxx:stream/input'," +
-//                "  'aws.region' = 'us-east-1'," +
-//                "  'source.init.position' = 'TRIM_HORIZON'," +
-//                "  'format' = 'json'" +
-//                ");").print();
+        tEnv.executeSql("CREATE TABLE IF NOT EXISTS gen (" +
+                "  `order_number` BIGINT," +
+                "  `price` DECIMAL(32,2)," +
+                "  `order_time` TIMESTAMP(3) " +
+                ")" +
+                "WITH (" +
+                "  'connector' = 'datagen'" +
+                ");").print();
 //
 //        // Show the list of tables in the 'test' database again after creating the new table
-//        tEnv.executeSql("SHOW TABLES").print();
+        tEnv.executeSql("SHOW TABLES").print();
 
         // Run a query to select all records from the 'fran' table and print the results
-//        tEnv.executeSql("SELECT * FROM kinesisTable").print();
+        tEnv.executeSql("SELECT price from gen where price > 50").print();
     }
 }
