@@ -175,9 +175,7 @@ public class TestUtil {
     }
 
     public static List<KinesisClientRecord> convertToKinesisClientRecord(List<Record> records) {
-        return records.stream()
-                .map(KinesisClientRecord::fromRecord)
-                .collect(Collectors.toList());
+        return records.stream().map(KinesisClientRecord::fromRecord).collect(Collectors.toList());
     }
 
     public static Record createAggregatedRecord(List<Record> records) {

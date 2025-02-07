@@ -122,9 +122,10 @@ public class FakeKinesisFanOutBehaviorsFactory {
                     records.add(createRecord(sequenceNumber));
                 }
 
-                List<Record> aggregatedRecords = partition(records, aggregationFactor).stream()
-                        .map(TestUtil::createAggregatedRecord)
-                        .collect(Collectors.toList());
+                List<Record> aggregatedRecords =
+                        partition(records, aggregationFactor).stream()
+                                .map(TestUtil::createAggregatedRecord)
+                                .collect(Collectors.toList());
 
                 eventBuilder.records(aggregatedRecords);
 

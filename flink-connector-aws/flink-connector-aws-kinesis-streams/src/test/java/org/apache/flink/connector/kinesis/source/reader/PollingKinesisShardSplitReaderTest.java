@@ -135,17 +135,11 @@ class PollingKinesisShardSplitReaderTest {
                 Stream.of(getTestRecord("data-1"), getTestRecord("data-2"), getTestRecord("data-3"))
                         .collect(Collectors.toList());
         testStreamProxy.addRecords(
-                TestUtil.STREAM_ARN,
-                TEST_SHARD_ID,
-                Collections.singletonList(inputRecords.get(0)));
+                TestUtil.STREAM_ARN, TEST_SHARD_ID, Collections.singletonList(inputRecords.get(0)));
         testStreamProxy.addRecords(
-                TestUtil.STREAM_ARN,
-                TEST_SHARD_ID,
-                Collections.singletonList(inputRecords.get(1)));
+                TestUtil.STREAM_ARN, TEST_SHARD_ID, Collections.singletonList(inputRecords.get(1)));
         testStreamProxy.addRecords(
-                TestUtil.STREAM_ARN,
-                TEST_SHARD_ID,
-                Collections.singletonList(inputRecords.get(2)));
+                TestUtil.STREAM_ARN, TEST_SHARD_ID, Collections.singletonList(inputRecords.get(2)));
         splitReader.handleSplitsChanges(
                 new SplitsAddition<>(Collections.singletonList(getTestSplit(TEST_SHARD_ID))));
 
@@ -169,17 +163,11 @@ class PollingKinesisShardSplitReaderTest {
                 Stream.of(getTestRecord("data-1"), getTestRecord("data-2"), getTestRecord("data-3"))
                         .collect(Collectors.toList());
         testStreamProxy.addRecords(
-                TestUtil.STREAM_ARN,
-                TEST_SHARD_ID,
-                Collections.singletonList(inputRecords.get(0)));
+                TestUtil.STREAM_ARN, TEST_SHARD_ID, Collections.singletonList(inputRecords.get(0)));
         testStreamProxy.addRecords(
-                TestUtil.STREAM_ARN,
-                TEST_SHARD_ID,
-                Collections.singletonList(inputRecords.get(1)));
+                TestUtil.STREAM_ARN, TEST_SHARD_ID, Collections.singletonList(inputRecords.get(1)));
         testStreamProxy.addRecords(
-                TestUtil.STREAM_ARN,
-                TEST_SHARD_ID,
-                Collections.singletonList(inputRecords.get(2)));
+                TestUtil.STREAM_ARN, TEST_SHARD_ID, Collections.singletonList(inputRecords.get(2)));
         splitReader.handleSplitsChanges(
                 new SplitsAddition<>(Collections.singletonList(getTestSplit(TEST_SHARD_ID))));
 
@@ -213,9 +201,10 @@ class PollingKinesisShardSplitReaderTest {
         splitReader.handleSplitsChanges(
                 new SplitsAddition<>(Collections.singletonList(getTestSplit(TEST_SHARD_ID))));
 
-        List<ByteBuffer> expectedRecords = convertToKinesisClientRecord(inputRecords).stream()
-                .map(KinesisClientRecord::data)
-                .collect(Collectors.toList());
+        List<ByteBuffer> expectedRecords =
+                convertToKinesisClientRecord(inputRecords).stream()
+                        .map(KinesisClientRecord::data)
+                        .collect(Collectors.toList());
 
         // When fetching records
         List<KinesisClientRecord> fetchedRecords = readAllRecords(splitReader.fetch());
@@ -223,8 +212,11 @@ class PollingKinesisShardSplitReaderTest {
         // Then all records are fetched
         assertThat(fetchedRecords)
                 .allMatch(KinesisClientRecord::aggregated)
-                .allMatch(record -> record.explicitHashKey().equals(aggregatedRecord.explicitHashKey()))
-                .extracting("data").containsExactlyInAnyOrderElementsOf(expectedRecords);
+                .allMatch(
+                        record ->
+                                record.explicitHashKey().equals(aggregatedRecord.explicitHashKey()))
+                .extracting("data")
+                .containsExactlyInAnyOrderElementsOf(expectedRecords);
     }
 
     @Test
@@ -289,13 +281,9 @@ class PollingKinesisShardSplitReaderTest {
                 Stream.of(getTestRecord("data-1"), getTestRecord("data-2"))
                         .collect(Collectors.toList());
         testStreamProxy.addRecords(
-                TestUtil.STREAM_ARN,
-                TEST_SHARD_ID,
-                Collections.singletonList(inputRecords.get(0)));
+                TestUtil.STREAM_ARN, TEST_SHARD_ID, Collections.singletonList(inputRecords.get(0)));
         testStreamProxy.addRecords(
-                TestUtil.STREAM_ARN,
-                TEST_SHARD_ID,
-                Collections.singletonList(inputRecords.get(1)));
+                TestUtil.STREAM_ARN, TEST_SHARD_ID, Collections.singletonList(inputRecords.get(1)));
         splitReader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(testSplit)));
 
         List<KinesisClientRecord> expectedRecords = convertToKinesisClientRecord(inputRecords);
@@ -378,7 +366,8 @@ class PollingKinesisShardSplitReaderTest {
             fetchedRecords.addAll(readAllRecords(records));
         }
 
-        List<KinesisClientRecord> expectedRecordsFromSplit2 = convertToKinesisClientRecord(recordsFromSplit2);
+        List<KinesisClientRecord> expectedRecordsFromSplit2 =
+                convertToKinesisClientRecord(recordsFromSplit2);
         assertThat(fetchedRecords).containsExactlyElementsOf(expectedRecordsFromSplit2);
 
         // resume split 3
@@ -392,7 +381,8 @@ class PollingKinesisShardSplitReaderTest {
             fetchedRecords.addAll(readAllRecords(records));
         }
 
-        List<KinesisClientRecord> expectedRecordsFromSplit3 = convertToKinesisClientRecord(recordsFromSplit3);
+        List<KinesisClientRecord> expectedRecordsFromSplit3 =
+                convertToKinesisClientRecord(recordsFromSplit3);
         assertThat(fetchedRecords).containsExactlyElementsOf(expectedRecordsFromSplit3);
     }
 
@@ -441,7 +431,8 @@ class PollingKinesisShardSplitReaderTest {
         assertThat(records.size()).isEqualTo(maxRecordsToGet);
     }
 
-    private List<KinesisClientRecord> readAllRecords(RecordsWithSplitIds<KinesisClientRecord> recordsWithSplitIds) {
+    private List<KinesisClientRecord> readAllRecords(
+            RecordsWithSplitIds<KinesisClientRecord> recordsWithSplitIds) {
         List<KinesisClientRecord> outputRecords = new ArrayList<>();
         KinesisClientRecord record;
         do {

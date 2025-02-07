@@ -40,8 +40,7 @@ class RecordBatchTest {
                 Stream.of(getTestRecord("data-1"), getTestRecord("data-2"), getTestRecord("data-3"))
                         .collect(Collectors.toList());
 
-        RecordBatch result =
-                new RecordBatch(records, getTestSplit(), 100L, true);
+        RecordBatch result = new RecordBatch(records, getTestSplit(), 100L, true);
 
         assertThat(result.getDeaggregatedRecords().size()).isEqualTo(3);
     }
@@ -55,7 +54,8 @@ class RecordBatchTest {
         Record aggregatedRecord = TestUtil.createAggregatedRecord(records);
 
         RecordBatch result =
-                new RecordBatch(Collections.singletonList(aggregatedRecord), getTestSplit(), 100L, true);
+                new RecordBatch(
+                        Collections.singletonList(aggregatedRecord), getTestSplit(), 100L, true);
 
         assertThat(result.getDeaggregatedRecords().size()).isEqualTo(3);
     }
@@ -64,7 +64,10 @@ class RecordBatchTest {
     public void testGetMillisBehindLatest() {
         RecordBatch result =
                 new RecordBatch(
-                        Collections.singletonList(getTestRecord("data-1")), getTestSplit(), 100L, true);
+                        Collections.singletonList(getTestRecord("data-1")),
+                        getTestSplit(),
+                        100L,
+                        true);
 
         assertThat(result.getMillisBehindLatest()).isEqualTo(100L);
     }
@@ -73,7 +76,10 @@ class RecordBatchTest {
     public void testIsCompleted() {
         RecordBatch result =
                 new RecordBatch(
-                        Collections.singletonList(getTestRecord("data-1")), getTestSplit(), 100L, true);
+                        Collections.singletonList(getTestRecord("data-1")),
+                        getTestSplit(),
+                        100L,
+                        true);
 
         assertThat(result.isCompleted()).isTrue();
     }

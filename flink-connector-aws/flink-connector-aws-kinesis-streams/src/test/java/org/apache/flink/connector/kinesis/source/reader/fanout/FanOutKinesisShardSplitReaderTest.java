@@ -206,7 +206,8 @@ public class FanOutKinesisShardSplitReaderTest {
                 "did not receive expected " + numRecords + " records within 10 seconds.");
     }
 
-    private List<KinesisClientRecord> readAllRecords(RecordsWithSplitIds<KinesisClientRecord> recordsWithSplitIds) {
+    private List<KinesisClientRecord> readAllRecords(
+            RecordsWithSplitIds<KinesisClientRecord> recordsWithSplitIds) {
         List<KinesisClientRecord> outputRecords = new ArrayList<>();
         KinesisClientRecord record;
         do {

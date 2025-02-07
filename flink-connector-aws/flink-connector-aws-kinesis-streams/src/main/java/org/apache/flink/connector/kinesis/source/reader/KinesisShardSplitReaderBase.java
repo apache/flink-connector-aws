@@ -158,7 +158,8 @@ public abstract class KinesisShardSplitReaderBase
      * SourceReader.
      */
     @Internal
-    private static class KinesisRecordsWithSplitIds implements RecordsWithSplitIds<KinesisClientRecord> {
+    private static class KinesisRecordsWithSplitIds
+            implements RecordsWithSplitIds<KinesisClientRecord> {
 
         private final Iterator<KinesisClientRecord> recordsIterator;
         private final String splitId;

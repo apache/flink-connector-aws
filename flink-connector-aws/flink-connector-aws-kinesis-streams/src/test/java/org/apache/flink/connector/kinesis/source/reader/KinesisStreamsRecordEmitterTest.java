@@ -53,21 +53,15 @@ class KinesisStreamsRecordEmitterTest {
         List<KinesisClientRecord> inputRecords =
                 Stream.of(
                                 KinesisClientRecord.builder()
-                                        .data(
-                                                ByteBuffer.wrap(
-                                                        STRING_SCHEMA.serialize("data-1")))
+                                        .data(ByteBuffer.wrap(STRING_SCHEMA.serialize("data-1")))
                                         .approximateArrivalTimestamp(startTime)
                                         .build(),
                                 KinesisClientRecord.builder()
-                                        .data(
-                                                ByteBuffer.wrap(
-                                                        STRING_SCHEMA.serialize("data-2")))
+                                        .data(ByteBuffer.wrap(STRING_SCHEMA.serialize("data-2")))
                                         .approximateArrivalTimestamp(startTime.plusSeconds(10))
                                         .build(),
                                 KinesisClientRecord.builder()
-                                        .data(
-                                                ByteBuffer.wrap(
-                                                        STRING_SCHEMA.serialize("data-3")))
+                                        .data(ByteBuffer.wrap(STRING_SCHEMA.serialize("data-3")))
                                         .approximateArrivalTimestamp(startTime.plusSeconds(20))
                                         .sequenceNumber("some-sequence-number")
                                         .build())
@@ -100,23 +94,17 @@ class KinesisStreamsRecordEmitterTest {
         List<KinesisClientRecord> inputRecords =
                 Stream.of(
                                 KinesisClientRecord.builder()
-                                        .data(
-                                                ByteBuffer.wrap(
-                                                        STRING_SCHEMA.serialize("data-1")))
+                                        .data(ByteBuffer.wrap(STRING_SCHEMA.serialize("data-1")))
                                         .sequenceNumber("emit")
                                         .approximateArrivalTimestamp(startTime)
                                         .build(),
                                 KinesisClientRecord.builder()
-                                        .data(
-                                                ByteBuffer.wrap(
-                                                        STRING_SCHEMA.serialize("data-2")))
+                                        .data(ByteBuffer.wrap(STRING_SCHEMA.serialize("data-2")))
                                         .sequenceNumber("emit")
                                         .approximateArrivalTimestamp(startTime.plusSeconds(10))
                                         .build(),
                                 KinesisClientRecord.builder()
-                                        .data(
-                                                ByteBuffer.wrap(
-                                                        STRING_SCHEMA.serialize("data-3")))
+                                        .data(ByteBuffer.wrap(STRING_SCHEMA.serialize("data-3")))
                                         .approximateArrivalTimestamp(startTime.plusSeconds(20))
                                         .sequenceNumber("do-not-emit")
                                         .build())
@@ -142,21 +130,15 @@ class KinesisStreamsRecordEmitterTest {
         List<KinesisClientRecord> inputRecords =
                 Stream.of(
                                 KinesisClientRecord.builder()
-                                        .data(
-                                                ByteBuffer.wrap(
-                                                        STRING_SCHEMA.serialize("data-1")))
+                                        .data(ByteBuffer.wrap(STRING_SCHEMA.serialize("data-1")))
                                         .approximateArrivalTimestamp(startTime)
                                         .build(),
                                 KinesisClientRecord.builder()
-                                        .data(
-                                                ByteBuffer.wrap(
-                                                        STRING_SCHEMA.serialize("data-2")))
+                                        .data(ByteBuffer.wrap(STRING_SCHEMA.serialize("data-2")))
                                         .approximateArrivalTimestamp(startTime.plusSeconds(10))
                                         .build(),
                                 KinesisClientRecord.builder()
-                                        .data(
-                                                ByteBuffer.wrap(
-                                                        STRING_SCHEMA.serialize("data-3")))
+                                        .data(ByteBuffer.wrap(STRING_SCHEMA.serialize("data-3")))
                                         .approximateArrivalTimestamp(startTime.plusSeconds(20))
                                         .sequenceNumber("some-sequence-number")
                                         .build())

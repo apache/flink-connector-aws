@@ -49,7 +49,8 @@ class KinesisDeserializationSchemaWrapper<T> implements KinesisDeserializationSc
     }
 
     @Override
-    public void deserialize(KinesisClientRecord record, String stream, String shardId, Collector<T> output)
+    public void deserialize(
+            KinesisClientRecord record, String stream, String shardId, Collector<T> output)
             throws IOException {
         ByteBuffer recordData = record.data();
 

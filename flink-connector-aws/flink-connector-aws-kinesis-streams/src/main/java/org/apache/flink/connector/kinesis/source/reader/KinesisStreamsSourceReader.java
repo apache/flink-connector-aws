@@ -45,7 +45,7 @@ import java.util.Map;
 @Internal
 public class KinesisStreamsSourceReader<T>
         extends SingleThreadMultiplexSourceReaderBase<
-        KinesisClientRecord, T, KinesisShardSplit, KinesisShardSplitState> {
+                KinesisClientRecord, T, KinesisShardSplit, KinesisShardSplitState> {
 
     private static final Logger LOG = LoggerFactory.getLogger(KinesisStreamsSourceReader.class);
     private final Map<String, KinesisShardMetrics> shardMetricGroupMap;

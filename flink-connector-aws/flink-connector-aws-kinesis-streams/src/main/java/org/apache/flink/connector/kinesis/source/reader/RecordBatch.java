@@ -29,11 +29,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Dataclass to store a batch of Kinesis records with metadata. Used to pass Kinesis records
- * from the SplitReader implementation to the SplitReaderBase.
+ * Dataclass to store a batch of Kinesis records with metadata. Used to pass Kinesis records from
+ * the SplitReader implementation to the SplitReaderBase.
  *
- * <p>Input records are de-aggregated using KCL 3.x library. It is expected that AWS SDK v2.x messages
- * are converted to KCL 3.x {@link KinesisClientRecord}.
+ * <p>Input records are de-aggregated using KCL 3.x library. It is expected that AWS SDK v2.x
+ * messages are converted to KCL 3.x {@link KinesisClientRecord}.
  */
 @Internal
 public class RecordBatch {
@@ -64,8 +64,7 @@ public class RecordBatch {
     }
 
     private List<KinesisClientRecord> deaggregateRecords(
-            final List<Record> records,
-            final KinesisShardSplit subscribedShard) {
+            final List<Record> records, final KinesisShardSplit subscribedShard) {
         final List<KinesisClientRecord> kinesisClientRecords = new ArrayList<>();
         for (Record record : records) {
             kinesisClientRecords.add(KinesisClientRecord.fromRecord(record));
@@ -74,6 +73,7 @@ public class RecordBatch {
         final String startingHashKey = subscribedShard.getStartingHashKey();
         final String endingHashKey = subscribedShard.getEndingHashKey();
 
-        return new AggregatorUtil().deaggregate(kinesisClientRecords, startingHashKey, endingHashKey);
+        return new AggregatorUtil()
+                .deaggregate(kinesisClientRecords, startingHashKey, endingHashKey);
     }
 }

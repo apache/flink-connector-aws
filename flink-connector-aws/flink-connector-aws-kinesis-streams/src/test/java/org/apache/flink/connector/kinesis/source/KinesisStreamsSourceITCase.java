@@ -282,8 +282,7 @@ public class KinesisStreamsSourceITCase {
 
             for (List<byte[]> partition : Lists.partition(messages, 500)) {
                 List<PutRecordsRequestEntry> entries =
-                        Lists.partition(partition, aggregationFactor)
-                                .stream()
+                        Lists.partition(partition, aggregationFactor).stream()
                                 .map(this::createAggregatePutRecordsRequestEntry)
                                 .collect(Collectors.toList());
                 PutRecordsRequest requests =
@@ -295,7 +294,8 @@ public class KinesisStreamsSourceITCase {
             }
         }
 
-        private PutRecordsRequestEntry createAggregatePutRecordsRequestEntry(List<byte[]> messages) {
+        private PutRecordsRequestEntry createAggregatePutRecordsRequestEntry(
+                List<byte[]> messages) {
             RecordAggregator recordAggregator = new RecordAggregator();
 
             for (byte[] message : messages) {

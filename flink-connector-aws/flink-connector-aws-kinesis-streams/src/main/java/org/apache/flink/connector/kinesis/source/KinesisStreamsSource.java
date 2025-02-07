@@ -209,8 +209,10 @@ public class KinesisStreamsSource<T>
         return new KinesisStreamsSourceEnumeratorStateSerializer(new KinesisShardSplitSerializer());
     }
 
-    private Supplier<SplitReader<KinesisClientRecord, KinesisShardSplit>> getKinesisShardSplitReaderSupplier(
-            Configuration sourceConfig, Map<String, KinesisShardMetrics> shardMetricGroupMap) {
+    private Supplier<SplitReader<KinesisClientRecord, KinesisShardSplit>>
+            getKinesisShardSplitReaderSupplier(
+                    Configuration sourceConfig,
+                    Map<String, KinesisShardMetrics> shardMetricGroupMap) {
         KinesisSourceConfigOptions.ReaderType readerType = sourceConfig.get(READER_TYPE);
         switch (readerType) {
                 // We create a new stream proxy for each split reader since they have their own
