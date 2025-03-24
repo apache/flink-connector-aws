@@ -26,6 +26,7 @@ import org.apache.flink.connector.dynamodb.source.metrics.DynamoDbStreamsShardMe
 import org.apache.flink.connector.dynamodb.source.proxy.StreamProxy;
 import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplit;
 import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplitState;
+import org.apache.flink.connector.dynamodb.source.split.StartingPosition;
 import org.apache.flink.connector.dynamodb.source.util.DynamoDbStreamsContextProvider;
 import org.apache.flink.connector.dynamodb.source.util.TestUtil;
 import org.apache.flink.connector.testutils.source.reader.TestingReaderContext;
@@ -36,14 +37,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static org.apache.flink.connector.dynamodb.source.util.DynamoDbStreamsProxyProvider.getTestStreamProxy;
+import static org.apache.flink.connector.dynamodb.source.util.TestUtil.STREAM_ARN;
 import static org.apache.flink.connector.dynamodb.source.util.TestUtil.getTestSplit;
 import static org.apache.flink.connector.dynamodb.source.util.TestUtil.getTestSplitState;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatNoException;
@@ -157,5 +162,129 @@ class DynamoDbStreamsSourceReaderTest {
 
         TestUtil.assertMillisBehindLatest(
                 split, TestUtil.MILLIS_BEHIND_LATEST_TEST_VALUE, metricListener);
+    }
+
+    @Test
+    void testSnapshotStateWithFinishedSplits() throws Exception {
+        // Create and add a split
+        DynamoDbStreamsShardSplit split = getTestSplit();
+        List<DynamoDbStreamsShardSplit> splits = Collections.singletonList(split);
+        sourceReader.addSplits(splits);
+
+        // Set checkpoint ID by taking initial snapshot
+        List<DynamoDbStreamsShardSplit> initialSnapshot = sourceReader.snapshotState(1L);
+        assertThat(initialSnapshot).hasSize(1).containsExactly(split);
+
+        // Simulate split finishing
+        Map<String, DynamoDbStreamsShardSplitState> finishedSplits = new HashMap<>();
+        finishedSplits.put(split.splitId(), new DynamoDbStreamsShardSplitState(split));
+        sourceReader.onSplitFinished(finishedSplits);
+
+        // Take another snapshot
+        List<DynamoDbStreamsShardSplit> snapshotSplits = sourceReader.snapshotState(2L);
+        List<DynamoDbStreamsShardSplit> snapshotFinishedSplits =
+                snapshotSplits.stream()
+                        .filter(DynamoDbStreamsShardSplit::isFinished)
+                        .collect(Collectors.toList());
+        // Verify we have 2 splits - the original split and the finished split
+        assertThat(snapshotSplits).hasSize(2);
+        assertThat(snapshotFinishedSplits)
+                .hasSize(1)
+                .allSatisfy(
+                        s -> {
+                            assertThat(s.splitId()).isEqualTo(split.splitId());
+                        });
+    }
+
+    @Test
+    void testAddSplitsWithStateRestoration() throws Exception {
+        DynamoDbStreamsShardSplit finishedSplit1 =
+                new DynamoDbStreamsShardSplit(
+                        STREAM_ARN, "finished-split-1", StartingPosition.fromStart(), null, true);
+        DynamoDbStreamsShardSplit finishedSplit2 =
+                new DynamoDbStreamsShardSplit(
+                        STREAM_ARN, "finished-split-2", StartingPosition.fromStart(), null, true);
+
+        // Create active split
+        DynamoDbStreamsShardSplit activeSplit = getTestSplit();
+
+        List<DynamoDbStreamsShardSplit> allSplits =
+                Arrays.asList(finishedSplit1, finishedSplit2, activeSplit);
+
+        // Clear any previous events
+        testingReaderContext.clearSentEvents();
+
+        // Add splits
+        sourceReader.addSplits(allSplits);
+
+        // Verify finished events were sent
+        List<SourceEvent> events = testingReaderContext.getSentEvents();
+        assertThat(events)
+                .hasSize(2)
+                .allMatch(e -> e instanceof SplitsFinishedEvent)
+                .allSatisfy(
+                        e -> {
+                            SplitsFinishedEvent event = (SplitsFinishedEvent) e;
+                            assertThat(event.getFinishedSplitIds()).hasSize(1);
+                            assertThat(event.getFinishedSplitIds())
+                                    .containsAnyOf("finished-split-1", "finished-split-2");
+                        });
+
+        // Verify metrics registered only for active split
+        assertThat(shardMetricGroupMap).hasSize(1).containsKey(activeSplit.splitId());
+    }
+
+    @Test
+    void testNotifyCheckpointCompleteRemovesFinishedSplits() throws Exception {
+        DynamoDbStreamsShardSplit split = getTestSplit();
+        List<DynamoDbStreamsShardSplit> splits = Collections.singletonList(split);
+
+        sourceReader.addSplits(splits);
+
+        // Simulate splits finishing at different checkpoints
+        Map<String, DynamoDbStreamsShardSplitState> finishedSplits1 = new HashMap<>();
+        DynamoDbStreamsShardSplit finishedSplit1 =
+                new DynamoDbStreamsShardSplit(
+                        STREAM_ARN, "split-1", StartingPosition.fromStart(), null);
+        finishedSplits1.put("split-1", new DynamoDbStreamsShardSplitState(finishedSplit1));
+        sourceReader.snapshotState(1L); // Set checkpoint ID
+        sourceReader.onSplitFinished(finishedSplits1);
+
+        Map<String, DynamoDbStreamsShardSplitState> finishedSplits2 = new HashMap<>();
+        DynamoDbStreamsShardSplit finishedSplit2 =
+                new DynamoDbStreamsShardSplit(
+                        STREAM_ARN, "split-2", StartingPosition.fromStart(), null);
+        finishedSplits2.put("split-2", new DynamoDbStreamsShardSplitState(finishedSplit2));
+        sourceReader.snapshotState(2L); // Set checkpoint ID
+        sourceReader.onSplitFinished(finishedSplits2);
+
+        // Take snapshot to verify initial state
+        List<DynamoDbStreamsShardSplit> snapshotSplits = sourceReader.snapshotState(3L);
+
+        assertThat(snapshotSplits).hasSize(3);
+        assertThat(
+                        snapshotSplits.stream()
+                                .filter(DynamoDbStreamsShardSplit::isFinished)
+                                .map(DynamoDbStreamsShardSplit::splitId)
+                                .collect(Collectors.toList()))
+                .hasSize(2)
+                .containsExactlyInAnyOrder("split-1", "split-2");
+
+        // Complete checkpoint 1
+        sourceReader.notifyCheckpointComplete(1L);
+
+        // Take another snapshot to verify state after completion
+        snapshotSplits = sourceReader.snapshotState(4L);
+
+        // Verify checkpoint 1 splits were removed
+        assertThat(snapshotSplits).hasSize(2);
+        assertThat(
+                        snapshotSplits.stream()
+                                .filter(DynamoDbStreamsShardSplit::isFinished)
+                                .map(DynamoDbStreamsShardSplit::splitId)
+                                .collect(Collectors.toList()))
+                .hasSize(1)
+                .first()
+                .isEqualTo("split-2");
     }
 }
