@@ -333,7 +333,13 @@ public class SplitTracker {
                 || isFinished(split.getParentShardId());
     }
 
-    private boolean isFinished(String splitId) {
+    /**
+     * Provides information whether a split is finished or not.
+     *
+     * @param splitId
+     * @return boolean value indicating if split is finished
+     */
+    public boolean isFinished(String splitId) {
         return finishedSplits.contains(splitId);
     }
 }

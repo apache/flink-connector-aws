@@ -21,6 +21,12 @@ package org.apache.flink.connector.dynamodb.source.split;
 import nl.jqno.equalsverifier.EqualsVerifier;
 import org.junit.jupiter.api.Test;
 
+import java.util.HashSet;
+import java.util.NavigableMap;
+import java.util.Set;
+import java.util.TreeMap;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatExceptionOfType;
 
 class DynamoDbStreamsShardSplitTest {
@@ -64,5 +70,29 @@ class DynamoDbStreamsShardSplitTest {
     @Test
     void testEquals() {
         EqualsVerifier.forClass(DynamoDbStreamsShardSplit.class).verify();
+    }
+
+    @Test
+    void testFinishedSplitsMapConstructor() {
+        NavigableMap<Long, Set<String>> finishedSplitsMap = new TreeMap<>();
+        Set<String> splits = new HashSet<>();
+        splits.add("split1");
+        splits.add("split2");
+        finishedSplitsMap.put(1L, splits);
+
+        DynamoDbStreamsShardSplit split =
+                new DynamoDbStreamsShardSplit(
+                        STREAM_ARN, SHARD_ID, STARTING_POSITION, PARENT_SHARD_ID, true);
+
+        assertThat(split.isFinished()).isTrue();
+    }
+
+    @Test
+    void testFinishedSplitsMapDefaultEmpty() {
+        DynamoDbStreamsShardSplit split =
+                new DynamoDbStreamsShardSplit(
+                        STREAM_ARN, SHARD_ID, STARTING_POSITION, PARENT_SHARD_ID);
+
+        assertThat(split.isFinished()).isFalse();
     }
 }
