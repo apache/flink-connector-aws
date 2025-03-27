@@ -84,6 +84,7 @@ under the License.
         <module>flink-formats-aws</module>
         <module>flink-python</module>
         <module>flink-connector-aws-e2e-tests</module>
+        <module>flink-catalog-aws-glue</module>
     </modules>
 
     <dependencies>
