@@ -53,8 +53,7 @@ public class PollingKinesisShardSplitReader extends KinesisShardSplitReaderBase 
 
     private long scheduledGetRecordTimeMillis = 0;
 
-    private static final Logger LOG =
-            LoggerFactory.getLogger(PollingKinesisShardSplitReader.class);
+    private static final Logger LOG = LoggerFactory.getLogger(PollingKinesisShardSplitReader.class);
 
     public PollingKinesisShardSplitReader(
             StreamProxy kinesisProxy,
@@ -65,7 +64,8 @@ public class PollingKinesisShardSplitReader extends KinesisShardSplitReaderBase 
         this.configuration = configuration;
         this.maxRecordsToGet = configuration.get(KinesisSourceConfigOptions.SHARD_GET_RECORDS_MAX);
         this.getRecordsIntervalMillis = configuration.get(SHARD_GET_RECORDS_INTERVAL).toMillis();
-        this.idleSourceGetRecordsIntervalMillis = configuration.get(SHARD_GET_RECORDS_IDLE_SOURCE_INTERVAL).toMillis();
+        this.idleSourceGetRecordsIntervalMillis =
+                configuration.get(SHARD_GET_RECORDS_IDLE_SOURCE_INTERVAL).toMillis();
     }
 
     @Override
@@ -92,16 +92,20 @@ public class PollingKinesisShardSplitReader extends KinesisShardSplitReaderBase 
             try {
                 Thread.sleep(millisToNextGetRecord);
             } catch (InterruptedException e) {
-                throw new IOException("Sleep was interrupted while waiting for next scheduled GetRecord ", e);
+                throw new IOException(
+                        "Sleep was interrupted while waiting for next scheduled GetRecord ", e);
             }
         }
     }
 
     private void scheduleNextGetRecord(GetRecordsResponse getRecordsResponse) {
         if (getRecordsResponse.records().isEmpty()) {
-            scheduledGetRecordTimeMillis = System.currentTimeMillis() + idleSourceGetRecordsIntervalMillis;
+            scheduledGetRecordTimeMillis =
+                    System.currentTimeMillis() + idleSourceGetRecordsIntervalMillis;
             if (LOG.isWarnEnabled()) {
-                LOG.warn("Got empty list from GetRecords, scheduling next get record to ", new Date(scheduledGetRecordTimeMillis));
+                LOG.warn(
+                        "Got empty list from GetRecords, scheduling next get record to ",
+                        new Date(scheduledGetRecordTimeMillis));
             }
         } else {
             scheduledGetRecordTimeMillis = System.currentTimeMillis() + getRecordsIntervalMillis;

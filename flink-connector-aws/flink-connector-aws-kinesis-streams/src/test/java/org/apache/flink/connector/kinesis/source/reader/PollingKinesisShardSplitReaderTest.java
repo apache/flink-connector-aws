@@ -57,7 +57,7 @@ import static org.apache.flink.connector.kinesis.source.util.TestUtil.getTestRec
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.getTestSplit;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatNoException;
 import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
-import static org.testcontainers.shaded.org.awaitility.Awaitility.await;
+import static org.awaitility.Awaitility.await;
 
 class PollingKinesisShardSplitReaderTest {
     private PollingKinesisShardSplitReader splitReader;
@@ -414,9 +414,7 @@ class PollingKinesisShardSplitReaderTest {
                         testStreamProxy, shardMetricGroupMap, sourceConfig);
 
         testStreamProxy.addShards(TEST_SHARD_ID);
-        List<Record> sentRecords =
-                Stream.of(getTestRecord("data-1"))
-                        .collect(Collectors.toList());
+        List<Record> sentRecords = Stream.of(getTestRecord("data-1")).collect(Collectors.toList());
         testStreamProxy.addRecords(TestUtil.STREAM_ARN, TEST_SHARD_ID, sentRecords);
 
         splitReader.handleSplitsChanges(
@@ -424,11 +422,12 @@ class PollingKinesisShardSplitReaderTest {
 
         await().atLeast(interval, TimeUnit.MILLISECONDS)
                 .atMost(interval + 500, TimeUnit.MILLISECONDS)
-                .until(() -> {
-                    assertThat(splitReader.fetch().nextRecordFromSplit()).isNotNull();
-                    assertThat(splitReader.fetch().nextRecordFromSplit()).isNull();
-                    return true;
-                });
+                .until(
+                        () -> {
+                            assertThat(splitReader.fetch().nextRecordFromSplit()).isNotNull();
+                            assertThat(splitReader.fetch().nextRecordFromSplit()).isNull();
+                            return true;
+                        });
     }
 
     @ValueSource(longs = {0L, 1000L, 2000L})
@@ -448,11 +447,12 @@ class PollingKinesisShardSplitReaderTest {
 
         await().atLeast(interval, TimeUnit.MILLISECONDS)
                 .atMost(interval + 500, TimeUnit.MILLISECONDS)
-                .until(() -> {
-                    assertThat(splitReader.fetch().nextRecordFromSplit()).isNull();
-                    assertThat(splitReader.fetch().nextRecordFromSplit()).isNull();
-                    return true;
-                });
+                .until(
+                        () -> {
+                            assertThat(splitReader.fetch().nextRecordFromSplit()).isNull();
+                            assertThat(splitReader.fetch().nextRecordFromSplit()).isNull();
+                            return true;
+                        });
     }
 
     private List<Record> readAllRecords(RecordsWithSplitIds<Record> recordsWithSplitIds) {

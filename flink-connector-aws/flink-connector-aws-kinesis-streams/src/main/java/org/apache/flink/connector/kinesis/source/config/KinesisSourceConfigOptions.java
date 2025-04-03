@@ -83,8 +83,7 @@ public class KinesisSourceConfigOptions {
             ConfigOptions.key("source.shard.get-records.interval")
                     .durationType()
                     .defaultValue(Duration.ofMillis(0))
-                    .withDescription(
-                            "The interval in milliseconds between GetRecords calls");
+                    .withDescription("The interval in milliseconds between GetRecords calls");
 
     public static final ConfigOption<Duration> SHARD_GET_RECORDS_IDLE_SOURCE_INTERVAL =
             ConfigOptions.key("source.shard.get-records.idle-source-interval")
