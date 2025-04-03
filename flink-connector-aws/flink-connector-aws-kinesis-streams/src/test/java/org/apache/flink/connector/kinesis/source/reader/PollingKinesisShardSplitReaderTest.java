@@ -424,9 +424,10 @@ class PollingKinesisShardSplitReaderTest {
 
         await().atLeast(interval, TimeUnit.MILLISECONDS)
                 .atMost(interval + 500, TimeUnit.MILLISECONDS)
-                .untilAsserted(() -> {
+                .until(() -> {
                     assertThat(splitReader.fetch().nextRecordFromSplit()).isNotNull();
                     assertThat(splitReader.fetch().nextRecordFromSplit()).isNull();
+                    return true;
                 });
     }
 
