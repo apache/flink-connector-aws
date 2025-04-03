@@ -57,8 +57,8 @@ import org.apache.flink.table.catalog.Catalog;
 Catalog glueCatalog = new GlueCatalog(
     "glue_catalog",      // Catalog name
     "default",           // Default database
-    "us-east-1",         // AWS region
-    null);               // AWS credentials provider (optional)
+    "us-east-1");         // AWS region
+
 
 // Register with table environment
 tableEnv.registerCatalog("glue_catalog", glueCatalog);
