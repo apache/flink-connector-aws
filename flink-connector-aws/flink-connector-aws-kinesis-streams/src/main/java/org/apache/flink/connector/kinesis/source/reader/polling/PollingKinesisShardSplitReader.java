@@ -100,7 +100,6 @@ public class PollingKinesisShardSplitReader extends KinesisShardSplitReaderBase 
     private void scheduleNextGetRecord(GetRecordsResponse getRecordsResponse) {
         if (getRecordsResponse.records().isEmpty()) {
             scheduledGetRecordTimeMillis = System.currentTimeMillis() + idleSourceGetRecordsIntervalMillis;
-            LOG.info("Got empty list from GetRecords, scheduling next get record to ", new Date(scheduledGetRecordTimeMillis));
             if (LOG.isWarnEnabled()) {
                 LOG.warn("Got empty list from GetRecords, scheduling next get record to ", new Date(scheduledGetRecordTimeMillis));
             }
