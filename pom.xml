@@ -412,6 +412,12 @@ under the License.
                 <artifactId>annotations</artifactId>
                 <version>17.0.0</version>
             </dependency>
+            <dependency>
+                <groupId>org.awaitility</groupId>
+                <artifactId>awaitility</artifactId>
+                <scope>test</scope>
+                <version>4.3.0</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 

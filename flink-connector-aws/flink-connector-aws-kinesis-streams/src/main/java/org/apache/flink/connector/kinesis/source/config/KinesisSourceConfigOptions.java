@@ -85,6 +85,13 @@ public class KinesisSourceConfigOptions {
                     .defaultValue(ReaderType.POLLING)
                     .withDescription("The type of reader used to read from the Kinesis stream.");
 
+    public static final ConfigOption<Duration> READER_EMPTY_RECORDS_FETCH_INTERVAL =
+            ConfigOptions.key("source.reader.empty-records-fetch-interval")
+                    .durationType()
+                    .defaultValue(Duration.ofMillis(250))
+                    .withDescription(
+                            "The interval in milliseconds between fetches with empty records");
+
     public static final ConfigOption<ConsumerLifecycle> EFO_CONSUMER_LIFECYCLE =
             ConfigOptions.key("source.efo.lifecycle")
                     .enumType(ConsumerLifecycle.class)
