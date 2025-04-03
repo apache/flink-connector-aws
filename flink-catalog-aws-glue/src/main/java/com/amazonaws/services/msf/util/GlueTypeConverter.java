@@ -105,42 +105,63 @@ public class GlueTypeConverter {
             throw new IllegalArgumentException("Glue type cannot be null or empty");
         }
 
-        glueType = glueType.toLowerCase().trim();
+        // Trim but don't lowercase - we'll handle case-insensitivity per type
+        String trimmedGlueType = glueType.trim();
 
-        // Handle DECIMAL type
-        Matcher decimalMatcher = DECIMAL_PATTERN.matcher(glueType);
+        // Handle DECIMAL type - using lowercase for pattern matching
+        Matcher decimalMatcher = DECIMAL_PATTERN.matcher(trimmedGlueType.toLowerCase());
         if (decimalMatcher.matches()) {
             int precision = Integer.parseInt(decimalMatcher.group(1));
             int scale = Integer.parseInt(decimalMatcher.group(2));
             return DataTypes.DECIMAL(precision, scale);
         }
 
-        // Handle ARRAY type
-        Matcher arrayMatcher = ARRAY_PATTERN.matcher(glueType);
+        // Handle ARRAY type - using lowercase for pattern matching but preserving content
+        Matcher arrayMatcher = ARRAY_PATTERN.matcher(trimmedGlueType);
         if (arrayMatcher.matches()) {
-            String elementType = arrayMatcher.group(1);
+            // Extract from original string to preserve case in content
+            int contentStart = trimmedGlueType.indexOf('<') + 1;
+            int contentEnd = trimmedGlueType.lastIndexOf('>');
+            String elementType = trimmedGlueType.substring(contentStart, contentEnd);
             return DataTypes.ARRAY(toFlinkType(elementType));
         }
 
-        // Handle MAP type
-        Matcher mapMatcher = MAP_PATTERN.matcher(glueType);
+        // Handle MAP type - using lowercase for pattern matching but preserving content
+        Matcher mapMatcher = MAP_PATTERN.matcher(trimmedGlueType);
         if (mapMatcher.matches()) {
-            String keyType = mapMatcher.group(1);
-            String valueType = mapMatcher.group(2);
+            // Extract from original string to preserve case in content
+            int contentStart = trimmedGlueType.indexOf('<') + 1;
+            int contentEnd = trimmedGlueType.lastIndexOf('>');
+            String mapContent = trimmedGlueType.substring(contentStart, contentEnd);
+            
+            // Split key and value types
+            int commaPos = findMapTypeSeparator(mapContent);
+            if (commaPos < 0) {
+                throw new IllegalArgumentException("Invalid map type format: " + glueType);
+            }
+            
+            String keyType = mapContent.substring(0, commaPos).trim();
+            String valueType = mapContent.substring(commaPos + 1).trim();
+            
             return DataTypes.MAP(
                     toFlinkType(keyType),
                     toFlinkType(valueType)
             );
         }
 
-        // Handle STRUCT type
-        Matcher structMatcher = STRUCT_PATTERN.matcher(glueType);
+        // Handle STRUCT type - using lowercase for pattern matching but preserving content
+        Matcher structMatcher = STRUCT_PATTERN.matcher(trimmedGlueType);
         if (structMatcher.matches()) {
-            return parseStructType(structMatcher.group(1));
+            // Extract from original string to preserve case in field names
+            int contentStart = trimmedGlueType.indexOf('<') + 1;
+            int contentEnd = trimmedGlueType.lastIndexOf('>');
+            String structContent = trimmedGlueType.substring(contentStart, contentEnd);
+            
+            return parseStructType(structContent);
         }
 
-        // Handle primitive types
-        switch (glueType) {
+        // Handle primitive types (case insensitive)
+        switch (trimmedGlueType.toLowerCase()) {
             case "string":
             case "char":
             case "varchar":
@@ -171,6 +192,26 @@ public class GlueTypeConverter {
     }
 
     /**
+     * Helper method to find the comma that separates key and value types in a map.
+     * Handles nested types correctly by tracking angle brackets.
+     *
+     * @param mapContent The content of the map type definition.
+     * @return The position of the separator comma, or -1 if not found.
+     */
+    private int findMapTypeSeparator(String mapContent) {
+        int nestedLevel = 0;
+        for (int i = 0; i < mapContent.length(); i++) {
+            char c = mapContent.charAt(i);
+            if (c == '<') nestedLevel++;
+            else if (c == '>') nestedLevel--;
+            else if (c == ',' && nestedLevel == 0) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
      * Parses a struct type definition and returns the corresponding Flink DataType.
      *
      * @param structDefinition The struct definition string to parse.
@@ -184,11 +225,22 @@ public class GlueTypeConverter {
         LOG.debug("Parsing struct definition: {}", structDefinition);
 
         for (String field : fields) {
-            String[] fieldParts = field.split(":");
-            String fieldName = fieldParts[0].trim();
-            String fieldType = fieldParts[1].trim();
+            // Important: We need to find the colon separator properly,
+            // as field names might contain characters like '<' for nested structs
+            int colonPos = field.indexOf(':');
+            if (colonPos < 0) {
+                LOG.warn("Invalid struct field definition (no colon found): {}", field);
+                continue;
+            }
             
-            // Use the field name as-is (already lowercase in Glue)
+            // Extract field name and type, preserving the original case of the field name
+            // This is crucial because Glue preserves case for struct fields
+            String fieldName = field.substring(0, colonPos).trim();
+            String fieldType = field.substring(colonPos + 1).trim();
+            
+            LOG.debug("Parsed struct field - name: '{}', type: '{}'", fieldName, fieldType);
+            
+            // Add field with its original case preserved from Glue
             flinkFields.add(DataTypes.FIELD(fieldName, toFlinkType(fieldType)));
         }
 

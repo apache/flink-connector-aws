@@ -26,6 +26,7 @@ import org.apache.flink.table.catalog.CatalogFunctionImpl;
 import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.catalog.exceptions.CatalogException;
 import org.apache.flink.table.catalog.exceptions.FunctionAlreadyExistException;
+import org.apache.flink.table.catalog.exceptions.FunctionNotExistException;
 import org.apache.flink.table.resource.ResourceUri;
 
 import org.slf4j.Logger;
@@ -101,34 +102,76 @@ public class GlueFunctionsOperations extends AbstractGlueOperations {
     }
 
     /**
+     * Modify an existing function. Function name should be handled in a case-insensitive way.
+     *
+     * @param functionPath path of function.
+     * @param newFunction modified function.
+     * @throws CatalogException on runtime errors.
+     * @throws FunctionNotExistException if the function doesn't exist.
+     */
+    public void alterGlueFunction(ObjectPath functionPath, CatalogFunction newFunction)
+            throws CatalogException, FunctionNotExistException {
+
+        UserDefinedFunctionInput functionInput = createFunctionInput(functionPath, newFunction);
+
+        UpdateUserDefinedFunctionRequest updateUserDefinedFunctionRequest =
+                UpdateUserDefinedFunctionRequest.builder()
+                        .functionName(functionPath.getObjectName())
+                        .databaseName(functionPath.getDatabaseName())
+                        .functionInput(functionInput)
+                        .build();
+        try {
+            UpdateUserDefinedFunctionResponse response =
+                    glueClient.updateUserDefinedFunction(updateUserDefinedFunctionRequest);
+            LOG.info("Altered Function: {}", functionPath.getFullName());
+        } catch (EntityNotFoundException e) {
+            LOG.error("Function not found: {}", functionPath.getFullName());
+            throw new FunctionNotExistException(catalogName, functionPath, e);
+        } catch (GlueException e) {
+            LOG.error("Error altering glue function: {}\n{}", functionPath.getFullName(), e);
+            throw new CatalogException(GlueCatalogConstants.GLUE_EXCEPTION_MSG_IDENTIFIER, e);
+        }
+    }
+
+    /**
      * Get the user defined function from glue Catalog. Function name should be handled in a
      * case-insensitive way.
      *
      * @param functionPath path of the function
      * @return the requested function
      * @throws CatalogException in case of any runtime exception
+     * @throws FunctionNotExistException if the function doesn't exist
      */
-    public CatalogFunction getGlueFunction(ObjectPath functionPath) {
+    public CatalogFunction getGlueFunction(ObjectPath functionPath) throws CatalogException, FunctionNotExistException {
         GetUserDefinedFunctionRequest request =
                 GetUserDefinedFunctionRequest.builder()
                         .databaseName(functionPath.getDatabaseName())
                         .functionName(functionPath.getObjectName())
                         .build();
-        GetUserDefinedFunctionResponse response = glueClient.getUserDefinedFunction(request);
-        UserDefinedFunction udf = response.userDefinedFunction();
-        List<ResourceUri> resourceUris =
-                udf.resourceUris().stream()
-                        .map(
-                                resourceUri ->
-                                        new org.apache.flink.table.resource.ResourceUri(
-                                                org.apache.flink.table.resource.ResourceType
-                                                        .valueOf(resourceUri.resourceType().name()),
-                                                resourceUri.uri()))
-                        .collect(Collectors.toList());
-        return new CatalogFunctionImpl(
-                GlueFunctionsUtil.getCatalogFunctionClassName(udf),
-                GlueFunctionsUtil.getFunctionalLanguage(udf),
-                resourceUris);
+        try {
+            GetUserDefinedFunctionResponse response = glueClient.getUserDefinedFunction(request);
+            UserDefinedFunction udf = response.userDefinedFunction();
+            List<ResourceUri> resourceUris =
+                    udf.resourceUris().stream()
+                            .map(
+                                    resourceUri ->
+                                            new org.apache.flink.table.resource.ResourceUri(
+                                                    org.apache.flink.table.resource.ResourceType
+                                                            .valueOf(resourceUri.resourceType().name()),
+                                                    resourceUri.uri()))
+                            .collect(Collectors.toList());
+            return new CatalogFunctionImpl(
+                    GlueFunctionsUtil.getCatalogFunctionClassName(udf),
+                    GlueFunctionsUtil.getFunctionalLanguage(udf),
+                    resourceUris);
+        } catch (EntityNotFoundException e) {
+            LOG.error("Function not found: {}", functionPath.getFullName());
+            throw new FunctionNotExistException(catalogName, functionPath, e);
+        } catch (GlueException e) {
+            LOG.error("Error fetching function {}: {}", functionPath.getFullName(), e);
+            throw new CatalogException(
+                String.format("Error getting function %s: %s", functionPath.getFullName(), e.getMessage()), e);
+        }
     }
 
     public List<String> listGlueFunctions(String databaseName) {
@@ -175,29 +218,6 @@ public class GlueFunctionsOperations extends AbstractGlueOperations {
             LOG.error(GlueCatalogConstants.GLUE_EXCEPTION_MSG_IDENTIFIER, e);
             throw new CatalogException(GlueCatalogConstants.GLUE_EXCEPTION_MSG_IDENTIFIER, e);
         }
-    }
-
-    /**
-     * Modify an existing function. Function name should be handled in a case-insensitive way.
-     *
-     * @param functionPath path of function.
-     * @param newFunction modified function.
-     * @throws CatalogException on runtime errors.
-     */
-    public void alterGlueFunction(ObjectPath functionPath, CatalogFunction newFunction)
-            throws CatalogException {
-
-        UserDefinedFunctionInput functionInput = createFunctionInput(functionPath, newFunction);
-
-        UpdateUserDefinedFunctionRequest updateUserDefinedFunctionRequest =
-                UpdateUserDefinedFunctionRequest.builder()
-                        .functionName(functionPath.getObjectName())
-                        .databaseName(functionPath.getDatabaseName())
-                        .functionInput(functionInput)
-                        .build();
-        UpdateUserDefinedFunctionResponse response =
-                glueClient.updateUserDefinedFunction(updateUserDefinedFunctionRequest);
-        LOG.info("Altered Function: {}", functionPath.getFullName());
     }
 
     /**

@@ -198,7 +198,7 @@ public class StreamingJob {
                  "  `UserProfile`.`FirstName` " +
 //                 "  `metadata`['sourceSystem'] as source_system, " +
 //                 "  `metadata`['correlationId'] as correlation_id " +
-                 "FROM nested_json_test").print();
+                 "FROM nested_json_test limit 1").print();
         
         // -------------------------------------------------------------------------
         // EXAMPLE 6-A: ALTERNATIVE NESTED STRUCTURE - First level only

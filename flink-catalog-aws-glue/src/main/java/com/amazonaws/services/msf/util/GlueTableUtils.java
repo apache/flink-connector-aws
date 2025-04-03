@@ -116,7 +116,8 @@ public class GlueTableUtils {
                 originalName = column.parameters().get("originalName");
             }
 
-            String columnType = column.type().toLowerCase();
+            String columnType = column.type();
+                    //.toLowerCase();
             DataType flinkDataType = glueTypeConverter.toFlinkType(columnType);
 
             schemaBuilder.column(originalName, flinkDataType);

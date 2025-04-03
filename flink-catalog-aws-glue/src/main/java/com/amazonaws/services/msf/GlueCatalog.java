@@ -645,182 +645,197 @@ public class GlueCatalog extends AbstractCatalog {
     /**
      * Retrieves a function from the catalog.
      *
-     * @param objectPath the object path of the function to retrieve
+     * @param functionPath the object path of the function to retrieve
      * @return the corresponding CatalogFunction
      * @throws FunctionNotExistException if the function does not exist
      * @throws CatalogException          if an error occurs while retrieving the function
      */
     @Override
-    public CatalogFunction getFunction(ObjectPath objectPath) throws FunctionNotExistException, CatalogException {
-        checkNotNull(objectPath, "Object path cannot be null");
-        LOG.debug("Getting function: {}", objectPath);
-        
-        ObjectPath functionPath = normalize(objectPath);
-        if (!functionExists(functionPath)) {
-            throw new FunctionNotExistException(getName(), functionPath);
+    public CatalogFunction getFunction(ObjectPath functionPath) throws FunctionNotExistException, CatalogException {
+        checkNotNull(functionPath, "functionPath cannot be null");
+
+        // Normalize the path for case-insensitive handling
+        ObjectPath normalizedPath = normalize(functionPath);
+
+        if (!databaseExists(normalizedPath.getDatabaseName())) {
+            throw new FunctionNotExistException(getName(), normalizedPath);
         }
-        
+
         try {
-            return glueFunctionsOperations.getGlueFunction(functionPath);
+            return glueFunctionsOperations.getGlueFunction(normalizedPath);
+        } catch (FunctionNotExistException e) {
+            throw e;
         } catch (Exception e) {
-            LOG.error("Failed to get function {}: {}", functionPath, e.getMessage());
             throw new CatalogException(
-                    String.format("Error getting function %s: %s", functionPath, e.getMessage()), e);
+                    String.format("Failed to get function %s", normalizedPath.getFullName()), e);
         }
     }
 
     /**
      * Checks if a function exists in the catalog.
      *
-     * @param objectPath the object path of the function to check
+     * @param functionPath the object path of the function to check
      * @return true if the function exists, false otherwise
      * @throws CatalogException if an error occurs while checking the function's existence
      */
     @Override
-    public boolean functionExists(ObjectPath objectPath) throws CatalogException {
-        checkNotNull(objectPath, "Object path cannot be null");
+    public boolean functionExists(ObjectPath functionPath) throws CatalogException {
+        checkNotNull(functionPath, "functionPath cannot be null");
+        
+        // Normalize the path for case-insensitive handling
+        ObjectPath normalizedPath = normalize(functionPath);
+        
+        if (!databaseExists(normalizedPath.getDatabaseName())) {
+            return false;
+        }
         
         try {
-            ObjectPath functionPath = normalize(objectPath);
-            return databaseExists(functionPath.getDatabaseName())
-                    && glueFunctionsOperations.glueFunctionExists(functionPath);
+            return glueFunctionsOperations.glueFunctionExists(normalizedPath);
         } catch (Exception e) {
-            LOG.error("Failed to check if function exists {}: {}", objectPath, e.getMessage());
             throw new CatalogException(
-                    String.format("Error checking if function %s exists: %s", objectPath, e.getMessage()), e);
+                    String.format("Failed to check if function %s exists", normalizedPath.getFullName()), e);
         }
     }
 
     /**
      * Creates a function in the catalog.
      *
-     * @param objectPath      the object path of the function to create
-     * @param catalogFunction the function definition
-     * @param ignoreIfExists  flag indicating whether to ignore the exception if the function already exists
+     * @param functionPath      the object path of the function to create
+     * @param function          the function definition
+     * @param ignoreIfExists    flag indicating whether to ignore the exception if the function already exists
      * @throws FunctionAlreadyExistException if the function already exists and ignoreIfExists is false
      * @throws DatabaseNotExistException     if the database does not exist
      * @throws CatalogException              if an error occurs while creating the function
      */
     @Override
-    public void createFunction(ObjectPath objectPath, CatalogFunction catalogFunction, boolean ignoreIfExists) 
+    public void createFunction(ObjectPath functionPath, CatalogFunction function, boolean ignoreIfExists)
             throws FunctionAlreadyExistException, DatabaseNotExistException, CatalogException {
-        checkNotNull(objectPath, "Object path cannot be null");
-        checkNotNull(catalogFunction, "Catalog function cannot be null");
-        LOG.debug("Creating function: {}", objectPath);
-        
-        ObjectPath functionPath = normalize(objectPath);
-        
-        // Check if database exists
-        if (!databaseExists(functionPath.getDatabaseName())) {
-            throw new DatabaseNotExistException(getName(), functionPath.getDatabaseName());
+        checkNotNull(functionPath, "functionPath cannot be null");
+        checkNotNull(function, "function cannot be null");
+
+        // Normalize the path for case-insensitive handling
+        ObjectPath normalizedPath = normalize(functionPath);
+
+        if (!databaseExists(normalizedPath.getDatabaseName())) {
+            throw new DatabaseNotExistException(getName(), normalizedPath.getDatabaseName());
         }
-        
-        try {
-            // Check if function already exists
-            if (functionExists(functionPath)) {
-                if (!ignoreIfExists) {
-                    throw new FunctionAlreadyExistException(getName(), functionPath);
-                }
-                LOG.debug("Function {} already exists and ignoreIfExists is set, skipping creation", functionPath);
-                return;
+
+        boolean exists = functionExists(normalizedPath);
+
+        if (exists) {
+            if (!ignoreIfExists) {
+                throw new FunctionAlreadyExistException(getName(), normalizedPath);
             }
-            
-            // Create the function
-            glueFunctionsOperations.createGlueFunction(functionPath, catalogFunction);
-            LOG.info("Successfully created function: {}", functionPath);
-        } catch (FunctionAlreadyExistException e) {
-            // Re-throw this specific exception
-            throw e;
+            return;
+        }
+
+        try {
+            glueFunctionsOperations.createGlueFunction(normalizedPath, function);
         } catch (Exception e) {
-            LOG.error("Failed to create function {}: {}", functionPath, e.getMessage());
             throw new CatalogException(
-                    String.format("Error creating function %s: %s", functionPath, e.getMessage()), e);
+                    String.format("Failed to create function %s", normalizedPath.getFullName()), e);
         }
     }
 
     /**
      * Alters a function in the catalog.
      *
-     * @param objectPath         the object path of the function to alter
-     * @param catalogFunction    the new function definition
+     * @param functionPath       the object path of the function to alter
+     * @param newFunction        the new function definition
      * @param ignoreIfNotExists  flag indicating whether to ignore the exception if the function does not exist
      * @throws FunctionNotExistException if the function does not exist and ignoreIfNotExists is false
      * @throws CatalogException          if an error occurs while altering the function
      */
     @Override
-    public void alterFunction(ObjectPath objectPath, CatalogFunction catalogFunction, boolean ignoreIfNotExists) 
+    public void alterFunction(ObjectPath functionPath, CatalogFunction newFunction, boolean ignoreIfNotExists)
             throws FunctionNotExistException, CatalogException {
-        checkNotNull(objectPath, "Object path cannot be null");
-        checkNotNull(catalogFunction, "Catalog function cannot be null");
-        LOG.debug("Altering function: {}", objectPath);
-        
-        ObjectPath functionPath = normalize(objectPath);
-        
+        checkNotNull(functionPath, "functionPath cannot be null");
+        checkNotNull(newFunction, "newFunction cannot be null");
+
+        // Normalize the path for case-insensitive handling
+        ObjectPath normalizedPath = normalize(functionPath);
+
         try {
-            // Check if function exists
-            CatalogFunction existingFunction = getFunction(functionPath);
+            // Check if function exists without throwing an exception first
+            boolean functionExists = functionExists(normalizedPath);
             
-            if (existingFunction != null) {
-                // Check if function types match
-                if (existingFunction.getClass() != catalogFunction.getClass()) {
-                    throw new CatalogException(
-                            String.format(
-                                    "Function types don't match. Existing function is '%s' and new function is '%s'.",
-                                    existingFunction.getClass().getName(),
-                                    catalogFunction.getClass().getName()));
+            if (!functionExists) {
+                if (ignoreIfNotExists) {
+                    LOG.debug("Function {} does not exist and ignoreIfNotExists is set to true. Returning.", normalizedPath.getFullName());
+                    return;
+                } else {
+                    throw new FunctionNotExistException(getName(), normalizedPath);
                 }
-                
-                // Alter the function
-                glueFunctionsOperations.alterGlueFunction(functionPath, catalogFunction);
-                LOG.info("Successfully altered function: {}", functionPath);
-            } else if (!ignoreIfNotExists) {
-                throw new FunctionNotExistException(getName(), functionPath);
-            } else {
-                LOG.debug("Function {} does not exist and ignoreIfNotExists is set, doing nothing", functionPath);
             }
+            
+            // Check for type compatibility of function
+            CatalogFunction existingFunction = getFunction(normalizedPath);
+            if (existingFunction.getClass() != newFunction.getClass()) {
+                throw new CatalogException(
+                        String.format(
+                                "Function types don't match. Existing function is '%s' and new function is '%s'.",
+                                existingFunction.getClass().getName(),
+                                newFunction.getClass().getName()));
+            }
+
+            // Proceed with alteration
+            glueFunctionsOperations.alterGlueFunction(normalizedPath, newFunction);
         } catch (FunctionNotExistException e) {
-            // Re-throw this specific exception
-            throw e;
+            if (ignoreIfNotExists) {
+                LOG.debug("Function {} does not exist and ignoreIfNotExists is set to true. Returning.", normalizedPath.getFullName());
+            } else {
+                throw e;
+            }
         } catch (Exception e) {
-            LOG.error("Failed to alter function {}: {}", functionPath, e.getMessage());
             throw new CatalogException(
-                    String.format("Error altering function %s: %s", functionPath, e.getMessage()), e);
+                    String.format("Failed to alter function %s", normalizedPath.getFullName()), e);
         }
     }
 
     /**
      * Drops a function from the catalog.
      *
-     * @param objectPath        the object path of the function to drop
-     * @param ignoreIfNotExists flag indicating whether to ignore the exception if the function does not exist
+     * @param functionPath        the object path of the function to drop
+     * @param ignoreIfNotExists   flag indicating whether to ignore the exception if the function does not exist
      * @throws FunctionNotExistException if the function does not exist and ignoreIfNotExists is false
      * @throws CatalogException          if an error occurs while dropping the function
      */
     @Override
-    public void dropFunction(ObjectPath objectPath, boolean ignoreIfNotExists) 
+    public void dropFunction(ObjectPath functionPath, boolean ignoreIfNotExists)
             throws FunctionNotExistException, CatalogException {
-        checkNotNull(objectPath, "Object path cannot be null");
-        LOG.debug("Dropping function: {}", objectPath);
-        
-        ObjectPath functionPath = normalize(objectPath);
-        
-        try {
-            // Check if function exists
-            if (functionExists(functionPath)) {
-                glueFunctionsOperations.dropGlueFunction(functionPath);
-                LOG.info("Successfully dropped function: {}", functionPath);
-            } else if (!ignoreIfNotExists) {
-                throw new FunctionNotExistException(getName(), functionPath);
-            } else {
-                LOG.debug("Function {} does not exist and ignoreIfNotExists is set, doing nothing", functionPath);
+        checkNotNull(functionPath, "functionPath cannot be null");
+
+        // Normalize the path for case-insensitive handling
+        ObjectPath normalizedPath = normalize(functionPath);
+
+        if (!databaseExists(normalizedPath.getDatabaseName())) {
+            if (ignoreIfNotExists) {
+                return;
             }
+            throw new FunctionNotExistException(getName(), normalizedPath);
+        }
+
+        try {
+            boolean exists = functionExists(normalizedPath);
+            if (!exists) {
+                if (ignoreIfNotExists) {
+                    LOG.debug("Function {} does not exist and ignoreIfNotExists is set to true. Returning.", normalizedPath.getFullName());
+                    return;
+                } else {
+                    throw new FunctionNotExistException(getName(), normalizedPath);
+                }
+            }
+            
+            // Function exists, proceed with dropping it
+            glueFunctionsOperations.dropGlueFunction(normalizedPath);
         } catch (FunctionNotExistException e) {
-            // Re-throw this specific exception
-            throw e;
+            if (!ignoreIfNotExists) {
+                throw e;
+            }
+            LOG.debug("Function {} does not exist and ignoreIfNotExists is set to true. Returning.", normalizedPath.getFullName());
         } catch (Exception e) {
-            LOG.error("Failed to drop function {}: {}", functionPath, e.getMessage());
             throw new CatalogException(
-                    String.format("Error dropping function %s: %s", functionPath, e.getMessage()), e);
+                    String.format("Failed to drop function %s", normalizedPath.getFullName()), e);
         }
     }
 

@@ -144,5 +144,42 @@ class GlueTypeConverterTest {
         assertEquals("map<string,map<string,int>>", glueType);
     }
 
+    @Test
+    void testCasePreservationForStructFields() {
+        // Test that mixed-case field names in struct are preserved
+        // This simulates how Glue actually behaves - preserving case for struct fields
+        String glueStructType = "struct<FirstName:string,lastName:string,Address:struct<Street:string,zipCode:string>>";
+        
+        // Convert to Flink type
+        DataType flinkType = converter.toFlinkType(glueStructType);
+        
+        // The result should be a row type
+        assertEquals(org.apache.flink.table.types.logical.LogicalTypeRoot.ROW, 
+                flinkType.getLogicalType().getTypeRoot(), 
+                "Result should be a ROW type");
+        
+        // Extract field names from the row type
+        org.apache.flink.table.types.logical.RowType rowType = 
+                (org.apache.flink.table.types.logical.RowType) flinkType.getLogicalType();
+        
+        assertEquals(3, rowType.getFieldCount(), "Should have 3 top-level fields");
+        
+        // Verify exact field name case is preserved
+        assertEquals("FirstName", rowType.getFieldNames().get(0), "Field name case should be preserved");
+        assertEquals("lastName", rowType.getFieldNames().get(1), "Field name case should be preserved");
+        assertEquals("Address", rowType.getFieldNames().get(2), "Field name case should be preserved");
+        
+        // Verify nested struct field names case is also preserved
+        org.apache.flink.table.types.logical.LogicalType nestedType = rowType.getFields().get(2).getType();
+        assertEquals(org.apache.flink.table.types.logical.LogicalTypeRoot.ROW, 
+                nestedType.getTypeRoot(), 
+                "Nested field should be a ROW type");
+        
+        org.apache.flink.table.types.logical.RowType nestedRowType = 
+                (org.apache.flink.table.types.logical.RowType) nestedType;
+        
+        assertEquals("Street", nestedRowType.getFieldNames().get(0), "Nested field name case should be preserved");
+        assertEquals("zipCode", nestedRowType.getFieldNames().get(1), "Nested field name case should be preserved");
+    }
 
 }
