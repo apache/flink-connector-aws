@@ -1,77 +1,284 @@
-# Flink-AWS Glue Integration
+# Flink AWS Glue Catalog Connector
 
-This project demonstrates how to integrate **Apache Flink** with the **AWS Glue Data Catalog**. It enables Flink applications to query metadata from AWS Glue, register catalogs, and interact with AWS services such as Kinesis and Kafka through Flink SQL.
+The Flink AWS Glue Catalog connector provides integration between Apache Flink and the AWS Glue Data Catalog. This connector enables Flink applications to use AWS Glue as a metadata catalog for tables, databases, and schemas, allowing seamless SQL queries against AWS resources.
+
+## Features
+
+- Register AWS Glue as a catalog in Flink applications
+- Access Glue databases and tables through Flink SQL
+- Support for various AWS data sources (S3, Kinesis, MSK)
+- Mapping between Flink and AWS Glue data types
+- Compatibility with Flink's Table API and SQL interface
 
 ## Prerequisites
 
 Before getting started, ensure you have the following:
 
-- **Apache Flink 1.20** or later installed.
-- An **AWS account** with appropriate permissions to access **AWS Glue** and **Kinesis** (if used).
-- **Maven 3.8+** for building the project.
-- **Java 11** or later installed.
+- **Apache Flink 1.17+** installed or running in a managed environment
+- **AWS account** with appropriate permissions for AWS Glue and other required services
+- **AWS credentials** properly configured
+- **Java 11** or later
+- **Maven 3.8+** for building the project
 
-## Project Setup
+## Getting Started
 
-### 1. Clone the Repository
+### 1. Add Dependency
 
-Clone this repository to your local machine:
+Add the AWS Glue Catalog connector to your Flink project:
 
-```bash
-git clone x
-cd flink-catalog-aws-glue
-```
-### 2. Build the Project
-
-Run the following Maven command to build the project:
-
-```bash
-mvn clean install
+```xml
+<dependency>
+    <groupId>org.apache.flink</groupId>
+    <artifactId>flink-connector-aws-glue-catalog</artifactId>
+    <version>${flink.version}</version>
+</dependency>
 ```
 
-### 3. Configure AWS Credentials
+### 2. Configure AWS Credentials
 
-Ensure you have AWS credentials set up on your local machine. You can configure them via the AWS CLI:
+Ensure AWS credentials are configured using one of these methods:
 
-```bash
-aws configure
-```
+- Environment variables
+- AWS credentials file
+- IAM roles (for applications running on AWS)
 
-### 4. Running the Application
+### 3. Register the Glue Catalog
 
-Once you have everything set up, you can run the **StreamingJob** which integrates Flink with the Glue Data Catalog:
+You can register the AWS Glue catalog using either the Table API or SQL:
 
-### Integration with Glue
-
-```markdown
-## Integration with Glue
-
-The main integration points for AWS Glue are handled in the `GlueTableUtils` and `GlueTypeConverter` classes. They help map Glue-specific metadata (such as columns and types) to Flink-compatible formats.
-
-### 1. Glue Catalog Setup
-
-The application registers a **GlueCatalog** with the Flink environment to interact with Glue's metadata. This enables Flink to read Glue's schema and catalog information for its SQL operations.
+#### Using Table API (Java/Scala)
 
 ```java
-Catalog glueCatalog = new GlueCatalog("glue_catalog", "default", "us-east-1");
-tEnv.registerCatalog("glue_catalog", glueCatalog);
-tEnv.useCatalog("glue_catalog");
+// Java/Scala
+import org.apache.flink.table.catalog.glue.GlueCatalog;
+import org.apache.flink.table.catalog.Catalog;
+
+// Create Glue catalog instance
+Catalog glueCatalog = new GlueCatalog(
+    "glue_catalog",      // Catalog name
+    "default",           // Default database
+    "us-east-1",         // AWS region
+    null);               // AWS credentials provider (optional)
+
+// Register with table environment
+tableEnv.registerCatalog("glue_catalog", glueCatalog);
+tableEnv.useCatalog("glue_catalog");
 ```
-### 2. Creating and Interacting with Glue Tables
-TBD
 
-## Case Sensitivity with Nested Fields
+#### Using Table API (Python)
 
-### Understanding Case Handling in AWS Glue
+```python
+# Python
+from pyflink.table.catalog import GlueCatalog
+
+# Create and register Glue catalog
+glue_catalog = GlueCatalog(
+    "glue_catalog",      # Catalog name
+    "default",           # Default database
+    "us-east-1")         # AWS region
+
+t_env.register_catalog("glue_catalog", glue_catalog)
+t_env.use_catalog("glue_catalog")
+```
+
+#### Using SQL
+
+In the Flink SQL Client, create and use the Glue catalog:
+
+```sql
+-- Create a catalog using Glue
+CREATE CATALOG glue_catalog WITH (
+    'type' = 'glue',
+    'catalog-name' = 'glue_catalog',
+    'default-database' = 'default',
+    'region' = 'us-east-1'
+);
+
+-- Use the created catalog
+USE CATALOG glue_catalog;
+
+-- Use a specific database
+USE default;
+```
+
+### 4. Create or Reference Glue Tables
+
+Once the catalog is registered, you can create new tables or reference existing ones:
+
+```sql
+-- Create a new table in Glue
+CREATE TABLE customer_table (
+  id BIGINT,
+  name STRING,
+  region STRING
+) WITH (
+  'connector' = 'kinesis',
+  'stream' = 'customer-stream',
+  'aws.region' = 'us-east-1',
+  'format' = 'json'
+);
+
+-- Query existing Glue table
+SELECT * FROM glue_catalog.sales_db.order_table;
+```
+
+## Catalog Operations
+
+The AWS Glue Catalog connector supports several catalog operations through SQL. Here's a list of the operations that are currently implemented:
+
+### Database Operations
+
+```sql
+-- Create a new database
+CREATE DATABASE sales_db;
+
+-- Create a database with comment
+CREATE DATABASE sales_db COMMENT 'Database for sales data';
+
+-- Create a database if it doesn't exist
+CREATE DATABASE IF NOT EXISTS sales_db;
+
+-- Drop a database
+DROP DATABASE sales_db;
+
+-- Drop a database if it exists
+DROP DATABASE IF EXISTS sales_db;
+
+-- Use a specific database
+USE sales_db;
+```
+
+### Table Operations
+
+```sql
+-- Create a table
+CREATE TABLE orders (
+  order_id BIGINT,
+  customer_id BIGINT,
+  order_date TIMESTAMP,
+  amount DECIMAL(10, 2)
+);
+
+-- Create a table with comment and properties
+CREATE TABLE orders (
+  order_id BIGINT,
+  customer_id BIGINT,
+  order_date TIMESTAMP,
+  amount DECIMAL(10, 2),
+  PRIMARY KEY (order_id) NOT ENFORCED
+) COMMENT 'Table storing order information'
+WITH (
+  'connector' = 's3',
+  'path' = 's3://bucket/path/to/orders',
+  'format' = 'parquet'
+);
+
+-- Create table if not exists
+CREATE TABLE IF NOT EXISTS orders (
+  order_id BIGINT,
+  customer_id BIGINT
+);
+
+-- Drop a table
+DROP TABLE orders;
+
+-- Drop a table if it exists
+DROP TABLE IF EXISTS orders;
+
+-- Show table details
+DESCRIBE orders;
+```
+
+### View Operations
+
+```sql
+-- Create a view
+CREATE VIEW order_summary AS
+SELECT customer_id, COUNT(*) as order_count, SUM(amount) as total_amount
+FROM orders
+GROUP BY customer_id;
+
+-- Create or replace a view
+CREATE OR REPLACE VIEW order_summary AS
+SELECT customer_id, COUNT(*) as order_count, SUM(amount) as total_amount
+FROM orders
+GROUP BY customer_id;
+
+-- Create a temporary view (only available in current session)
+CREATE TEMPORARY VIEW temp_view AS
+SELECT * FROM orders WHERE amount > 100;
+
+-- Drop a view
+DROP VIEW order_summary;
+
+-- Drop a view if it exists
+DROP VIEW IF EXISTS order_summary;
+```
+
+### Function Operations
+
+```sql
+-- Register a function
+CREATE FUNCTION multiply_func AS 'com.example.functions.MultiplyFunction';
+
+-- Register a temporary function
+CREATE TEMPORARY FUNCTION temp_function AS 'com.example.functions.TempFunction';
+
+-- Drop a function
+DROP FUNCTION multiply_func;
+
+-- Drop a temporary function
+DROP TEMPORARY FUNCTION temp_function;
+```
+
+### Listing Resources
+
+Query available catalogs, databases, and tables:
+
+```sql
+-- List all catalogs
+SHOW CATALOGS;
+
+-- List databases in the current catalog
+SHOW DATABASES;
+
+-- List tables in the current database
+SHOW TABLES;
+
+-- List tables in a specific database
+SHOW TABLES FROM sales_db;
+
+-- List views in the current database
+SHOW VIEWS;
+
+-- List functions
+SHOW FUNCTIONS;
+```
+
+### Cross-Catalog Queries
+
+Access tables from different catalogs in the same query:
+
+```sql
+-- Join tables from different catalogs
+SELECT o.order_id, c.customer_name, o.amount
+FROM glue_catalog.sales_db.orders o
+JOIN default_catalog.default_database.customers c
+ON o.customer_id = c.id;
+```
+
+## Case Sensitivity in AWS Glue
+
+### Understanding Case Handling
 
 AWS Glue handles case sensitivity in a specific way:
 
-1. **Top-level column names** are automatically lowercased in Glue (e.g., `UserProfile` becomes `userprofile`).
-2. **Nested struct field names** preserve their original case in Glue (e.g., inside the struct, `FirstName` stays as `FirstName`).
+1. **Top-level column names** are automatically lowercased in Glue (e.g., `UserProfile` becomes `userprofile`)
+2. **Nested struct field names** preserve their original case in Glue (e.g., inside a struct, `FirstName` stays as `FirstName`)
 
-This difference in case handling can cause issues when querying nested fields using Flink SQL.
+However, when writing queries in Flink SQL, you should use the **original column names** as defined in your `CREATE TABLE` statement, not how they are stored in Glue.
 
-### Example
+### Example with Nested Fields
 
 Consider this table definition:
 
@@ -90,7 +297,7 @@ CREATE TABLE nested_json_test (
 )
 ```
 
-When stored in Glue, it looks like:
+When stored in Glue, the schema looks like:
 
 ```json
 {
@@ -101,41 +308,89 @@ When stored in Glue, it looks like:
 }
 ```
 
-### Handling Case Sensitivity in Queries
+### Querying Nested Fields
 
-When querying this data with Flink SQL, a direct query like:
-
-```sql
-SELECT UserProfile.FirstName FROM nested_json_test
-```
-
-Will fail with an error like:
-
-```
-Column 'UserProfile.FirstName' not found in table 'nested_json_test'; did you mean 'firstname'?
-```
-
-To properly query the data, you need to use backticks to handle case sensitivity:
+When querying, always use the original column names as defined in your `CREATE TABLE` statement:
 
 ```sql
-SELECT `userprofile`.`FirstName` FROM nested_json_test
+-- CORRECT: Use the original column names from CREATE TABLE
+SELECT UserProfile.FirstName FROM nested_json_test;
+
+-- INCORRECT: This doesn't match your schema definition
+SELECT `userprofile`.`FirstName` FROM nested_json_test;
+
+-- For nested fields within nested fields, also use original case
+SELECT event_data.EventType, event_data.eventTimestamp FROM nested_json_test;
+
+-- Accessing map fields
+SELECT metadata['source_system'] FROM nested_json_test;
 ```
 
-### Utility Method for SQL Generation
+### Important Notes on Case Sensitivity
 
-To help generate properly quoted SQL expressions for nested fields, use the `generateSafeNestedFieldAccess` utility method:
+1. Always use the original column names as defined in your `CREATE TABLE` statement
+2. Use backticks (`) when column names contain special characters or spaces
+3. Remember that regardless of how Glue stores the data internally, your queries should match your schema definition
+4. When creating tables, defining the schema with backticks is recommended for clarity
+
+## Data Type Mapping
+
+The connector handles mapping between Flink data types and AWS Glue data types automatically. The following table shows the basic type mappings:
+
+| Flink Type | AWS Glue Type |
+|------------|---------------|
+| CHAR       | string        |
+| VARCHAR    | string        |
+| BOOLEAN    | boolean       |
+| BINARY     | binary        |
+| VARBINARY  | binary        |
+| DECIMAL    | decimal       |
+| TINYINT    | byte          |
+| SMALLINT   | short         |
+| INTEGER    | int           |
+| BIGINT     | long          |
+| FLOAT      | float         |
+| DOUBLE     | double        |
+| DATE       | date          |
+| TIME       | string        |
+| TIMESTAMP  | timestamp     |
+| ROW        | struct        |
+| ARRAY      | array         |
+| MAP        | map           |
+
+## Limitations and Considerations
+
+1. **Case Sensitivity**: As detailed above, always use the original column names from your schema definition when querying.
+2. **Performance**: Queries involving large datasets or complex joins may experience performance issues.
+3. **AWS Service Limits**: Be aware of AWS Glue service limits that may affect your application.
+4. **Authentication**: Ensure proper AWS credentials with appropriate permissions are available.
+5. **Region Selection**: The Glue catalog must be registered with the correct AWS region where your Glue resources exist.
+6. **Unsupported Operations**: The following operations are not currently supported:
+   - ALTER DATABASE (modifying database properties)
+   - ALTER TABLE (modifying table properties or schema)
+   - RENAME TABLE
+   - Partition management operations (ADD/DROP PARTITION)
+
+## Troubleshooting
+
+### Common Issues
+
+1. **"Table not found"**: Verify the table exists in the specified Glue database and catalog.
+2. **Authentication errors**: Check AWS credentials and permissions.
+3. **Case sensitivity errors**: Ensure you're using the original column names as defined in your schema.
+4. **Type conversion errors**: Verify that data types are compatible between Flink and Glue.
+
+### Logging
+
+Enable detailed logging for troubleshooting:
 
 ```java
-// Import the utility class
-import com.amazonaws.services.msf.util.GlueTableUtils;
-
-// Generate a SQL-safe field access expression
-String fieldExpression = GlueTableUtils.generateSafeNestedFieldAccess("userprofile", "FirstName");
-// Result: "`userprofile`.`FirstName`"
-
-// Use it in a SQL query
-String sql = "SELECT " + fieldExpression + " FROM nested_json_test";
-// Result: "SELECT `userprofile`.`FirstName` FROM nested_json_test"
+// Set to DEBUG level for more detailed logs
+LOG.setLevel(Level.DEBUG);
 ```
 
-This approach ensures that your SQL queries will work correctly with the case-sensitive nested fields in AWS Glue.
+## Additional Resources
+
+- [Apache Flink Documentation](https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/table/catalogs/)
+- [AWS Glue Documentation](https://docs.aws.amazon.com/glue/)
+- [Flink SQL Documentation](https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/table/sql/overview/)

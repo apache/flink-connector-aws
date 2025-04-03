@@ -168,23 +168,22 @@ public class StreamingJob {
         // EXAMPLE 6: NESTED JSON TEST - Tests case sensitivity in nested structures
         // -------------------------------------------------------------------------
         // // Create a table with a complex nested structure using different case styles
-         tEnv.executeSql("CREATE TABLE IF NOT EXISTS nested_json_test (" +
-                 "  `Id` INT," +
-                 "  `UserProfile` ROW<" +
-                 "     `FirstName` VARCHAR(255), " +
-                 "     `lastName` VARCHAR(255)" +
-                 "  >," +
-                 "  `event_data` ROW<" +
-                 "     `EventType` VARCHAR(50)," +
-                 "     `eventTimestamp` TIMESTAMP(3)" +
-                 "  >," +
-                 "  `metadata` MAP<VARCHAR(100), VARCHAR(255)>" +
-                 ")" +
-                 "WITH (" +
-                 "  'connector' = 'filesystem'," +
-                 "  'path' = '/tmp/nested_json_test.json'," +
-                 "  'format' = 'json'" +
-                 ");").print();
+//         tEnv.executeSql("CREATE TABLE IF NOT EXISTS nested_json_test (" +
+//                 "  `Id` INT," +
+//                 "  `UserProfile` ROW<" +
+//                 "     `FirstName` VARCHAR(255), " +
+//                 "     `lastName` VARCHAR(255)" +
+//                 "  >," +
+//                 "  `EventData` ROW<" +
+//                 "     `EventType` VARCHAR(50)," +
+//                 "     `eventTimestamp` TIMESTAMP(3)," +
+//                 "      `METADATA` MAP<VARCHAR(100), VARCHAR(255)>>" +
+//                 ")" +
+//                 "WITH (" +
+//                 "  'connector' = 'filesystem'," +
+//                 "  'path' = '/tmp/nested_json_test.json'," +
+//                 "  'format' = 'json'" +
+//                 ");").print();
         // 
         // // Create a simpler nested JSON file manually:
         // cat > /tmp/nested_json_test.json << 'EOF'
@@ -193,189 +192,95 @@ public class StreamingJob {
         // EOF
         // 
         // // Test basic query to verify all fields are accessible with correct case
-         tEnv.executeSql("SELECT " +
-                 "  `Id`, " +
-                 "  `UserProfile`.`FirstName` " +
-//                 "  `metadata`['sourceSystem'] as source_system, " +
-//                 "  `metadata`['correlationId'] as correlation_id " +
-                 "FROM nested_json_test limit 1").print();
+//         tEnv.executeSql("SELECT " +
+//                 "  `Id`, " +
+//                 "  `UserProfile`.`FirstName`, " +
+//                 "  `UserProfile`, " +
+//                 "  `EventData`," +
+//                 "  `EventData`.`METADATA`," +
+//                 "  `EventData`.`METADATA`['SourceSystem'] as source_system, " +
+//                 "  `EventData`.`METADATA`['correlation_id'] as correlation_id " +
+//                 "FROM nested_json_test limit 1").print();
         
         // -------------------------------------------------------------------------
         // EXAMPLE 6-A: ALTERNATIVE NESTED STRUCTURE - First level only
         // -------------------------------------------------------------------------
         // // Create a simpler table with first-level nested fields only
-        // tEnv.executeSql("CREATE TABLE IF NOT EXISTS flat_json_test (" +
-        //         "  `UserId` INT," +
-        //         "  `UserName` VARCHAR(255)," +
-        //         "  `EventType` VARCHAR(50)," +
-        //         "  `TimeStamp` TIMESTAMP(3)," +
-        //         "  `DATA_VALUE` VARCHAR(255)" +
-        //         ")" +
-        //         "WITH (" +
-        //         "  'connector' = 'filesystem'," +
-        //         "  'path' = '/tmp/flat_json_test.json'," +
-        //         "  'format' = 'json'" +
-        //         ");").print();
+//         tEnv.executeSql("CREATE TABLE IF NOT EXISTS flat_json_test (" +
+//                 "  `UserId` INT," +
+//                 "  `UserName` VARCHAR(255)," +
+//                 "  `EventType` VARCHAR(50)," +
+//                 "  `TimeStamp` TIMESTAMP(3)," +
+//                 "  `DATA_VALUE` VARCHAR(255)" +
+//                 ")" +
+//                 "WITH (" +
+//                 "  'connector' = 'filesystem'," +
+//                 "  'path' = '/tmp/flat_json_test.json'," +
+//                 "  'format' = 'json'" +
+//                 ");").print();
         // 
         // // Create a simple JSON file manually:
         // // echo '{"UserId":1,"UserName":"john","EventType":"LOGIN","TimeStamp":"2023-04-01 12:00:00","DATA_VALUE":"test"}' > /tmp/flat_json_test.json
         // // echo '{"UserId":2,"UserName":"jane","EventType":"LOGOUT","TimeStamp":"2023-04-01 12:30:00","DATA_VALUE":"test2"}' >> /tmp/flat_json_test.json
         // 
         // // Query the table with mixed case columns
-        // tEnv.executeSql("SELECT `UserId`, `UserName`, `EventType`, `TimeStamp`, `DATA_VALUE` FROM flat_json_test").print();
+//         tEnv.executeSql("SELECT `UserId`, `UserName`, `EventType`, `TimeStamp`, `DATA_VALUE` FROM flat_json_test").print();
         
         // -------------------------------------------------------------------------
         // EXAMPLE 6-B: MAP STRUCTURE APPROACH - Using MAP instead of nested ROWs
         // -------------------------------------------------------------------------
         // // Create a table using MAPs instead of nested ROWs
-        // tEnv.executeSql("CREATE TABLE IF NOT EXISTS map_json_test (" +
-        //         "  `Id` INT," +
-        //         "  `Profile` MAP<VARCHAR(100), VARCHAR(255)>," +
-        //         "  `EventInfo` MAP<VARCHAR(100), VARCHAR(255)>" +
-        //         ")" +
-        //         "WITH (" +
-        //         "  'connector' = 'filesystem'," +
-        //         "  'path' = '/tmp/map_json_test.json'," +
-        //         "  'format' = 'json'" +
-        //         ");").print();
+//         tEnv.executeSql("CREATE TABLE IF NOT EXISTS map_json_test (" +
+//                 "  `Id` INT," +
+//                 "  `Profile` MAP<VARCHAR(100), VARCHAR(255)>," +
+//                 "  `EventInfo` MAP<VARCHAR(100), VARCHAR(255)>" +
+//                 ")" +
+//                 "WITH (" +
+//                 "  'connector' = 'filesystem'," +
+//                 "  'path' = '/tmp/map_json_test.json'," +
+//                 "  'format' = 'json'" +
+//                 ");").print();
         // 
         // // Create a JSON file manually with map-like structure:
         // // echo '{"Id":1,"Profile":{"FirstName":"John","LastName":"Doe"},"EventInfo":{"Type":"LOGIN","Time":"2023-04-01 12:00:00"}}' > /tmp/map_json_test.json
         // // echo '{"Id":2,"Profile":{"FirstName":"Jane","LastName":"Smith"},"EventInfo":{"Type":"PURCHASE","Time":"2023-04-01 12:30:00"}}' >> /tmp/map_json_test.json
         // 
         // // Query the table using map access
-        // tEnv.executeSql("SELECT " +
-        //         "  `Id`, " +
-        //         "  `Profile`['FirstName'] as first_name, " +
-        //         "  `Profile`['LastName'] as last_name, " +
-        //         "  `EventInfo`['Type'] as event_type, " +
-        //         "  `EventInfo`['Time'] as event_time " +
-        //         "FROM map_json_test").print();
+//         tEnv.executeSql("SELECT " +
+//                 "  `Id`, " +
+//                 "  `Profile`['FirstName'] as first_name, " +
+//                 "  `Profile`['LastName'] as last_name, " +
+//                 "  `EventInfo`['Type'] as event_type, " +
+//                 "  `EventInfo`['Time'] as event_time " +
+//                 "FROM map_json_test").print();
         
         // -------------------------------------------------------------------------
         // EXAMPLE 6-C: STRING JSON APPROACH - Store nested JSON as STRING
         // -------------------------------------------------------------------------
         // // Create a table with JSON stored as STRING
-        // tEnv.executeSql("CREATE TABLE IF NOT EXISTS string_json_test (" +
-        //         "  `Id` INT," +
-        //         "  `UserData` STRING," +  // Store JSON as string
-        //         "  `EventData` STRING" +  // Store JSON as string
-        //         ")" +
-        //         "WITH (" +
-        //         "  'connector' = 'filesystem'," +
-        //         "  'path' = '/tmp/string_json_test.json'," +
-        //         "  'format' = 'json'" +
-        //         ");").print();
+//         tEnv.executeSql("CREATE TABLE IF NOT EXISTS string_json_test (" +
+//                 "  `Id` INT," +
+//                 "  `UserData` STRING," +  // Store JSON as string
+//                 "  `EventData` STRING" +  // Store JSON as string
+//                 ")" +
+//                 "WITH (" +
+//                 "  'connector' = 'filesystem'," +
+//                 "  'path' = '/tmp/string_json_test.json'," +
+//                 "  'format' = 'json'" +
+//                 ");").print();
         // 
         // // Create a JSON file manually:
         // // echo '{"Id":1,"UserData":"{\"FirstName\":\"John\",\"LastName\":\"Doe\"}","EventData":"{\"EventType\":\"LOGIN\",\"TimeStamp\":\"2023-04-01 12:00:00\"}"}' > /tmp/string_json_test.json
         // // echo '{"Id":2,"UserData":"{\"FirstName\":\"Jane\",\"LastName\":\"Smith\"}","EventData":"{\"EventType\":\"PURCHASE\",\"TimeStamp\":\"2023-04-01 12:30:00\"}"}' >> /tmp/string_json_test.json
         // 
         // // Query with JSON functions to extract fields
-        // tEnv.executeSql("SELECT " +
-        //         "  `Id`, " +
-        //         "  JSON_VALUE(`UserData`, '$.FirstName') as first_name, " +
-        //         "  JSON_VALUE(`UserData`, '$.LastName') as last_name, " +
-        //         "  JSON_VALUE(`EventData`, '$.EventType') as event_type, " +
-        //         "  JSON_VALUE(`EventData`, '$.TimeStamp') as event_time " +
-        //         "FROM string_json_test").print();
-        
-        // -------------------------------------------------------------------------
-        // EXAMPLE 7: KAFKA SOURCE WITH JSON - For testing with streaming data
-        // -------------------------------------------------------------------------
-        // // Create a Kafka source table with mixed case columns
-        // tEnv.executeSql("CREATE TABLE IF NOT EXISTS kafka_json_test (" +
-        //         "  `MessageId` STRING," +
-        //         "  `UserData` ROW<" +
-        //         "     `userId` BIGINT," +
-        //         "     `FirstName` STRING," +
-        //         "     `LastName` STRING" +
-        //         "  >," +
-        //         "  `EVENT_TIME` TIMESTAMP(3)," +
-        //         "  `eventType` STRING," +
-        //         "  WATERMARK FOR `EVENT_TIME` AS `EVENT_TIME` - INTERVAL '5' SECOND" +
-        //         ")" +
-        //         "WITH (" +
-        //         "  'connector' = 'kafka'," +
-        //         "  'topic' = 'test-topic'," +
-        //         "  'properties.bootstrap.servers' = 'localhost:9092'," +
-        //         "  'properties.group.id' = 'testGroup'," +
-        //         "  'scan.startup.mode' = 'earliest-offset'," +
-        //         "  'format' = 'json'" +
-        //         ");").print();
-        //
-        // // Note: You'll need to produce messages to Kafka in this format:
-        // // {"MessageId":"msg1","UserData":{"userId":101,"FirstName":"Alice","LastName":"Johnson"},"EVENT_TIME":"2023-04-01 13:00:00","eventType":"LOGIN"}
-        // // {"MessageId":"msg2","UserData":{"userId":102,"FirstName":"Bob","LastName":"Smith"},"EVENT_TIME":"2023-04-01 13:05:00","eventType":"LOGOUT"}
-        //
-        // // Query to test the access of mixed-case fields
-        // tEnv.executeSql("SELECT " +
-        //         "  `MessageId`, " +
-        //         "  `UserData`.`userId`, " +
-        //         "  `UserData`.`FirstName`, " +
-        //         "  `UserData`.`LastName`, " +
-        //         "  `EVENT_TIME`, " +
-        //         "  `eventType` " +
-        //         "FROM kafka_json_test").print();
-        
-        // -------------------------------------------------------------------------
-        // EXAMPLE 8: ADVANCED JSON CONVERSION TEST - Create tables programmatically
-        // -------------------------------------------------------------------------
-        // This example demonstrates programmatic JSON handling with case-sensitive fields
-        
-        // // Uncomment and run this test to validate direct JSON conversion with case-sensitive fields
-        // // First, create a simple table to store the source JSON
-        // tEnv.executeSql("CREATE TABLE IF NOT EXISTS json_source (" +
-        //         "  `id` INT," +
-        //         "  `content` STRING" + // This will contain a JSON string
-        //         ")" +
-        //         "WITH (" +
-        //         "  'connector' = 'datagen'" +
-        //         ");").print();
-        // 
-        // // Insert a sample JSON record
-        // tEnv.executeSql("INSERT INTO json_source VALUES " +
-        //         "(1, '{\"UserId\":123,\"UserName\":\"test_user\",\"METADATA\":{\"CreatedAt\":\"2023-04-01\",\"active_Status\":true}}');").print();
-        // 
-        // // Query the JSON fields directly using Flink's JSON functions
-        // tEnv.executeSql("SELECT " +
-        //         "  id, " +
-        //         "  JSON_VALUE(content, '$.UserId') AS extracted_user_id, " +
-        //         "  JSON_VALUE(content, '$.UserName') AS extracted_user_name, " +
-        //         "  JSON_VALUE(content, '$.METADATA.CreatedAt') AS created_at, " +
-        //         "  JSON_VALUE(content, '$.METADATA.active_Status') AS active_status " +
-        //         "FROM json_source").print();
-        
-        // -------------------------------------------------------------------------
-        // CLEANUP - Uncomment to clean up test tables
-        // -------------------------------------------------------------------------
-        // tEnv.executeSql("DROP TABLE IF EXISTS case_test_lowercase").print();
-        // tEnv.executeSql("DROP TABLE IF EXISTS case_test_uppercase").print();
-        // tEnv.executeSql("DROP TABLE IF EXISTS case_test_mixed").print();
-        // tEnv.executeSql("DROP TABLE IF EXISTS case_test_pascal").print();
-        // tEnv.executeSql("DROP TABLE IF EXISTS json_test").print();
-        // tEnv.executeSql("DROP TABLE IF EXISTS nested_json_test").print();
-        // tEnv.executeSql("DROP TABLE IF EXISTS flat_json_test").print();
-        // tEnv.executeSql("DROP TABLE IF EXISTS map_json_test").print();
-        // tEnv.executeSql("DROP TABLE IF EXISTS string_json_test").print();
-        // tEnv.executeSql("DROP TABLE IF EXISTS kafka_json_test").print();
-        // tEnv.executeSql("DROP TABLE IF EXISTS json_source").print();
+//         tEnv.executeSql("SELECT " +
+//                 "  `Id`, " +
+//                 "  JSON_VALUE(`UserData`, '$.FirstName') as first_name, " +
+//                 "  JSON_VALUE(`UserData`, '$.LastName') as last_name, " +
+//                 "  JSON_VALUE(`EventData`, '$.EventType') as event_type, " +
+//                 "  JSON_VALUE(`EventData`, '$.TimeStamp') as event_time " +
+//                 "FROM string_json_test").print();
 
-//        //        // Create a new table 'fran' with specified schema and configuration
-//        tEnv.executeSql("CREATE VIEW IF NOT EXISTS gen_view AS SELECT * FROM gen where price > 50").print();
-//
-//        //        // Show the list of tables in the 'test' database again after creating the new table
-//        tEnv.executeSql("SHOW TABLES").print();
-//
-//       // Run a query to select all records from the 'fran' table and print the results
-//       tEnv.executeSql("SELECT * from gen_view limit 15").print();
-//        //        // Drop the 'fran' table if it exists and create it
-//        tEnv.executeSql("DROP TABLE IF EXISTS gen").print();
-//
-//        tEnv.executeSql("DROP TABLE IF EXISTS gen_view").print();
-
-
-//        // Run a query to select all records from the 'fran' table and print the results
-//        tEnv.executeSql("SELECT price from gen where price > 50").print();
     }
 }
