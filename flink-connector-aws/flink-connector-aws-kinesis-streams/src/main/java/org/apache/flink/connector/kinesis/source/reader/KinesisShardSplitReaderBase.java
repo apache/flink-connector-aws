@@ -132,7 +132,7 @@ public abstract class KinesisShardSplitReaderBase
      * @return RecordBatch containing the fetched records and metadata. Returns null if there are no
      *     records but fetching should be retried at a later time.
      */
-    protected abstract RecordBatch fetchRecords(KinesisShardSplitState splitState);
+    protected abstract RecordBatch fetchRecords(KinesisShardSplitState splitState) throws IOException;
 
     @Override
     public void handleSplitsChanges(SplitsChange<KinesisShardSplit> splitsChanges) {

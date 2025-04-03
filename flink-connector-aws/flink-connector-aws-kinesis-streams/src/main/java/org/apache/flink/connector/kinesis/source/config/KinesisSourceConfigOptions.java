@@ -79,6 +79,20 @@ public class KinesisSourceConfigOptions {
                     .withDescription(
                             "The maximum number of records to try to get each time we fetch records from a AWS Kinesis shard");
 
+    public static final ConfigOption<Duration> SHARD_GET_RECORDS_INTERVAL =
+            ConfigOptions.key("source.shard.get-records.interval")
+                    .durationType()
+                    .defaultValue(Duration.ofMillis(0))
+                    .withDescription(
+                            "The interval in milliseconds between GetRecords calls");
+
+    public static final ConfigOption<Duration> SHARD_GET_RECORDS_IDLE_SOURCE_INTERVAL =
+            ConfigOptions.key("source.shard.get-records.idle-source-interval")
+                    .durationType()
+                    .defaultValue(Duration.ofMillis(250))
+                    .withDescription(
+                            "The interval in milliseconds between GetRecords calls on an idle source");
+
     public static final ConfigOption<ReaderType> READER_TYPE =
             ConfigOptions.key("source.reader.type")
                     .enumType(ReaderType.class)

@@ -36,6 +36,7 @@ import org.apache.flink.metrics.testutils.MetricListener;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +44,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
+import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.SHARD_GET_RECORDS_IDLE_SOURCE_INTERVAL;
+import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.SHARD_GET_RECORDS_INTERVAL;
 import static org.apache.flink.connector.kinesis.source.util.KinesisStreamProxyProvider.getTestStreamProxy;
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.getTestSplit;
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.getTestSplitState;
@@ -60,6 +63,8 @@ class KinesisStreamsSourceReaderTest {
         metricListener = new MetricListener();
         shardMetricGroupMap = new ConcurrentHashMap<>();
         sourceConfig = new Configuration();
+        sourceConfig.set(SHARD_GET_RECORDS_INTERVAL, Duration.ofMillis(0));
+        sourceConfig.set(SHARD_GET_RECORDS_IDLE_SOURCE_INTERVAL, Duration.ofMillis(250));
         StreamProxy testStreamProxy = getTestStreamProxy();
         Supplier<PollingKinesisShardSplitReader> splitReaderSupplier =
                 () ->

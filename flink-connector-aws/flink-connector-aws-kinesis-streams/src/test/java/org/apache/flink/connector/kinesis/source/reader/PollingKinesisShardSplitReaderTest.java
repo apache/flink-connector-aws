@@ -30,19 +30,25 @@ import org.apache.flink.metrics.testutils.MetricListener;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.SHARD_GET_RECORDS_IDLE_SOURCE_INTERVAL;
+import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.SHARD_GET_RECORDS_INTERVAL;
 import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.SHARD_GET_RECORDS_MAX;
 import static org.apache.flink.connector.kinesis.source.util.KinesisStreamProxyProvider.getTestStreamProxy;
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.STREAM_ARN;
@@ -51,6 +57,7 @@ import static org.apache.flink.connector.kinesis.source.util.TestUtil.getTestRec
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.getTestSplit;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatNoException;
 import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
+import static org.testcontainers.shaded.org.awaitility.Awaitility.await;
 
 class PollingKinesisShardSplitReaderTest {
     private PollingKinesisShardSplitReader splitReader;
@@ -393,6 +400,58 @@ class PollingKinesisShardSplitReaderTest {
 
         assertThat(sentRecords.size() > maxRecordsToGet).isTrue();
         assertThat(records.size()).isEqualTo(maxRecordsToGet);
+    }
+
+    @ValueSource(longs = {0L, 1000L, 2000L})
+    @ParameterizedTest
+    public void testPollingInterval(long interval) {
+        sourceConfig = new Configuration();
+        sourceConfig.set(SHARD_GET_RECORDS_MAX, 50);
+        sourceConfig.set(SHARD_GET_RECORDS_INTERVAL, Duration.ofMillis(interval));
+
+        splitReader =
+                new PollingKinesisShardSplitReader(
+                        testStreamProxy, shardMetricGroupMap, sourceConfig);
+
+        testStreamProxy.addShards(TEST_SHARD_ID);
+        List<Record> sentRecords =
+                Stream.of(getTestRecord("data-1"))
+                        .collect(Collectors.toList());
+        testStreamProxy.addRecords(TestUtil.STREAM_ARN, TEST_SHARD_ID, sentRecords);
+
+        splitReader.handleSplitsChanges(
+                new SplitsAddition<>(Collections.singletonList(getTestSplit(TEST_SHARD_ID))));
+
+        await().atLeast(interval, TimeUnit.MILLISECONDS)
+                .atMost(interval + 500, TimeUnit.MILLISECONDS)
+                .untilAsserted(() -> {
+                    assertThat(splitReader.fetch().nextRecordFromSplit()).isNotNull();
+                    assertThat(splitReader.fetch().nextRecordFromSplit()).isNull();
+                });
+    }
+
+    @ValueSource(longs = {0L, 1000L, 2000L})
+    @ParameterizedTest
+    public void testPollingIntervalForIdleSource(long interval) {
+        sourceConfig = new Configuration();
+        sourceConfig.set(SHARD_GET_RECORDS_MAX, 50);
+        sourceConfig.set(SHARD_GET_RECORDS_IDLE_SOURCE_INTERVAL, Duration.ofMillis(interval));
+
+        splitReader =
+                new PollingKinesisShardSplitReader(
+                        testStreamProxy, shardMetricGroupMap, sourceConfig);
+
+        testStreamProxy.addShards(TEST_SHARD_ID);
+        splitReader.handleSplitsChanges(
+                new SplitsAddition<>(Collections.singletonList(getTestSplit(TEST_SHARD_ID))));
+
+        await().atLeast(interval, TimeUnit.MILLISECONDS)
+                .atMost(interval + 500, TimeUnit.MILLISECONDS)
+                .until(() -> {
+                    assertThat(splitReader.fetch().nextRecordFromSplit()).isNull();
+                    assertThat(splitReader.fetch().nextRecordFromSplit()).isNull();
+                    return true;
+                });
     }
 
     private List<Record> readAllRecords(RecordsWithSplitIds<Record> recordsWithSplitIds) {
