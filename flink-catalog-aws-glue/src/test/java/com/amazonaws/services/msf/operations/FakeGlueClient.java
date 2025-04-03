@@ -10,13 +10,12 @@ public class FakeGlueClient implements GlueClient {
     // Static map to maintain database state across tests
     public static final Map<String, Database> databaseStore = new HashMap<>();
     public static Map<String, Map<String, Table>> tableStore = new HashMap<>(); // Map for tables by database name
+    public static Map<String, Map<String, UserDefinedFunction>> functionStore = new HashMap<>(); // Map for functions by database name
 
     @Override
     public void close() {
         // No actual AWS call needed, so leave it empty
     }
-
-
 
     @Override
     public String serviceName() {
@@ -27,6 +26,7 @@ public class FakeGlueClient implements GlueClient {
     public static void reset() {
         databaseStore.clear();
         tableStore.clear();
+        functionStore.clear();
     }
 
     @Override
@@ -95,19 +95,55 @@ public class FakeGlueClient implements GlueClient {
 
     @Override
     public CreateTableResponse createTable(CreateTableRequest request) {
+        String databaseName = request.databaseName();
         TableInput tableInput = request.tableInput();
-        Table table = Table.builder()
+        String tableType = tableInput.tableType() != null ? tableInput.tableType() : "TABLE";
+        
+        Table.Builder tableBuilder = Table.builder()
                 .name(tableInput.name())
-                .storageDescriptor(tableInput.storageDescriptor())
-                .tableType("TABLE")
-                .parameters(tableInput.parameters())
-                .build();
+                .storageDescriptor(preserveColumnParameters(tableInput.storageDescriptor()))
+                .tableType(tableType)
+                .parameters(tableInput.parameters());
+        
+        // Add view-specific properties if it's a view
+        if ("VIEW".equalsIgnoreCase(tableType)) {
+            tableBuilder
+                .viewOriginalText(tableInput.viewOriginalText())
+                .viewExpandedText(tableInput.viewExpandedText());
+        }
+        
+        Table table = tableBuilder.build();
 
         tableStore
-                .computeIfAbsent(request.databaseName(), db -> new HashMap<>())
+                .computeIfAbsent(databaseName, db -> new HashMap<>())
                 .put(tableInput.name(), table);
 
         return CreateTableResponse.builder().build();
+    }
+
+    /**
+     * Helper to ensure column parameters, including originalName, are preserved
+     * when creating tables in the fake Glue client.
+     */
+    private StorageDescriptor preserveColumnParameters(StorageDescriptor storageDescriptor) {
+        if (storageDescriptor == null || storageDescriptor.columns() == null) {
+            return storageDescriptor;
+        }
+        
+        List<Column> columns = storageDescriptor.columns();
+        List<Column> columnsWithParams = new ArrayList<>();
+        
+        for (Column column : columns) {
+            columnsWithParams.add(column);
+        }
+        
+        return StorageDescriptor.builder()
+                .columns(columnsWithParams)
+                .location(storageDescriptor.location())
+                .inputFormat(storageDescriptor.inputFormat())
+                .outputFormat(storageDescriptor.outputFormat())
+                .parameters(storageDescriptor.parameters())
+                .build();
     }
 
     @Override
@@ -119,7 +155,6 @@ public class FakeGlueClient implements GlueClient {
         return DeleteTableResponse.builder().build();
     }
 
-    // Other methods like getTables (to list tables) can also be added similarly:
     @Override
     public GetTablesResponse getTables(GetTablesRequest request) {
         Map<String, Table> tablesInDb = tableStore.get(request.databaseName());
@@ -130,8 +165,117 @@ public class FakeGlueClient implements GlueClient {
         }
         return GetTablesResponse.builder().build();
     }
+    
+    // Function-related methods
+    @Override
+    public CreateUserDefinedFunctionResponse createUserDefinedFunction(CreateUserDefinedFunctionRequest request) {
+        String databaseName = request.databaseName();
+        String functionName = request.functionInput().functionName();
+        
+        // Check if the function already exists
+        if (functionStore.containsKey(databaseName) && 
+            functionStore.get(databaseName).containsKey(functionName)) {
+            throw AlreadyExistsException.builder()
+                    .message("Function already exists: " + functionName)
+                    .build();
+        }
+        
+        UserDefinedFunction function = UserDefinedFunction.builder()
+                .functionName(functionName)
+                .className(request.functionInput().className())
+                .ownerName(request.functionInput().ownerName())
+                .ownerType(request.functionInput().ownerType())
+                .resourceUris(request.functionInput().resourceUris())
+                .databaseName(databaseName)
+                .catalogId(request.catalogId())
+                .build();
+        
+        // Add the function to the store
+        functionStore
+                .computeIfAbsent(databaseName, db -> new HashMap<>())
+                .put(functionName, function);
+        
+        return CreateUserDefinedFunctionResponse.builder().build();
+    }
+    
+    @Override
+    public GetUserDefinedFunctionResponse getUserDefinedFunction(GetUserDefinedFunctionRequest request) {
+        String databaseName = request.databaseName();
+        String functionName = request.functionName();
+        
+        // Check if the function exists
+        if (!functionStore.containsKey(databaseName) || 
+            !functionStore.get(databaseName).containsKey(functionName)) {
+            throw EntityNotFoundException.builder()
+                    .message("Function not found: " + functionName)
+                    .build();
+        }
+        
+        UserDefinedFunction function = functionStore.get(databaseName).get(functionName);
+        return GetUserDefinedFunctionResponse.builder()
+                .userDefinedFunction(function)
+                .build();
+    }
+    
+    @Override
+    public GetUserDefinedFunctionsResponse getUserDefinedFunctions(GetUserDefinedFunctionsRequest request) {
+        String databaseName = request.databaseName();
+        
+        if (!functionStore.containsKey(databaseName)) {
+            return GetUserDefinedFunctionsResponse.builder()
+                    .userDefinedFunctions(Collections.emptyList())
+                    .build();
+        }
+        
+        List<UserDefinedFunction> functions = new ArrayList<>(functionStore.get(databaseName).values());
+        return GetUserDefinedFunctionsResponse.builder()
+                .userDefinedFunctions(functions)
+                .build();
+    }
+    
+    @Override
+    public UpdateUserDefinedFunctionResponse updateUserDefinedFunction(UpdateUserDefinedFunctionRequest request) {
+        String databaseName = request.databaseName();
+        String functionName = request.functionName();
+        
+        // Check if the function exists
+        if (!functionStore.containsKey(databaseName) || 
+            !functionStore.get(databaseName).containsKey(functionName)) {
+            throw EntityNotFoundException.builder()
+                    .message("Function not found: " + functionName)
+                    .build();
+        }
+        
+        // Update the function
+        UserDefinedFunction oldFunction = functionStore.get(databaseName).get(functionName);
+        UserDefinedFunction newFunction = UserDefinedFunction.builder()
+                .functionName(functionName)
+                .className(request.functionInput().className())
+                .ownerName(request.functionInput().ownerName())
+                .ownerType(request.functionInput().ownerType())
+                .resourceUris(request.functionInput().resourceUris())
+                .databaseName(databaseName)
+                .catalogId(request.catalogId())
+                .build();
+        
+        functionStore.get(databaseName).put(functionName, newFunction);
+        
+        return UpdateUserDefinedFunctionResponse.builder().build();
+    }
+    
+    @Override
+    public DeleteUserDefinedFunctionResponse deleteUserDefinedFunction(DeleteUserDefinedFunctionRequest request) {
+        String databaseName = request.databaseName();
+        String functionName = request.functionName();
+        
+        // Check if the function exists
+        if (functionStore.containsKey(databaseName)) {
+            functionStore.get(databaseName).remove(functionName);
+        }
+        
+        return DeleteUserDefinedFunctionResponse.builder().build();
+    }
 
-    // Other required methods (can be left as empty or throwing UnsupportedOperationException)
     @Override
     public String toString() {
         return "FakeGlueClient{}";

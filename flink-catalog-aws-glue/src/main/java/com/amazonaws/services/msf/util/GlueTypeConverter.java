@@ -81,6 +81,7 @@ public class GlueTypeConverter {
                 StringBuilder structBuilder = new StringBuilder("struct<");
                 for (int i = 0; i < rowType.getFieldCount(); i++) {
                     if (i > 0) structBuilder.append(",");
+                    // Keep original field name for nested structs
                     structBuilder.append(rowType.getFieldNames().get(i))
                             .append(":")
                             .append(toGlueType(DataTypes.of(rowType.getChildren().get(i))));
@@ -186,6 +187,8 @@ public class GlueTypeConverter {
             String[] fieldParts = field.split(":");
             String fieldName = fieldParts[0].trim();
             String fieldType = fieldParts[1].trim();
+            
+            // Use the field name as-is (already lowercase in Glue)
             flinkFields.add(DataTypes.FIELD(fieldName, toFlinkType(fieldType)));
         }
 
