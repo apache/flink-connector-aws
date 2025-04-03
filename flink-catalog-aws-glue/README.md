@@ -14,7 +14,7 @@ The Flink AWS Glue Catalog connector provides integration between Apache Flink a
 
 Before getting started, ensure you have the following:
 
-- **Apache Flink 1.17+** installed or running in a managed environment
+- **Apache Flink 1.20+** installed or running in a managed environment
 - **AWS account** with appropriate permissions for AWS Glue and other required services
 - **AWS credentials** properly configured
 - **Java 11** or later
@@ -198,12 +198,6 @@ SELECT customer_id, COUNT(*) as order_count, SUM(amount) as total_amount
 FROM orders
 GROUP BY customer_id;
 
--- Create or replace a view
-CREATE OR REPLACE VIEW order_summary AS
-SELECT customer_id, COUNT(*) as order_count, SUM(amount) as total_amount
-FROM orders
-GROUP BY customer_id;
-
 -- Create a temporary view (only available in current session)
 CREATE TEMPORARY VIEW temp_view AS
 SELECT * FROM orders WHERE amount > 100;
@@ -361,7 +355,6 @@ The connector handles mapping between Flink data types and AWS Glue data types a
 ## Limitations and Considerations
 
 1. **Case Sensitivity**: As detailed above, always use the original column names from your schema definition when querying.
-2. **Performance**: Queries involving large datasets or complex joins may experience performance issues.
 3. **AWS Service Limits**: Be aware of AWS Glue service limits that may affect your application.
 4. **Authentication**: Ensure proper AWS credentials with appropriate permissions are available.
 5. **Region Selection**: The Glue catalog must be registered with the correct AWS region where your Glue resources exist.
