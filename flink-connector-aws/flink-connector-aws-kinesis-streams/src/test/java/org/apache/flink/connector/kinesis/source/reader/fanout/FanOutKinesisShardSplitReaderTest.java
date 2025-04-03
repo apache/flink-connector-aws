@@ -18,6 +18,7 @@
 
 package org.apache.flink.connector.kinesis.source.reader.fanout;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitReader;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsAddition;
@@ -40,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.EFO_CONSUMER_SUBSCRIPTION_TIMEOUT;
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.CONSUMER_ARN;
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.getTestSplit;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatNoException;
@@ -49,13 +51,16 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 /** Test for {@link FanOutKinesisShardSplitReader}. */
 public class FanOutKinesisShardSplitReaderTest {
     private static final String TEST_SHARD_ID = TestUtil.generateShardId(1);
-    private static final Duration TEST_SUBSCRIPTION_TIMEOUT = Duration.ofMillis(1000);
 
-    SplitReader<Record, KinesisShardSplit> splitReader;
+    FanOutKinesisShardSplitReader splitReader;
 
     private AsyncStreamProxy testAsyncStreamProxy;
     private Map<String, KinesisShardMetrics> shardMetricGroupMap;
     private MetricListener metricListener;
+
+    private Configuration newConfigurationForTest() {
+        return new Configuration().set(EFO_CONSUMER_SUBSCRIPTION_TIMEOUT, Duration.ofMillis(1000));
+    }
 
     @BeforeEach
     public void init() {
@@ -77,7 +82,7 @@ public class FanOutKinesisShardSplitReaderTest {
                         testAsyncStreamProxy,
                         CONSUMER_ARN,
                         shardMetricGroupMap,
-                        TEST_SUBSCRIPTION_TIMEOUT);
+                        newConfigurationForTest());
         RecordsWithSplitIds<Record> retrievedRecords = splitReader.fetch();
 
         assertThat(retrievedRecords.nextRecordFromSplit()).isNull();
@@ -94,7 +99,7 @@ public class FanOutKinesisShardSplitReaderTest {
                         testAsyncStreamProxy,
                         CONSUMER_ARN,
                         shardMetricGroupMap,
-                        TEST_SUBSCRIPTION_TIMEOUT);
+                        newConfigurationForTest());
         splitReader.handleSplitsChanges(
                 new SplitsAddition<>(Collections.singletonList(getTestSplit(TEST_SHARD_ID))));
 
@@ -117,7 +122,7 @@ public class FanOutKinesisShardSplitReaderTest {
                         testAsyncStreamProxy,
                         CONSUMER_ARN,
                         shardMetricGroupMap,
-                        TEST_SUBSCRIPTION_TIMEOUT);
+                        newConfigurationForTest());
         splitReader.handleSplitsChanges(
                 new SplitsAddition<>(Collections.singletonList(getTestSplit(TEST_SHARD_ID))));
 
@@ -138,7 +143,7 @@ public class FanOutKinesisShardSplitReaderTest {
                         testAsyncStreamProxy,
                         CONSUMER_ARN,
                         shardMetricGroupMap,
-                        TEST_SUBSCRIPTION_TIMEOUT);
+                        newConfigurationForTest());
 
         // When wakeup is called
         // Then no exception is thrown and no-op
@@ -155,7 +160,7 @@ public class FanOutKinesisShardSplitReaderTest {
                         trackCloseStreamProxy,
                         CONSUMER_ARN,
                         shardMetricGroupMap,
-                        TEST_SUBSCRIPTION_TIMEOUT);
+                        newConfigurationForTest());
 
         // When split reader is not closed
         // Then stream proxy is still open
