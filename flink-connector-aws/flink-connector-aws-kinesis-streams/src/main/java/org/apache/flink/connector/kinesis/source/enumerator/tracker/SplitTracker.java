@@ -159,6 +159,12 @@ public class SplitTracker {
         return allParentsFinished;
     }
 
+    /**
+     * Checks if split with specified id is finished.
+     *
+     * @param splitId Id of the split to check
+     * @return true if split is finished, otherwise false
+     */
     private boolean isFinished(String splitId) {
         return !knownSplits.containsKey(splitId);
     }
