@@ -33,9 +33,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.model.Record;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
+import java.util.Set;
+import java.util.TreeMap;
 
 /**
  * Coordinates the reading from assigned splits. Runs on the TaskManager.
@@ -49,6 +54,8 @@ public class KinesisStreamsSourceReader<T>
 
     private static final Logger LOG = LoggerFactory.getLogger(KinesisStreamsSourceReader.class);
     private final Map<String, KinesisShardMetrics> shardMetricGroupMap;
+    private final NavigableMap<Long, Set<KinesisShardSplit>> finishedSplits;
+    private long currentCheckpointId;
 
     public KinesisStreamsSourceReader(
             SingleThreadFetcherManager<Record, KinesisShardSplit> splitFetcherManager,
@@ -58,13 +65,65 @@ public class KinesisStreamsSourceReader<T>
             Map<String, KinesisShardMetrics> shardMetricGroupMap) {
         super(splitFetcherManager, recordEmitter, config, context);
         this.shardMetricGroupMap = shardMetricGroupMap;
+        this.finishedSplits = new TreeMap<>();
+        this.currentCheckpointId = Long.MIN_VALUE;
     }
 
     @Override
     protected void onSplitFinished(Map<String, KinesisShardSplitState> finishedSplitIds) {
+        if (finishedSplitIds.isEmpty()) {
+            return;
+        }
+        finishedSplits.computeIfAbsent(currentCheckpointId, k -> new HashSet<>());
+        finishedSplitIds.values().stream()
+                .map(
+                        finishedSplit ->
+                                new KinesisShardSplit(
+                                        finishedSplit.getStreamArn(),
+                                        finishedSplit.getShardId(),
+                                        finishedSplit.getNextStartingPosition(),
+                                        finishedSplit.getKinesisShardSplit().getParentShardIds(),
+                                        finishedSplit.getKinesisShardSplit().getStartingHashKey(),
+                                        finishedSplit.getKinesisShardSplit().getEndingHashKey(),
+                                        true))
+                .forEach(split -> finishedSplits.get(currentCheckpointId).add(split));
+
         context.sendSourceEventToCoordinator(
                 new SplitsFinishedEvent(new HashSet<>(finishedSplitIds.keySet())));
         finishedSplitIds.keySet().forEach(this::unregisterShardMetricGroup);
+    }
+
+    /**
+     * At snapshot, we also store the pending finished split ids in the current checkpoint so that
+     * in case we have to restore the reader from state, we also send the finished split ids
+     * otherwise we run a risk of data loss during restarts of the source because of the
+     * SplitsFinishedEvent going missing.
+     *
+     * @param checkpointId the checkpoint id
+     * @return a list of finished splits
+     */
+    @Override
+    public List<KinesisShardSplit> snapshotState(long checkpointId) {
+        this.currentCheckpointId = checkpointId;
+        List<KinesisShardSplit> splits = new ArrayList<>(super.snapshotState(checkpointId));
+
+        if (!finishedSplits.isEmpty()) {
+            // Add all finished splits to the snapshot
+            finishedSplits.values().forEach(splits::addAll);
+        }
+
+        return splits;
+    }
+
+    /**
+     * During notifyCheckpointComplete, we should clean up the state of finished splits that are
+     * less than or equal to the checkpoint id.
+     *
+     * @param checkpointId the checkpoint id
+     */
+    @Override
+    public void notifyCheckpointComplete(long checkpointId) {
+        finishedSplits.headMap(checkpointId, true).clear();
     }
 
     @Override
@@ -79,8 +138,17 @@ public class KinesisStreamsSourceReader<T>
 
     @Override
     public void addSplits(List<KinesisShardSplit> splits) {
-        splits.forEach(this::registerShardMetricGroup);
-        super.addSplits(splits);
+        List<KinesisShardSplit> unfinishedSplits = new ArrayList<>();
+        for (KinesisShardSplit split : splits) {
+            if (split.isFinished()) {
+                context.sendSourceEventToCoordinator(
+                        new SplitsFinishedEvent(Collections.singleton(split.splitId())));
+            } else {
+                unfinishedSplits.add(split);
+            }
+        }
+        unfinishedSplits.forEach(this::registerShardMetricGroup);
+        super.addSplits(unfinishedSplits);
     }
 
     @Override
