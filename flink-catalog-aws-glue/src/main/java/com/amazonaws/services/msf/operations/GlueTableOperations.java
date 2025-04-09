@@ -43,12 +43,20 @@ public class GlueTableOperations extends AbstractGlueOperations {
      */
     public boolean tableExists(String databaseName, String tableName) {
         try {
-            glueClient.getTable(builder -> builder.databaseName(databaseName).name(tableName));
+            GetTableRequest request = GetTableRequest.builder()
+                    .databaseName(databaseName)
+                    .name(tableName)
+                    .build();
+            glueClient.getTable(request);
             return true;
         } catch (EntityNotFoundException e) {
             return false;
-        } catch (Exception e) {
-            throw new CatalogException("Error checking if table exists: " + e.getMessage(), e);
+        } catch (InvalidInputException e) {
+            throw new CatalogException("Invalid input: " + e.getMessage(), e);
+        } catch (OperationTimeoutException e) {
+            throw new CatalogException("Operation timed out: " + e.getMessage(), e);
+        } catch (GlueException e) {
+            throw new CatalogException("AWS Glue error: " + e.getMessage(), e);
         }
     }
 
@@ -59,15 +67,21 @@ public class GlueTableOperations extends AbstractGlueOperations {
      * @return A list of table names.
      * @throws CatalogException if there is an error fetching the table list.
      */
-    public List<String> listTables(String databaseName) throws CatalogException {
+    public List<String> listTables(String databaseName) {
         try {
-            return glueClient.getTables(builder -> builder.databaseName(databaseName))
-                    .tableList()
-                    .stream()
+            GetTablesRequest request = GetTablesRequest.builder()
+                    .databaseName(databaseName)
+                    .build();
+            GetTablesResponse response = glueClient.getTables(request);
+            return response.tableList().stream()
                     .map(Table::name)
                     .collect(Collectors.toList());
-        } catch (Exception e) {
-            throw new CatalogException("Error listing tables: " + e.getMessage(), e);
+        } catch (InvalidInputException e) {
+            throw new CatalogException("Invalid input: " + e.getMessage(), e);
+        } catch (OperationTimeoutException e) {
+            throw new CatalogException("Operation timed out: " + e.getMessage(), e);
+        } catch (GlueException e) {
+            throw new CatalogException("AWS Glue error: " + e.getMessage(), e);
         }
     }
 
@@ -78,11 +92,23 @@ public class GlueTableOperations extends AbstractGlueOperations {
      * @param tableInput   The input data for creating the table.
      * @throws CatalogException if there is an error creating the table.
      */
-    public void createTable(String databaseName, TableInput tableInput) throws CatalogException {
+    public void createTable(String databaseName, TableInput tableInput) {
         try {
-            glueClient.createTable(builder -> builder.databaseName(databaseName).tableInput(tableInput));
-        } catch (Exception e) {
-            throw new CatalogException("Error creating table: " + e.getMessage(), e);
+            CreateTableRequest request = CreateTableRequest.builder()
+                    .databaseName(databaseName)
+                    .tableInput(tableInput)
+                    .build();
+            glueClient.createTable(request);
+        } catch (AlreadyExistsException e) {
+            throw new CatalogException("Table already exists: " + e.getMessage(), e);
+        } catch (InvalidInputException e) {
+            throw new CatalogException("Invalid input: " + e.getMessage(), e);
+        } catch (ResourceNumberLimitExceededException e) {
+            throw new CatalogException("Resource limit exceeded: " + e.getMessage(), e);
+        } catch (OperationTimeoutException e) {
+            throw new CatalogException("Operation timed out: " + e.getMessage(), e);
+        } catch (GlueException e) {
+            throw new CatalogException("AWS Glue error: " + e.getMessage(), e);
         }
     }
 
@@ -95,19 +121,21 @@ public class GlueTableOperations extends AbstractGlueOperations {
      * @throws TableNotExistException if the table does not exist in the Glue catalog.
      * @throws CatalogException       if there is an error fetching the table details.
      */
-    public Table getGlueTable(String databaseName, String tableName) throws TableNotExistException, CatalogException {
-        GetTableRequest tableRequest = GetTableRequest.builder()
-                .databaseName(databaseName)
-                .name(tableName)
-                .build();
-
+    public Table getGlueTable(String databaseName, String tableName) throws TableNotExistException {
         try {
-            GetTableResponse response = glueClient.getTable(tableRequest);
-            return response.table();
+            GetTableRequest request = GetTableRequest.builder()
+                    .databaseName(databaseName)
+                    .name(tableName)
+                    .build();
+            return glueClient.getTable(request).table();
         } catch (EntityNotFoundException e) {
             throw new TableNotExistException(catalogName, new ObjectPath(databaseName, tableName));
-        } catch (Exception e) {
-            throw new CatalogException("Error fetching table: " + e.getMessage(), e);
+        } catch (InvalidInputException e) {
+            throw new CatalogException("Invalid input: " + e.getMessage(), e);
+        } catch (OperationTimeoutException e) {
+            throw new CatalogException("Operation timed out: " + e.getMessage(), e);
+        } catch (GlueException e) {
+            throw new CatalogException("AWS Glue error: " + e.getMessage(), e);
         }
     }
 
@@ -139,19 +167,24 @@ public class GlueTableOperations extends AbstractGlueOperations {
      *
      * @param databaseName The name of the database containing the table.
      * @param tableName    The name of the table to delete.
-     * @throws CatalogException if there is an error dropping the table.
+     * @throws TableNotExistException if the table does not exist in the Glue catalog.
+     * @throws CatalogException       if there is an error dropping the table.
      */
-    public void dropTable(String databaseName, String tableName) throws CatalogException {
+    public void dropTable(String databaseName, String tableName) throws TableNotExistException {
         try {
-            // First, check if the table exists
-            if (!tableExists(databaseName, tableName)) {
-                throw new CatalogException("Table does not exist: " + tableName);
-            }
-
-            // Proceed to delete the table if it exists
-            glueClient.deleteTable(builder -> builder.databaseName(databaseName).name(tableName));
-        } catch (Exception e) {
-            throw new CatalogException("Error dropping table: " + e.getMessage(), e);
+            DeleteTableRequest request = DeleteTableRequest.builder()
+                    .databaseName(databaseName)
+                    .name(tableName)
+                    .build();
+            glueClient.deleteTable(request);
+        } catch (EntityNotFoundException e) {
+            throw new TableNotExistException(catalogName, new ObjectPath(databaseName, tableName));
+        } catch (InvalidInputException e) {
+            throw new CatalogException("Invalid input: " + e.getMessage(), e);
+        } catch (OperationTimeoutException e) {
+            throw new CatalogException("Operation timed out: " + e.getMessage(), e);
+        } catch (GlueException e) {
+            throw new CatalogException("AWS Glue error: " + e.getMessage(), e);
         }
     }
 }

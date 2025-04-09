@@ -25,8 +25,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
 /**
  * GlueCatalog is an implementation of the Flink AbstractCatalog that interacts with AWS Glue.
  * This class allows Flink to perform various catalog operations such as creating, deleting, and retrieving
@@ -248,8 +246,7 @@ public class GlueCatalog extends AbstractCatalog {
      * @throws CatalogException if the table type is unknown or conversion fails
      */
     private CatalogBaseTable getCatalogBaseTableFromGlueTable(Table glueTable) {
-        checkNotNull(glueTable, "Glue Table cannot be null");
-        
+
         try {
             // Parse schema from Glue table structure
             Schema schemaInfo = glueTableUtils.getSchemaFromGlueTable(glueTable);
@@ -308,11 +305,24 @@ public class GlueCatalog extends AbstractCatalog {
                         partitionKeys, 
                         properties);
             } else if (tableType.equalsIgnoreCase(CatalogBaseTable.TableKind.VIEW.name())) {
+                String originalQuery = glueTable.viewOriginalText();
+                String expandedQuery = glueTable.viewExpandedText();
+                
+                if (originalQuery == null) {
+                    throw new CatalogException(
+                            String.format("View '%s' is missing its original query text", glueTable.name()));
+                }
+                
+                // If expanded query is null, use original query
+                if (expandedQuery == null) {
+                    expandedQuery = originalQuery;
+                }
+                
                 return CatalogView.of(
                         schemaInfo,
                         glueTable.description(),
-                        glueTable.viewOriginalText(),
-                        glueTable.viewExpandedText(),
+                        originalQuery,
+                        expandedQuery,
                         properties);
             } else {
                 throw new CatalogException(
@@ -379,8 +389,6 @@ public class GlueCatalog extends AbstractCatalog {
     @Override
     public void createTable(ObjectPath objectPath, CatalogBaseTable catalogBaseTable, boolean ifNotExists) 
             throws TableAlreadyExistException, DatabaseNotExistException, CatalogException {
-        checkNotNull(objectPath, "Object path cannot be null");
-        checkNotNull(catalogBaseTable, "Catalog base table cannot be null");
         
         String databaseName = objectPath.getDatabaseName();
         String tableName = objectPath.getObjectName();
@@ -508,7 +516,6 @@ public class GlueCatalog extends AbstractCatalog {
      */
     @Override
     public List<String> listViews(String databaseName) throws DatabaseNotExistException, CatalogException {
-        checkNotNull(databaseName, "Database name cannot be null");
         LOG.debug("Listing views in database: {}", databaseName);
         
         // Check if the database exists before listing views
@@ -607,8 +614,7 @@ public class GlueCatalog extends AbstractCatalog {
      * @return the normalized object path
      */
     public ObjectPath normalize(ObjectPath path) {
-        checkNotNull(path, "Object path cannot be null");
-        
+
         return new ObjectPath(
                 path.getDatabaseName(), 
                 FunctionIdentifier.normalizeName(path.getObjectName()));
@@ -624,7 +630,6 @@ public class GlueCatalog extends AbstractCatalog {
      */
     @Override
     public List<String> listFunctions(String databaseName) throws DatabaseNotExistException, CatalogException {
-        checkNotNull(databaseName, "Database name cannot be null");
         LOG.debug("Listing functions in database: {}", databaseName);
         
         if (!databaseExists(databaseName)) {
@@ -652,7 +657,6 @@ public class GlueCatalog extends AbstractCatalog {
      */
     @Override
     public CatalogFunction getFunction(ObjectPath functionPath) throws FunctionNotExistException, CatalogException {
-        checkNotNull(functionPath, "functionPath cannot be null");
 
         // Normalize the path for case-insensitive handling
         ObjectPath normalizedPath = normalize(functionPath);
@@ -680,8 +684,7 @@ public class GlueCatalog extends AbstractCatalog {
      */
     @Override
     public boolean functionExists(ObjectPath functionPath) throws CatalogException {
-        checkNotNull(functionPath, "functionPath cannot be null");
-        
+
         // Normalize the path for case-insensitive handling
         ObjectPath normalizedPath = normalize(functionPath);
         
@@ -710,8 +713,6 @@ public class GlueCatalog extends AbstractCatalog {
     @Override
     public void createFunction(ObjectPath functionPath, CatalogFunction function, boolean ignoreIfExists)
             throws FunctionAlreadyExistException, DatabaseNotExistException, CatalogException {
-        checkNotNull(functionPath, "functionPath cannot be null");
-        checkNotNull(function, "function cannot be null");
 
         // Normalize the path for case-insensitive handling
         ObjectPath normalizedPath = normalize(functionPath);
@@ -749,8 +750,6 @@ public class GlueCatalog extends AbstractCatalog {
     @Override
     public void alterFunction(ObjectPath functionPath, CatalogFunction newFunction, boolean ignoreIfNotExists)
             throws FunctionNotExistException, CatalogException {
-        checkNotNull(functionPath, "functionPath cannot be null");
-        checkNotNull(newFunction, "newFunction cannot be null");
 
         // Normalize the path for case-insensitive handling
         ObjectPath normalizedPath = normalize(functionPath);
@@ -803,7 +802,6 @@ public class GlueCatalog extends AbstractCatalog {
     @Override
     public void dropFunction(ObjectPath functionPath, boolean ignoreIfNotExists)
             throws FunctionNotExistException, CatalogException {
-        checkNotNull(functionPath, "functionPath cannot be null");
 
         // Normalize the path for case-insensitive handling
         ObjectPath normalizedPath = normalize(functionPath);

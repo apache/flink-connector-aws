@@ -249,18 +249,6 @@ SHOW VIEWS;
 SHOW FUNCTIONS;
 ```
 
-### Cross-Catalog Queries
-
-Access tables from different catalogs in the same query:
-
-```sql
--- Join tables from different catalogs
-SELECT o.order_id, c.customer_name, o.amount
-FROM glue_catalog.sales_db.orders o
-JOIN default_catalog.default_database.customers c
-ON o.customer_id = c.id;
-```
-
 ## Case Sensitivity in AWS Glue
 
 ### Understanding Case Handling

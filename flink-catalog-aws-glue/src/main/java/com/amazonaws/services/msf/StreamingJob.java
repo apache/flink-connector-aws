@@ -60,15 +60,15 @@ public class StreamingJob {
         tEnv.executeSql("SHOW TABLES").print();
 
 //
-//        // Create a new table 'fran' with specified schema and configuration
-//        tEnv.executeSql("CREATE TABLE IF NOT EXISTS gen (" +
-//                "  `order_number` BIGINT," +
-//                "  `price` DECIMAL(32,2)," +
-//                "  `order_time` TIMESTAMP(3) " +
-//                ")" +
-//                "WITH (" +
-//                "  'connector' = 'datagen'" +
-//                ");").print();
+        // Create a new table 'fran' with specified schema and configuration
+        tEnv.executeSql("CREATE TABLE IF NOT EXISTS gen (" +
+                "  `order_number` BIGINT," +
+                "  `price` DECIMAL(32,2)," +
+                "  `order_time` TIMESTAMP(3) " +
+                ")" +
+                "WITH (" +
+                "  'connector' = 'datagen'" +
+                ");").print();
 //
 //        // Show the list of tables in the 'test' database again after creating the new table
         tEnv.executeSql("SHOW TABLES").print();

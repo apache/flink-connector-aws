@@ -11,6 +11,20 @@ public class FakeGlueClient implements GlueClient {
     public static final Map<String, Database> databaseStore = new HashMap<>();
     public static Map<String, Map<String, Table>> tableStore = new HashMap<>(); // Map for tables by database name
     public static Map<String, Map<String, UserDefinedFunction>> functionStore = new HashMap<>(); // Map for functions by database name
+    
+    private RuntimeException nextException;
+
+    public void setNextException(RuntimeException exception) {
+        this.nextException = exception;
+    }
+
+    private void throwNextExceptionIfExists() {
+        if (nextException != null) {
+            RuntimeException ex = nextException;
+            nextException = null;
+            throw ex;
+        }
+    }
 
     @Override
     public void close() {
@@ -31,6 +45,7 @@ public class FakeGlueClient implements GlueClient {
 
     @Override
     public GetDatabasesResponse getDatabases(GetDatabasesRequest request) {
+        throwNextExceptionIfExists();
         List<Database> databases = new ArrayList<>(databaseStore.values());
         return GetDatabasesResponse.builder()
                 .databaseList(databases)
@@ -39,6 +54,7 @@ public class FakeGlueClient implements GlueClient {
 
     @Override
     public GetDatabaseResponse getDatabase(GetDatabaseRequest request) {
+        throwNextExceptionIfExists();
         String databaseName = request.name();
         Database db = databaseStore.get(databaseName);
         if (db == null) {
@@ -49,6 +65,7 @@ public class FakeGlueClient implements GlueClient {
 
     @Override
     public CreateDatabaseResponse createDatabase(CreateDatabaseRequest request) {
+        throwNextExceptionIfExists();
         DatabaseInput dbInput = request.databaseInput();
         String dbName = dbInput.name();
 
@@ -70,6 +87,7 @@ public class FakeGlueClient implements GlueClient {
 
     @Override
     public DeleteDatabaseResponse deleteDatabase(DeleteDatabaseRequest request) {
+        throwNextExceptionIfExists();
         String dbName = request.name();
 
         // Check if the database exists
@@ -85,39 +103,53 @@ public class FakeGlueClient implements GlueClient {
     // Table-related methods
     @Override
     public GetTableResponse getTable(GetTableRequest request) {
-        Map<String, Table> tablesInDb = tableStore.get(request.databaseName());
-        if (tablesInDb != null && tablesInDb.containsKey(request.name())) {
-            Table table = tablesInDb.get(request.name());
-            return GetTableResponse.builder().table(table).build();
+        throwNextExceptionIfExists();
+        String databaseName = request.databaseName();
+        String tableName = request.name();
+        
+        if (!tableStore.containsKey(databaseName)) {
+            throw EntityNotFoundException.builder().message("Table does not exist").build();
         }
-        throw EntityNotFoundException.builder().message("Table not found").build();
+        
+        Table table = tableStore.get(databaseName).get(tableName);
+        if (table == null) {
+            throw EntityNotFoundException.builder().message("Table does not exist").build();
+        }
+        
+        return GetTableResponse.builder().table(table).build();
     }
 
     @Override
     public CreateTableResponse createTable(CreateTableRequest request) {
+        throwNextExceptionIfExists();
         String databaseName = request.databaseName();
-        TableInput tableInput = request.tableInput();
-        String tableType = tableInput.tableType() != null ? tableInput.tableType() : "TABLE";
+        String tableName = request.tableInput().name();
         
-        Table.Builder tableBuilder = Table.builder()
-                .name(tableInput.name())
-                .storageDescriptor(preserveColumnParameters(tableInput.storageDescriptor()))
-                .tableType(tableType)
-                .parameters(tableInput.parameters());
+        // Initialize the database's table store if it doesn't exist
+        tableStore.computeIfAbsent(databaseName, k -> new HashMap<>());
         
-        // Add view-specific properties if it's a view
-        if ("VIEW".equalsIgnoreCase(tableType)) {
-            tableBuilder
-                .viewOriginalText(tableInput.viewOriginalText())
-                .viewExpandedText(tableInput.viewExpandedText());
+        if (tableStore.get(databaseName).containsKey(tableName)) {
+            throw AlreadyExistsException.builder().message("Table already exists").build();
         }
         
+        Table.Builder tableBuilder = Table.builder()
+                .name(tableName)
+                .databaseName(databaseName)
+                .tableType(request.tableInput().tableType())
+                .parameters(request.tableInput().parameters())
+                .storageDescriptor(request.tableInput().storageDescriptor())
+                .description(request.tableInput().description());
+
+        // Add view-specific fields if present
+        if (request.tableInput().viewOriginalText() != null) {
+            tableBuilder.viewOriginalText(request.tableInput().viewOriginalText());
+        }
+        if (request.tableInput().viewExpandedText() != null) {
+            tableBuilder.viewExpandedText(request.tableInput().viewExpandedText());
+        }
+                
         Table table = tableBuilder.build();
-
-        tableStore
-                .computeIfAbsent(databaseName, db -> new HashMap<>())
-                .put(tableInput.name(), table);
-
+        tableStore.get(databaseName).put(tableName, table);
         return CreateTableResponse.builder().build();
     }
 
@@ -148,22 +180,26 @@ public class FakeGlueClient implements GlueClient {
 
     @Override
     public DeleteTableResponse deleteTable(DeleteTableRequest request) {
-        Map<String, Table> tablesInDb = tableStore.get(request.databaseName());
-        if (tablesInDb != null) {
-            tablesInDb.remove(request.name());
+        throwNextExceptionIfExists();
+        String databaseName = request.databaseName();
+        String tableName = request.name();
+        
+        if (!tableStore.containsKey(databaseName) || !tableStore.get(databaseName).containsKey(tableName)) {
+            throw EntityNotFoundException.builder().message("Table does not exist").build();
         }
+        
+        tableStore.get(databaseName).remove(tableName);
         return DeleteTableResponse.builder().build();
     }
 
     @Override
     public GetTablesResponse getTables(GetTablesRequest request) {
-        Map<String, Table> tablesInDb = tableStore.get(request.databaseName());
-        if (tablesInDb != null) {
-            return GetTablesResponse.builder()
-                    .tableList(tablesInDb.values())
-                    .build();
+        throwNextExceptionIfExists();
+        String databaseName = request.databaseName();
+        if (!tableStore.containsKey(databaseName)) {
+            return GetTablesResponse.builder().tableList(Collections.emptyList()).build();
         }
-        return GetTablesResponse.builder().build();
+        return GetTablesResponse.builder().tableList(new ArrayList<>(tableStore.get(databaseName).values())).build();
     }
     
     // Function-related methods

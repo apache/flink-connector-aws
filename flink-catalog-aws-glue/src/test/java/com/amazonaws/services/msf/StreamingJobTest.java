@@ -7,12 +7,14 @@ import org.apache.flink.runtime.minicluster.MiniClusterConfiguration;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 import org.apache.flink.table.catalog.ObjectPath;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.glue.GlueClient;
+import software.amazon.awssdk.services.glue.model.*;
 
 import static org.junit.jupiter.api.Assertions.*;
+
 public class StreamingJobTest {
 
     private MiniCluster miniCluster;
@@ -23,10 +25,9 @@ public class StreamingJobTest {
     private String databaseName;
     private String tableName;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
-
-        fakeGlueClient = new FakeGlueClient();  // Assume this is your fake client
+        fakeGlueClient = new FakeGlueClient();
         // Set up the Flink MiniCluster
         miniCluster = new MiniCluster(new MiniClusterConfiguration.Builder().setNumTaskManagers(1).setNumSlotsPerTaskManager(1).build());
         miniCluster.start();
@@ -41,14 +42,14 @@ public class StreamingJobTest {
         String defaultDB = "default";
         databaseName = "test";
         tableName = "tableName";
-        glueCatalog = new GlueCatalog("glueCatalog",defaultDB,region,fakeGlueClient);
+        glueCatalog = new GlueCatalog("glueCatalog", defaultDB, region, fakeGlueClient);
 
         // Register the catalog in Flink
         tEnv.registerCatalog("myGlueCatalog", glueCatalog);
         tEnv.useCatalog("myGlueCatalog");
     }
 
-    @After
+    @AfterEach
     public void tearDown() throws Exception {
         if (miniCluster != null) {
             miniCluster.close();
@@ -57,24 +58,65 @@ public class StreamingJobTest {
 
     @Test
     public void testCreateDatabase() throws Exception {
-        // Initialize GlueCatalog with necessary parameters
-
         String SQLStatement = String.format("CREATE DATABASE IF NOT EXISTS %s", databaseName);
         tEnv.executeSql(SQLStatement).print();
-        // Show the list of databases in the catalog
         assertTrue(glueCatalog.databaseExists(databaseName));
     }
 
     @Test
+    public void testCreateDatabaseAlreadyExists() throws Exception {
+        // First create the database
+        String SQLStatement = String.format("CREATE DATABASE IF NOT EXISTS %s", databaseName);
+        tEnv.executeSql(SQLStatement).print();
+        
+        // Try to create it again - should not throw exception due to IF NOT EXISTS
+        assertDoesNotThrow(() -> tEnv.executeSql(SQLStatement).print());
+    }
+
+    @Test
+    public void testCreateDatabaseInvalidInput() throws Exception {
+        // Set up the fake client to throw InvalidInputException
+        ((FakeGlueClient) fakeGlueClient).setNextException(
+            InvalidInputException.builder().message("Invalid database name").build());
+            
+        String SQLStatement = String.format("CREATE DATABASE IF NOT EXISTS %s", databaseName);
+        assertThrows(Exception.class, () -> tEnv.executeSql(SQLStatement).print());
+    }
+
+    @Test
+    public void testCreateDatabaseResourceLimitExceeded() throws Exception {
+        // Set up the fake client to throw ResourceNumberLimitExceededException
+        ((FakeGlueClient) fakeGlueClient).setNextException(
+            ResourceNumberLimitExceededException.builder().message("Resource limit exceeded").build());
+            
+        String SQLStatement = String.format("CREATE DATABASE IF NOT EXISTS %s", databaseName);
+        assertThrows(Exception.class, () -> tEnv.executeSql(SQLStatement).print());
+    }
+
+    @Test
+    public void testCreateDatabaseTimeout() throws Exception {
+        // Set up the fake client to throw OperationTimeoutException
+        ((FakeGlueClient) fakeGlueClient).setNextException(
+            OperationTimeoutException.builder().message("Operation timed out").build());
+            
+        String SQLStatement = String.format("CREATE DATABASE IF NOT EXISTS %s", databaseName);
+        assertThrows(Exception.class, () -> tEnv.executeSql(SQLStatement).print());
+    }
+
+    @Test
     public void testDropDatabase() throws Exception {
-        // Initialize GlueCatalog with necessary parameters
         String SQLCreateDatabaseStatement = String.format("CREATE DATABASE IF NOT EXISTS %s", databaseName);
         tEnv.executeSql(SQLCreateDatabaseStatement).print();
         String SQLDropDatabaseStatement = String.format("DROP DATABASE %s", databaseName);
         tEnv.executeSql(SQLDropDatabaseStatement).print();
 
-        // Show the list of databases in the catalog
         assertFalse(glueCatalog.databaseExists(databaseName));
+    }
+
+    @Test
+    public void testDropNonExistentDatabase() throws Exception {
+        String SQLDropDatabaseStatement = String.format("DROP DATABASE IF EXISTS %s", databaseName);
+        assertDoesNotThrow(() -> tEnv.executeSql(SQLDropDatabaseStatement).print());
     }
 
     @Test
@@ -100,13 +142,59 @@ public class StreamingJobTest {
                 ");", tableName);
 
         tEnv.executeSql(SQLStatementCreateDatabase).print();
-        // Switch to the 'test' database
         tEnv.executeSql(SQLStatementUseDatabase).print();
-        // Create a new table 'fran' with specified schema and configuration
         tEnv.executeSql(SQLStatementCreateTable).print();
-        // Show the list of databases in the catalog
-        ObjectPath objectPath = new ObjectPath(databaseName,tableName);
+        
+        ObjectPath objectPath = new ObjectPath(databaseName, tableName);
         assertTrue(glueCatalog.tableExists(objectPath));
+    }
+
+    @Test
+    public void testCreateTableAlreadyExists() throws Exception {
+        String SQLStatementCreateDatabase = String.format("CREATE DATABASE IF NOT EXISTS %s", databaseName);
+        String SQLStatementUseDatabase = String.format("USE %s", databaseName);
+        String SQLStatementCreateTable = String.format("CREATE TABLE IF NOT EXISTS %s (" +
+                "  `user_id` STRING" +
+                ")" +
+                "WITH (" +
+                "  'connector' = 'kinesis'," +
+                "  'stream.arn' = 'arn:aws:kinesis:us-east-1:116394013621:stream/input'," +
+                "  'aws.region' = 'us-east-1'," +
+                "  'source.init.position' = 'TRIM_HORIZON'," +
+                "  'format' = 'json'" +
+                ");", tableName);
+
+        tEnv.executeSql(SQLStatementCreateDatabase).print();
+        tEnv.executeSql(SQLStatementUseDatabase).print();
+        tEnv.executeSql(SQLStatementCreateTable).print();
+        
+        // Try to create it again - should not throw exception due to IF NOT EXISTS
+        assertDoesNotThrow(() -> tEnv.executeSql(SQLStatementCreateTable).print());
+    }
+
+    @Test
+    public void testCreateTableInvalidInput() throws Exception {
+        String SQLStatementCreateDatabase = String.format("CREATE DATABASE IF NOT EXISTS %s", databaseName);
+        String SQLStatementUseDatabase = String.format("USE %s", databaseName);
+        tEnv.executeSql(SQLStatementCreateDatabase).print();
+        tEnv.executeSql(SQLStatementUseDatabase).print();
+
+        // Set up the fake client to throw InvalidInputException
+        ((FakeGlueClient) fakeGlueClient).setNextException(
+            InvalidInputException.builder().message("Invalid table name").build());
+
+        String SQLStatementCreateTable = String.format("CREATE TABLE IF NOT EXISTS %s (" +
+                "  `user_id` STRING" +
+                ")" +
+                "WITH (" +
+                "  'connector' = 'kinesis'," +
+                "  'stream.arn' = 'arn:aws:kinesis:us-east-1:116394013621:stream/input'," +
+                "  'aws.region' = 'us-east-1'," +
+                "  'source.init.position' = 'TRIM_HORIZON'," +
+                "  'format' = 'json'" +
+                ");", tableName);
+
+        assertThrows(Exception.class, () -> tEnv.executeSql(SQLStatementCreateTable).print());
     }
 
     @Test
@@ -133,20 +221,26 @@ public class StreamingJobTest {
 
         String SQLStatementDropTable = String.format("DROP TABLE %s", tableName);
 
-
         tEnv.executeSql(SQLStatementCreateDatabase).print();
-        // Switch to the 'test' database
         tEnv.executeSql(SQLStatementUseDatabase).print();
-        // Create a new table 'fran' with specified schema and configuration
         tEnv.executeSql(SQLStatementCreateTable).print();
-        // Show the list of databases in the catalog
-        ObjectPath objectPath = new ObjectPath(databaseName,tableName);
-
+        
+        ObjectPath objectPath = new ObjectPath(databaseName, tableName);
         tEnv.executeSql(SQLStatementDropTable).print();
-
-        // Show the list of databases in the catalog
 
         assertFalse(glueCatalog.tableExists(objectPath));
     }
 
+    @Test
+    public void testDropNonExistentTable() throws Exception {
+        String SQLStatementCreateDatabase = String.format("CREATE DATABASE IF NOT EXISTS %s", databaseName);
+        String SQLStatementUseDatabase = String.format("USE %s", databaseName);
+        String SQLStatementDropTable = String.format("DROP TABLE IF EXISTS %s", tableName);
+
+        tEnv.executeSql(SQLStatementCreateDatabase).print();
+        tEnv.executeSql(SQLStatementUseDatabase).print();
+        
+        // Should not throw exception due to IF EXISTS
+        assertDoesNotThrow(() -> tEnv.executeSql(SQLStatementDropTable).print());
+    }
 }

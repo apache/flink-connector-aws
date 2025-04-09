@@ -2,16 +2,16 @@ package com.amazonaws.services.msf.operations;
 
 import org.apache.flink.table.catalog.CatalogDatabase;
 import org.apache.flink.table.catalog.CatalogDatabaseImpl;
-import org.apache.flink.table.catalog.exceptions.DatabaseNotExistException;
+import org.apache.flink.table.catalog.exceptions.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.*;
 import software.amazon.awssdk.services.glue.model.*;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 class GlueDatabaseOperationsTest {
 
@@ -20,111 +20,155 @@ class GlueDatabaseOperationsTest {
 
     @BeforeEach
     void setUp() {
-        // Reset the state of the FakeGlueClient before each test
         FakeGlueClient.reset();
         fakeGlueClient = new FakeGlueClient();
         glueDatabaseOperations = new GlueDatabaseOperations(fakeGlueClient, "testCatalog");
-
     }
 
     @Test
-    void testCreateDatabase() {
-        // Arrange
+    void testCreateDatabase() throws DatabaseAlreadyExistException {
         CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test");
-
-        // Act
         glueDatabaseOperations.createDatabase("db1", catalogDatabase);
-
-        // Assert
-        assertTrue(FakeGlueClient.databaseStore.containsKey("db1"), "Database should be created");
-        assertEquals("db1", FakeGlueClient.databaseStore.get("db1").name(), "DatabaseName should match");
+        assertTrue(FakeGlueClient.databaseStore.containsKey("db1"));
+        assertEquals("db1", FakeGlueClient.databaseStore.get("db1").name());
     }
 
     @Test
-    void testCreateDatabaseAlreadyExists() {
-        // Arrange
+    void testCreateDatabaseAlreadyExists() throws DatabaseAlreadyExistException {
         CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "Description");
-
         glueDatabaseOperations.createDatabase("db1", catalogDatabase);
-
-        // Act & Assert
-        assertThrows(AlreadyExistsException.class, () -> {
-            glueDatabaseOperations.createDatabase("db1", catalogDatabase);
-        }, "Should throw AlreadyExistsException for an existing database");
+        assertThrows(DatabaseAlreadyExistException.class, () -> 
+            glueDatabaseOperations.createDatabase("db1", catalogDatabase));
     }
 
     @Test
-    void testDropDatabase() {
+    void testCreateDatabaseInvalidInput() throws DatabaseAlreadyExistException {
         CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "Description");
+        fakeGlueClient.setNextException(InvalidInputException.builder().message("Invalid database name").build());
+        assertThrows(CatalogException.class, () -> 
+            glueDatabaseOperations.createDatabase("db1", catalogDatabase));
+    }
 
+    @Test
+    void testCreateDatabaseResourceLimitExceeded() throws DatabaseAlreadyExistException {
+        CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "Description");
+        fakeGlueClient.setNextException(ResourceNumberLimitExceededException.builder().message("Resource limit exceeded").build());
+        assertThrows(CatalogException.class, () -> 
+            glueDatabaseOperations.createDatabase("db1", catalogDatabase));
+    }
+
+    @Test
+    void testCreateDatabaseTimeout() throws DatabaseAlreadyExistException {
+        CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "Description");
+        fakeGlueClient.setNextException(OperationTimeoutException.builder().message("Operation timed out").build());
+        assertThrows(CatalogException.class, () -> 
+            glueDatabaseOperations.createDatabase("db1", catalogDatabase));
+    }
+
+    @Test
+    void testDropDatabase() throws DatabaseAlreadyExistException {
+        CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "Description");
         glueDatabaseOperations.createDatabase("db1", catalogDatabase);
-
-        // Act & Assert
-        assertDoesNotThrow(() -> glueDatabaseOperations.dropGlueDatabase("db1"),
-                "Should not throw any exception when dropping an existing database");
-
-        assertNull(FakeGlueClient.databaseStore.get("db1"), "Database Shouldnt be there");
-
+        assertDoesNotThrow(() -> glueDatabaseOperations.dropGlueDatabase("db1"));
+        assertNull(FakeGlueClient.databaseStore.get("db1"));
     }
 
     @Test
     void testDropDatabaseNotFound() {
-        // Act & Assert
-        assertThrows(DatabaseNotExistException.class, () -> glueDatabaseOperations.dropGlueDatabase("db1"),
-                "Should throw DatabaseNotExistException when trying to drop a non-existent database");
+        assertThrows(DatabaseNotExistException.class, () -> 
+            glueDatabaseOperations.dropGlueDatabase("db1"));
     }
 
     @Test
-    void testListDatabases() {
-        // Arrange: Create a couple of databases
+    void testDropDatabaseInvalidInput() {
+        fakeGlueClient.setNextException(InvalidInputException.builder().message("Invalid database name").build());
+        assertThrows(CatalogException.class, () -> 
+            glueDatabaseOperations.dropGlueDatabase("db1"));
+    }
+
+    @Test
+    void testDropDatabaseTimeout() {
+        fakeGlueClient.setNextException(OperationTimeoutException.builder().message("Operation timed out").build());
+        assertThrows(CatalogException.class, () -> 
+            glueDatabaseOperations.dropGlueDatabase("db1"));
+    }
+
+    @Test
+    void testListDatabases() throws DatabaseAlreadyExistException {
         CatalogDatabase catalogDatabase1 = new CatalogDatabaseImpl(Collections.emptyMap(), "test1");
         CatalogDatabase catalogDatabase2 = new CatalogDatabaseImpl(Collections.emptyMap(), "test2");
         glueDatabaseOperations.createDatabase("db1", catalogDatabase1);
         glueDatabaseOperations.createDatabase("db2", catalogDatabase2);
 
-        // Act: List databases
         List<String> databaseNames = glueDatabaseOperations.listDatabases();
-
-        // Assert: Verify that the databases are listed correctly
-        assertTrue(databaseNames.contains("db1"), "Database db1 should be in the list");
-        assertTrue(databaseNames.contains("db2"), "Database db2 should be in the list");
+        assertTrue(databaseNames.contains("db1"));
+        assertTrue(databaseNames.contains("db2"));
     }
 
     @Test
-    void testGetDatabase() throws DatabaseNotExistException {
-        // Arrange: Create a database
+    void testListDatabasesTimeout() {
+        fakeGlueClient.setNextException(OperationTimeoutException.builder().message("Operation timed out").build());
+        assertThrows(CatalogException.class, () -> glueDatabaseOperations.listDatabases());
+    }
+
+    @Test
+    void testListDatabasesResourceLimitExceeded() {
+        fakeGlueClient.setNextException(ResourceNumberLimitExceededException.builder().message("Resource limit exceeded").build());
+        assertThrows(CatalogException.class, () -> glueDatabaseOperations.listDatabases());
+    }
+
+    @Test
+    void testGetDatabase() throws DatabaseNotExistException, DatabaseAlreadyExistException {
         CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "comment");
         glueDatabaseOperations.createDatabase("db1", catalogDatabase);
-
-        // Act: Retrieve the database
         CatalogDatabase retrievedDatabase = glueDatabaseOperations.getDatabase("db1");
-
-        // Assert: Check that the database is retrieved correctly
-        assertNotNull(retrievedDatabase, "Database should be retrieved successfully");
-        assertEquals("Optional[comment]", retrievedDatabase.getComment(), "comment should match");
+        assertNotNull(retrievedDatabase);
+        assertEquals("Optional[comment]", retrievedDatabase.getComment());
     }
 
     @Test
     void testGetDatabaseNotFound() {
-        // Act & Assert: Trying to get a non-existent database should throw DatabaseNotExistException
-        assertThrows(DatabaseNotExistException.class, () -> glueDatabaseOperations.getDatabase("db1"),
-                "Should throw DatabaseNotExistException when trying to get a non-existent database");
+        assertThrows(DatabaseNotExistException.class, () -> 
+            glueDatabaseOperations.getDatabase("db1"));
     }
 
     @Test
-    void testGlueDatabaseExists() {
-        // Arrange: Create a database
+    void testGetDatabaseInvalidInput() {
+        fakeGlueClient.setNextException(InvalidInputException.builder().message("Invalid database name").build());
+        assertThrows(CatalogException.class, () -> 
+            glueDatabaseOperations.getDatabase("db1"));
+    }
+
+    @Test
+    void testGetDatabaseTimeout() {
+        fakeGlueClient.setNextException(OperationTimeoutException.builder().message("Operation timed out").build());
+        assertThrows(CatalogException.class, () -> 
+            glueDatabaseOperations.getDatabase("db1"));
+    }
+
+    @Test
+    void testGlueDatabaseExists() throws DatabaseAlreadyExistException {
         CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test");
         glueDatabaseOperations.createDatabase("db1", catalogDatabase);
-
-        // Act & Assert: Check if the database exists
-        assertTrue(glueDatabaseOperations.glueDatabaseExists("db1"), "Database should exist");
+        assertTrue(glueDatabaseOperations.glueDatabaseExists("db1"));
     }
 
     @Test
     void testGlueDatabaseDoesNotExist() {
-        // Act & Assert: Check if a non-existent database exists
-        assertFalse(glueDatabaseOperations.glueDatabaseExists("nonExistentDB"), "Database should not exist");
+        assertFalse(glueDatabaseOperations.glueDatabaseExists("nonExistentDB"));
     }
 
+    @Test
+    void testGlueDatabaseExistsInvalidInput() {
+        fakeGlueClient.setNextException(InvalidInputException.builder().message("Invalid database name").build());
+        assertThrows(CatalogException.class, () -> 
+            glueDatabaseOperations.glueDatabaseExists("db1"));
+    }
+
+    @Test
+    void testGlueDatabaseExistsTimeout() {
+        fakeGlueClient.setNextException(OperationTimeoutException.builder().message("Operation timed out").build());
+        assertThrows(CatalogException.class, () -> 
+            glueDatabaseOperations.glueDatabaseExists("db1"));
+    }
 }

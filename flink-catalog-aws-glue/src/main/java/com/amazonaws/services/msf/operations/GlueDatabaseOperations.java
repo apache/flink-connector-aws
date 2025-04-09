@@ -47,6 +47,12 @@ public class GlueDatabaseOperations extends AbstractGlueOperations {
                     .stream()
                     .map(Database::name)
                     .collect(Collectors.toList());
+        } catch (OperationTimeoutException e) {
+            LOG.error("Timeout while listing databases in Glue", e);
+            throw new CatalogException("Timeout while listing databases: " + e.getMessage(), e);
+        } catch (ResourceNumberLimitExceededException e) {
+            LOG.error("Resource limit exceeded while listing databases in Glue", e);
+            throw new CatalogException("Resource limit exceeded while listing databases: " + e.getMessage(), e);
         } catch (GlueException e) {
             LOG.error("Failed to list databases in Glue", e);
             throw new CatalogException("Failed to list databases: " + e.getMessage(), e);
@@ -73,8 +79,15 @@ public class GlueDatabaseOperations extends AbstractGlueOperations {
             return convertGlueDatabase(glueDatabase);
         } catch (EntityNotFoundException e) {
             throw new DatabaseNotExistException(catalogName, databaseName);
-        } catch (Exception e) {
-            throw new CatalogException("Error fetching database: " + databaseName, e);
+        } catch (InvalidInputException e) {
+            LOG.error("Invalid input while getting database: {}", databaseName, e);
+            throw new CatalogException("Invalid database name: " + databaseName, e);
+        } catch (OperationTimeoutException e) {
+            LOG.error("Timeout while getting database: {}", databaseName, e);
+            throw new CatalogException("Timeout while getting database: " + databaseName, e);
+        } catch (GlueException e) {
+            LOG.error("Error getting database: {}", databaseName, e);
+            throw new CatalogException("Error getting database: " + databaseName, e);
         }
     }
 
@@ -104,7 +117,14 @@ public class GlueDatabaseOperations extends AbstractGlueOperations {
             return true;
         } catch (EntityNotFoundException e) {
             return false;
-        } catch (Exception e) {
+        } catch (InvalidInputException e) {
+            LOG.error("Invalid input while checking database existence: {}", databaseName, e);
+            throw new CatalogException("Invalid database name: " + databaseName, e);
+        } catch (OperationTimeoutException e) {
+            LOG.error("Timeout while checking database existence: {}", databaseName, e);
+            throw new CatalogException("Timeout while checking database existence: " + databaseName, e);
+        } catch (GlueException e) {
+            LOG.error("Error checking database existence: {}", databaseName, e);
             throw new CatalogException("Error checking database existence: " + databaseName, e);
         }
     }
@@ -114,12 +134,31 @@ public class GlueDatabaseOperations extends AbstractGlueOperations {
      *
      * @param databaseName The name of the database to create.
      * @param catalogDatabase The CatalogDatabase containing properties and description.
+     * @throws DatabaseAlreadyExistException If the database already exists.
+     * @throws CatalogException If there is any error creating the database.
      */
-    public void createDatabase(String databaseName, CatalogDatabase catalogDatabase) {
-        glueClient.createDatabase(builder -> builder.databaseInput(db ->
-                db.name(databaseName)
-                        .description(String.valueOf(catalogDatabase.getDescription()))
-                        .parameters(catalogDatabase.getProperties())));
+    public void createDatabase(String databaseName, CatalogDatabase catalogDatabase) 
+            throws DatabaseAlreadyExistException, CatalogException {
+        try {
+            glueClient.createDatabase(builder -> builder.databaseInput(db ->
+                    db.name(databaseName)
+                            .description(String.valueOf(catalogDatabase.getDescription()))
+                            .parameters(catalogDatabase.getProperties())));
+        } catch (AlreadyExistsException e) {
+            throw new DatabaseAlreadyExistException(catalogName, databaseName);
+        } catch (InvalidInputException e) {
+            LOG.error("Invalid input while creating database: {}", databaseName, e);
+            throw new CatalogException("Invalid database name or properties: " + databaseName, e);
+        } catch (ResourceNumberLimitExceededException e) {
+            LOG.error("Resource limit exceeded while creating database: {}", databaseName, e);
+            throw new CatalogException("Resource limit exceeded while creating database: " + databaseName, e);
+        } catch (OperationTimeoutException e) {
+            LOG.error("Timeout while creating database: {}", databaseName, e);
+            throw new CatalogException("Timeout while creating database: " + databaseName, e);
+        } catch (GlueException e) {
+            LOG.error("Error creating database: {}", databaseName, e);
+            throw new CatalogException("Error creating database: " + databaseName, e);
+        }
     }
 
     /**
@@ -127,19 +166,27 @@ public class GlueDatabaseOperations extends AbstractGlueOperations {
      *
      * @param databaseName The name of the database to delete.
      * @throws DatabaseNotExistException If the database does not exist in the Glue catalog.
+     * @throws CatalogException If there is any error deleting the database.
      */
-    public void dropGlueDatabase(String databaseName) throws DatabaseNotExistException {
-        DeleteDatabaseRequest deleteDatabaseRequest = DeleteDatabaseRequest.builder()
-                .name(databaseName)
-                .build();
-
+    public void dropGlueDatabase(String databaseName) throws DatabaseNotExistException, CatalogException {
         try {
-            // Attempt to delete the database
-            DeleteDatabaseResponse response = glueClient.deleteDatabase(deleteDatabaseRequest);
+            DeleteDatabaseRequest deleteDatabaseRequest = DeleteDatabaseRequest.builder()
+                    .name(databaseName)
+                    .build();
+
+            glueClient.deleteDatabase(deleteDatabaseRequest);
             LOG.info("Successfully dropped database: {}", databaseName);
         } catch (EntityNotFoundException e) {
-            // If the database doesn't exist, throw an appropriate exception
             throw new DatabaseNotExistException(catalogName, databaseName);
+        } catch (InvalidInputException e) {
+            LOG.error("Invalid input while dropping database: {}", databaseName, e);
+            throw new CatalogException("Invalid database name: " + databaseName, e);
+        } catch (OperationTimeoutException e) {
+            LOG.error("Timeout while dropping database: {}", databaseName, e);
+            throw new CatalogException("Timeout while dropping database: " + databaseName, e);
+        } catch (GlueException e) {
+            LOG.error("Error dropping database: {}", databaseName, e);
+            throw new CatalogException("Error dropping database: " + databaseName, e);
         }
     }
 }
