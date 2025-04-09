@@ -348,7 +348,7 @@ public class GlueCatalog extends AbstractCatalog {
         String tableName = objectPath.getObjectName();
 
         // Delegate existence check to GlueTableOperations
-        return glueTableOperations.tableExists(databaseName, tableName);
+        return glueTableOperations.glueTableExists(databaseName, tableName);
     }
 
     /**
@@ -365,7 +365,7 @@ public class GlueCatalog extends AbstractCatalog {
         String tableName = objectPath.getObjectName();
 
         // Check if the table exists
-        if (!glueTableOperations.tableExists(databaseName, tableName)) {
+        if (!glueTableOperations.glueTableExists(databaseName, tableName)) {
             if (!ifExists) {
                 throw new TableNotExistException(getName(), objectPath);
             }
@@ -400,7 +400,7 @@ public class GlueCatalog extends AbstractCatalog {
         }
 
         // Check if the table already exists
-        if (glueTableOperations.tableExists(databaseName, tableName)) {
+        if (glueTableOperations.glueTableExists(databaseName, tableName)) {
             if (!ifNotExists) {
                 throw new TableAlreadyExistException(getName(), objectPath);
             }

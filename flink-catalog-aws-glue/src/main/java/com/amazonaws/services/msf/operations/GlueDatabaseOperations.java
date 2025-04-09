@@ -117,14 +117,9 @@ public class GlueDatabaseOperations extends AbstractGlueOperations {
             return true;
         } catch (EntityNotFoundException e) {
             return false;
-        } catch (InvalidInputException e) {
-            LOG.error("Invalid input while checking database existence: {}", databaseName, e);
-            throw new CatalogException("Invalid database name: " + databaseName, e);
-        } catch (OperationTimeoutException e) {
-            LOG.error("Timeout while checking database existence: {}", databaseName, e);
-            throw new CatalogException("Timeout while checking database existence: " + databaseName, e);
+        } catch (InvalidInputException | OperationTimeoutException | ResourceNumberLimitExceededException e) {
+            throw new CatalogException("Error checking database existence: " + databaseName, e);
         } catch (GlueException e) {
-            LOG.error("Error checking database existence: {}", databaseName, e);
             throw new CatalogException("Error checking database existence: " + databaseName, e);
         }
     }
@@ -146,17 +141,9 @@ public class GlueDatabaseOperations extends AbstractGlueOperations {
                             .parameters(catalogDatabase.getProperties())));
         } catch (AlreadyExistsException e) {
             throw new DatabaseAlreadyExistException(catalogName, databaseName);
-        } catch (InvalidInputException e) {
-            LOG.error("Invalid input while creating database: {}", databaseName, e);
-            throw new CatalogException("Invalid database name or properties: " + databaseName, e);
-        } catch (ResourceNumberLimitExceededException e) {
-            LOG.error("Resource limit exceeded while creating database: {}", databaseName, e);
-            throw new CatalogException("Resource limit exceeded while creating database: " + databaseName, e);
-        } catch (OperationTimeoutException e) {
-            LOG.error("Timeout while creating database: {}", databaseName, e);
-            throw new CatalogException("Timeout while creating database: " + databaseName, e);
+        } catch (InvalidInputException | ResourceNumberLimitExceededException | OperationTimeoutException e) {
+            throw new CatalogException("Error creating database: " + databaseName, e);
         } catch (GlueException e) {
-            LOG.error("Error creating database: {}", databaseName, e);
             throw new CatalogException("Error creating database: " + databaseName, e);
         }
     }
@@ -178,14 +165,9 @@ public class GlueDatabaseOperations extends AbstractGlueOperations {
             LOG.info("Successfully dropped database: {}", databaseName);
         } catch (EntityNotFoundException e) {
             throw new DatabaseNotExistException(catalogName, databaseName);
-        } catch (InvalidInputException e) {
-            LOG.error("Invalid input while dropping database: {}", databaseName, e);
-            throw new CatalogException("Invalid database name: " + databaseName, e);
-        } catch (OperationTimeoutException e) {
-            LOG.error("Timeout while dropping database: {}", databaseName, e);
-            throw new CatalogException("Timeout while dropping database: " + databaseName, e);
+        } catch (InvalidInputException | OperationTimeoutException e) {
+            throw new CatalogException("Error dropping database: " + databaseName, e);
         } catch (GlueException e) {
-            LOG.error("Error dropping database: {}", databaseName, e);
             throw new CatalogException("Error dropping database: " + databaseName, e);
         }
     }

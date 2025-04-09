@@ -200,7 +200,7 @@ public class GlueCatalogTest {
         glueCatalog.createTable(new ObjectPath(databaseName, tableName), resolvedCatalogTable, false);
 
         // Assert
-        assertTrue(glueTableOperations.tableExists(databaseName, tableName), "Table should be created");
+        assertTrue(glueTableOperations.glueTableExists(databaseName, tableName));
     }
 
     /**
@@ -299,7 +299,7 @@ public class GlueCatalogTest {
         glueCatalog.dropTable(new ObjectPath(databaseName, tableName), false);
 
         // Assert
-        assertFalse(glueTableOperations.tableExists(databaseName, tableName), "Table should be dropped");
+        assertFalse(glueTableOperations.glueTableExists(databaseName, tableName));
     }
 
     /**

@@ -41,12 +41,12 @@ public class GlueTableOperationsTest {
                 .tableInput(tableInput)
                 .build());
 
-        assertTrue(glueTableOperations.tableExists(DATABASE_NAME, TABLE_NAME));
+        assertTrue(glueTableOperations.glueTableExists(DATABASE_NAME, TABLE_NAME));
     }
 
     @Test
     void testTableExistsWhenNotFound() {
-        assertFalse(glueTableOperations.tableExists(DATABASE_NAME, TABLE_NAME));
+        assertFalse(glueTableOperations.glueTableExists(DATABASE_NAME, TABLE_NAME));
     }
 
     @Test
@@ -83,7 +83,7 @@ public class GlueTableOperationsTest {
                 .build();
 
         assertDoesNotThrow(() -> glueTableOperations.createTable(DATABASE_NAME, tableInput));
-        assertTrue(glueTableOperations.tableExists(DATABASE_NAME, TABLE_NAME));
+        assertTrue(glueTableOperations.glueTableExists(DATABASE_NAME, TABLE_NAME));
     }
 
     @Test
@@ -170,7 +170,7 @@ public class GlueTableOperationsTest {
 
         // Then drop it
         assertDoesNotThrow(() -> glueTableOperations.dropTable(DATABASE_NAME, TABLE_NAME));
-        assertFalse(glueTableOperations.tableExists(DATABASE_NAME, TABLE_NAME));
+        assertFalse(glueTableOperations.glueTableExists(DATABASE_NAME, TABLE_NAME));
     }
 
     @Test
@@ -200,7 +200,7 @@ public class GlueTableOperationsTest {
                 .build();
 
         assertDoesNotThrow(() -> glueTableOperations.createTable(DATABASE_NAME, viewInput));
-        assertTrue(glueTableOperations.tableExists(DATABASE_NAME, "test-view"));
+        assertTrue(glueTableOperations.glueTableExists(DATABASE_NAME, "test-view"));
     }
 
     @Test

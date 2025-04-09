@@ -41,22 +41,16 @@ public class GlueTableOperations extends AbstractGlueOperations {
      * @param tableName    The name of the table to check.
      * @return true if the table exists, false otherwise.
      */
-    public boolean tableExists(String databaseName, String tableName) {
+    public boolean glueTableExists(String databaseName, String tableName) {
         try {
-            GetTableRequest request = GetTableRequest.builder()
-                    .databaseName(databaseName)
-                    .name(tableName)
-                    .build();
-            glueClient.getTable(request);
+            glueClient.getTable(builder -> builder.databaseName(databaseName).name(tableName));
             return true;
         } catch (EntityNotFoundException e) {
             return false;
-        } catch (InvalidInputException e) {
-            throw new CatalogException("Invalid input: " + e.getMessage(), e);
-        } catch (OperationTimeoutException e) {
-            throw new CatalogException("Operation timed out: " + e.getMessage(), e);
+        } catch (InvalidInputException | OperationTimeoutException | ResourceNumberLimitExceededException e) {
+            throw new CatalogException("Error checking table existence: " + databaseName + "." + tableName, e);
         } catch (GlueException e) {
-            throw new CatalogException("AWS Glue error: " + e.getMessage(), e);
+            throw new CatalogException("Error checking table existence: " + databaseName + "." + tableName, e);
         }
     }
 
@@ -77,11 +71,13 @@ public class GlueTableOperations extends AbstractGlueOperations {
                     .map(Table::name)
                     .collect(Collectors.toList());
         } catch (InvalidInputException e) {
-            throw new CatalogException("Invalid input: " + e.getMessage(), e);
+            throw new CatalogException("Invalid input while listing tables: " + e.getMessage(), e);
         } catch (OperationTimeoutException e) {
-            throw new CatalogException("Operation timed out: " + e.getMessage(), e);
+            throw new CatalogException("Operation timed out while listing tables: " + e.getMessage(), e);
+        } catch (ResourceNumberLimitExceededException e) {
+            throw new CatalogException("Resource limit exceeded while listing tables: " + e.getMessage(), e);
         } catch (GlueException e) {
-            throw new CatalogException("AWS Glue error: " + e.getMessage(), e);
+            throw new CatalogException("AWS Glue error while listing tables: " + e.getMessage(), e);
         }
     }
 
@@ -131,11 +127,13 @@ public class GlueTableOperations extends AbstractGlueOperations {
         } catch (EntityNotFoundException e) {
             throw new TableNotExistException(catalogName, new ObjectPath(databaseName, tableName));
         } catch (InvalidInputException e) {
-            throw new CatalogException("Invalid input: " + e.getMessage(), e);
+            throw new CatalogException("Invalid input while getting table: " + e.getMessage(), e);
         } catch (OperationTimeoutException e) {
-            throw new CatalogException("Operation timed out: " + e.getMessage(), e);
+            throw new CatalogException("Operation timed out while getting table: " + e.getMessage(), e);
+        } catch (ResourceNumberLimitExceededException e) {
+            throw new CatalogException("Resource limit exceeded while getting table: " + e.getMessage(), e);
         } catch (GlueException e) {
-            throw new CatalogException("AWS Glue error: " + e.getMessage(), e);
+            throw new CatalogException("AWS Glue error while getting table: " + e.getMessage(), e);
         }
     }
 
@@ -180,11 +178,13 @@ public class GlueTableOperations extends AbstractGlueOperations {
         } catch (EntityNotFoundException e) {
             throw new TableNotExistException(catalogName, new ObjectPath(databaseName, tableName));
         } catch (InvalidInputException e) {
-            throw new CatalogException("Invalid input: " + e.getMessage(), e);
+            throw new CatalogException("Invalid input while dropping table: " + e.getMessage(), e);
         } catch (OperationTimeoutException e) {
-            throw new CatalogException("Operation timed out: " + e.getMessage(), e);
+            throw new CatalogException("Operation timed out while dropping table: " + e.getMessage(), e);
+        } catch (ResourceNumberLimitExceededException e) {
+            throw new CatalogException("Resource limit exceeded while dropping table: " + e.getMessage(), e);
         } catch (GlueException e) {
-            throw new CatalogException("AWS Glue error: " + e.getMessage(), e);
+            throw new CatalogException("AWS Glue error while dropping table: " + e.getMessage(), e);
         }
     }
 }
