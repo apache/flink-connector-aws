@@ -22,6 +22,7 @@ import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
 import org.apache.flink.core.io.VersionMismatchException;
+import org.apache.flink.util.function.BiConsumerWithException;
 
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 
@@ -42,8 +43,8 @@ import java.util.Set;
 @Internal
 public class KinesisShardSplitSerializer implements SimpleVersionedSerializer<KinesisShardSplit> {
 
-    private static final int CURRENT_VERSION = 1;
-    private static final Set<Integer> COMPATIBLE_VERSIONS = new HashSet<>(Arrays.asList(0, 1));
+    private static final int CURRENT_VERSION = 2;
+    private static final Set<Integer> COMPATIBLE_VERSIONS = new HashSet<>(Arrays.asList(0, 1, 2));
 
     @Override
     public int getVersion() {
@@ -52,64 +53,65 @@ public class KinesisShardSplitSerializer implements SimpleVersionedSerializer<Ki
 
     @Override
     public byte[] serialize(KinesisShardSplit split) throws IOException {
+        return serialize(split, this::serializeV2);
+    }
+
+    @VisibleForTesting
+    byte[] serialize(
+            KinesisShardSplit split,
+            BiConsumerWithException<KinesisShardSplit, DataOutputStream, IOException> serializer)
+            throws IOException {
+
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 DataOutputStream out = new DataOutputStream(baos)) {
 
-            out.writeUTF(split.getStreamArn());
-            out.writeUTF(split.getShardId());
-            out.writeUTF(split.getStartingPosition().getShardIteratorType().toString());
-            if (split.getStartingPosition().getStartingMarker() == null) {
-                out.writeBoolean(false);
-            } else {
-                out.writeBoolean(true);
-                Object startingMarker = split.getStartingPosition().getStartingMarker();
-                out.writeBoolean(startingMarker instanceof Instant);
-                if (startingMarker instanceof Instant) {
-                    out.writeLong(((Instant) startingMarker).toEpochMilli());
-                }
-                out.writeBoolean(startingMarker instanceof String);
-                if (startingMarker instanceof String) {
-                    out.writeUTF((String) startingMarker);
-                }
-            }
-            out.writeInt(split.getParentShardIds().size());
-            for (String parentShardId : split.getParentShardIds()) {
-                out.writeUTF(parentShardId);
-            }
-            out.writeUTF(split.getStartingHashKey());
-            out.writeUTF(split.getEndingHashKey());
-
+            serializer.accept(split, out);
             out.flush();
+
             return baos.toByteArray();
         }
     }
 
-    /** This method used only to test backwards compatibility of deserialization logic. */
+    /** This method is used to test backwards compatibility of deserialization logic. */
     @VisibleForTesting
-    byte[] serializeV0(KinesisShardSplit split) throws IOException {
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                DataOutputStream out = new DataOutputStream(baos)) {
-
-            out.writeUTF(split.getStreamArn());
-            out.writeUTF(split.getShardId());
-            out.writeUTF(split.getStartingPosition().getShardIteratorType().toString());
-            if (split.getStartingPosition().getStartingMarker() == null) {
-                out.writeBoolean(false);
-            } else {
-                out.writeBoolean(true);
-                Object startingMarker = split.getStartingPosition().getStartingMarker();
-                out.writeBoolean(startingMarker instanceof Instant);
-                if (startingMarker instanceof Instant) {
-                    out.writeLong(((Instant) startingMarker).toEpochMilli());
-                }
-                out.writeBoolean(startingMarker instanceof String);
-                if (startingMarker instanceof String) {
-                    out.writeUTF((String) startingMarker);
-                }
+    void serializeV0(KinesisShardSplit split, DataOutputStream out) throws IOException {
+        out.writeUTF(split.getStreamArn());
+        out.writeUTF(split.getShardId());
+        out.writeUTF(split.getStartingPosition().getShardIteratorType().toString());
+        if (split.getStartingPosition().getStartingMarker() == null) {
+            out.writeBoolean(false);
+        } else {
+            out.writeBoolean(true);
+            Object startingMarker = split.getStartingPosition().getStartingMarker();
+            out.writeBoolean(startingMarker instanceof Instant);
+            if (startingMarker instanceof Instant) {
+                out.writeLong(((Instant) startingMarker).toEpochMilli());
             }
-            out.flush();
-            return baos.toByteArray();
+            out.writeBoolean(startingMarker instanceof String);
+            if (startingMarker instanceof String) {
+                out.writeUTF((String) startingMarker);
+            }
         }
+    }
+
+    /** This method is used to test backwards compatibility of deserialization logic. */
+    @VisibleForTesting
+    void serializeV1(KinesisShardSplit split, DataOutputStream out) throws IOException {
+        serializeV0(split, out);
+
+        out.writeInt(split.getParentShardIds().size());
+        for (String parentShardId : split.getParentShardIds()) {
+            out.writeUTF(parentShardId);
+        }
+        out.writeUTF(split.getStartingHashKey());
+        out.writeUTF(split.getEndingHashKey());
+    }
+
+    @VisibleForTesting
+    void serializeV2(KinesisShardSplit split, DataOutputStream out) throws IOException {
+        serializeV1(split, out);
+
+        out.writeBoolean(split.isFinished());
     }
 
     @Override
@@ -140,7 +142,8 @@ public class KinesisShardSplitSerializer implements SimpleVersionedSerializer<Ki
             }
 
             Set<String> parentShardIds = new HashSet<>();
-            if (version == CURRENT_VERSION) {
+            // parentShardIds was added in V1
+            if (version >= 1) {
                 int parentShardCount = in.readInt();
                 for (int i = 0; i < parentShardCount; i++) {
                     parentShardIds.add(in.readUTF());
@@ -149,12 +152,19 @@ public class KinesisShardSplitSerializer implements SimpleVersionedSerializer<Ki
 
             String startingHashKey;
             String endingHashKey;
-            if (version == CURRENT_VERSION) {
+            // startingHashKey and endingHashKey were added in V1
+            if (version >= 1) {
                 startingHashKey = in.readUTF();
                 endingHashKey = in.readUTF();
             } else {
                 startingHashKey = "-1";
                 endingHashKey = "0";
+            }
+
+            boolean finished = false;
+            // isFinished was added in V2
+            if (version >= 2) {
+                finished = in.readBoolean();
             }
 
             return new KinesisShardSplit(
@@ -163,7 +173,8 @@ public class KinesisShardSplitSerializer implements SimpleVersionedSerializer<Ki
                     new StartingPosition(shardIteratorType, startingMarker),
                     parentShardIds,
                     startingHashKey,
-                    endingHashKey);
+                    endingHashKey,
+                    finished);
         }
     }
 }
