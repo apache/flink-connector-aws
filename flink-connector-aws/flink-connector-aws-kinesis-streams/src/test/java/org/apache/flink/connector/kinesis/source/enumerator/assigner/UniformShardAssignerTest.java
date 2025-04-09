@@ -101,7 +101,9 @@ class UniformShardAssignerTest {
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> assigner.assign(split, assignerContext))
                 .withMessageContaining(
-                        "Expected at least one registered reader. Unable to assign split.");
+                        String.format(
+                                "Expected at least one registered reader. Unable to assign split with id: %s.",
+                                split.splitId()));
     }
 
     private void createReaderWithAssignedSplits(
