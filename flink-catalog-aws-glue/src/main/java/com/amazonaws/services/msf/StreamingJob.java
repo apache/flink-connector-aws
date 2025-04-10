@@ -33,8 +33,10 @@ public class StreamingJob {
 //
 //        // Set the registered Glue catalog as the default catalog
 //        tEnv.useCatalog("glue_catalog");
-
-
+//        // Show the list of tables in the 'test' database
+        tEnv.executeSql("SHOW TABLES").print();
+//        // Show the list of databases in the catalog
+        tEnv.executeSql("SHOW DATABASES").print();
         // Register the Glue catalog using SQL
         tEnv.executeSql(
                 "CREATE CATALOG glue_catalog WITH (" +
@@ -62,9 +64,9 @@ public class StreamingJob {
 //
         // Create a new table 'fran' with specified schema and configuration
         tEnv.executeSql("CREATE TABLE IF NOT EXISTS gen (" +
-                "  `order_number` BIGINT," +
+                "  `order_Number` BIGINT," +
                 "  `price` DECIMAL(32,2)," +
-                "  `order_time` TIMESTAMP(3) " +
+                "  `order_Time` TIMESTAMP(3) " +
                 ")" +
                 "WITH (" +
                 "  'connector' = 'datagen'" +
@@ -72,6 +74,7 @@ public class StreamingJob {
 //
 //        // Show the list of tables in the 'test' database again after creating the new table
         tEnv.executeSql("SHOW TABLES").print();
+        
 
         // =========================================================================
         // TEST CASE-SENSITIVITY EXAMPLES - Uncomment one at a time to test
