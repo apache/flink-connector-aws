@@ -1,5 +1,3 @@
-package org.apache.flink.table.catalog.glue.util;
-
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -18,6 +16,7 @@ package org.apache.flink.table.catalog.glue.util;
  * limitations under the License.
  */
 
+package org.apache.flink.table.catalog.glue.util;
 
 import org.apache.flink.annotation.Internal;
 

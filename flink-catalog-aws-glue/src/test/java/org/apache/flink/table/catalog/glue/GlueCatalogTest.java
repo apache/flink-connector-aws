@@ -1,3 +1,21 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.flink.table.catalog.glue;
 
 import org.apache.flink.table.catalog.glue.operations.FakeGlueClient;
@@ -10,7 +28,9 @@ import org.apache.flink.table.functions.FunctionIdentifier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.Collections;
 import java.util.List;
@@ -52,12 +72,12 @@ public class GlueCatalogTest {
         GlueCatalog catalog = new GlueCatalog("glueCatalog", "default", "us-east-1");
         
         // Assert
-        assertNotNull(catalog);
+        assertThat(catalog).isNotNull();
         // Verify it can be opened and closed without exceptions
-        assertDoesNotThrow(() -> {
+        assertThatCode(() -> {
             catalog.open();
             catalog.close();
-        });
+        }).doesNotThrowAnyException();
     }
 
     /**
@@ -66,10 +86,10 @@ public class GlueCatalogTest {
     @Test
     public void testOpenAndClose() {
         // Act & Assert
-        assertDoesNotThrow(() -> {
+        assertThatCode(() -> {
             glueCatalog.open();
             glueCatalog.close();
-        });
+        }).doesNotThrowAnyException();
     }
 
     //-------------------------------------------------------------------------
@@ -89,7 +109,7 @@ public class GlueCatalogTest {
         glueCatalog.createDatabase(databaseName, catalogDatabase, false);
 
         // Assert
-        assertTrue(glueDatabaseOperations.glueDatabaseExists(databaseName));
+        assertThat(glueDatabaseOperations.glueDatabaseExists(databaseName)).isTrue();
     }
 
     /**
@@ -103,8 +123,8 @@ public class GlueCatalogTest {
         glueCatalog.createDatabase(databaseName, catalogDatabase, false);
 
         // Act & Assert
-        assertTrue(glueCatalog.databaseExists(databaseName));
-        assertFalse(glueCatalog.databaseExists("nonExistingDatabase"));
+        assertThat(glueCatalog.databaseExists(databaseName)).isTrue();
+        assertThat(glueCatalog.databaseExists("nonExistingDatabase")).isFalse();
     }
 
     /**
@@ -120,12 +140,12 @@ public class GlueCatalogTest {
         glueCatalog.createDatabase(databaseName, catalogDatabase, false);
         
         // Act - Create again with ifNotExists=true should not throw exception
-        assertDoesNotThrow(() -> {
+        assertThatCode(() -> {
             glueCatalog.createDatabase(databaseName, catalogDatabase, true);
-        });
+        }).doesNotThrowAnyException();
         
         // Assert
-        assertTrue(glueCatalog.databaseExists(databaseName));
+        assertThat(glueCatalog.databaseExists(databaseName)).isTrue();
     }
 
     /**
@@ -142,7 +162,7 @@ public class GlueCatalogTest {
         glueCatalog.dropDatabase(databaseName, false, false);
         
         // Assert
-        assertFalse(glueCatalog.databaseExists(databaseName));
+        assertThat(glueCatalog.databaseExists(databaseName)).isFalse();
     }
 
     /**
@@ -151,9 +171,9 @@ public class GlueCatalogTest {
     @Test
     public void testDropDatabaseIgnoreIfNotExists() {
         // Act & Assert - should not throw exception with ignoreIfNotExists=true
-        assertDoesNotThrow(() -> {
+        assertThatCode(() -> {
             glueCatalog.dropDatabase("nonExistingDatabase", true, false);
-        });
+        }).doesNotThrowAnyException();
     }
 
     /**
@@ -162,9 +182,9 @@ public class GlueCatalogTest {
     @Test
     public void testDropDatabaseFailIfNotExists() {
         // Act & Assert - should throw exception with ignoreIfNotExists=false
-        assertThrows(DatabaseNotExistException.class, () -> {
+        assertThatThrownBy(() -> {
             glueCatalog.dropDatabase("nonExistingDatabase", false, false);
-        });
+        }).isInstanceOf(DatabaseNotExistException.class);
     }
 
     //-------------------------------------------------------------------------
@@ -194,7 +214,7 @@ public class GlueCatalogTest {
         glueCatalog.createTable(new ObjectPath(databaseName, tableName), resolvedCatalogTable, false);
 
         // Assert
-        assertTrue(glueTableOperations.glueTableExists(databaseName, tableName));
+        assertThat(glueTableOperations.glueTableExists(databaseName, tableName)).isTrue();
     }
 
     /**
@@ -220,9 +240,9 @@ public class GlueCatalogTest {
         glueCatalog.createTable(new ObjectPath(databaseName, tableName), resolvedCatalogTable, false);
         
         // Act - Create again with ifNotExists=true
-        assertDoesNotThrow(() -> {
+        assertThatCode(() -> {
             glueCatalog.createTable(new ObjectPath(databaseName, tableName), resolvedCatalogTable, true);
-        });
+        }).doesNotThrowAnyException();
     }
 
     /**
@@ -250,7 +270,7 @@ public class GlueCatalogTest {
         CatalogTable retrievedTable = (CatalogTable) glueCatalog.getTable(new ObjectPath(databaseName, tableName));
 
         // Assert
-        assertNotNull(retrievedTable, "Table should be retrieved");
+        assertThat(retrievedTable).isNotNull();
     }
 
     /**
@@ -263,9 +283,9 @@ public class GlueCatalogTest {
         String tableName = "testTable";
 
         // Act & Assert
-        assertThrows(TableNotExistException.class, () -> {
+        assertThatThrownBy(() -> {
             glueCatalog.getTable(new ObjectPath(databaseName, tableName));
-        });
+        }).isInstanceOf(TableNotExistException.class);
     }
 
     /**
@@ -293,7 +313,7 @@ public class GlueCatalogTest {
         glueCatalog.dropTable(new ObjectPath(databaseName, tableName), false);
 
         // Assert
-        assertFalse(glueTableOperations.glueTableExists(databaseName, tableName));
+        assertThat(glueTableOperations.glueTableExists(databaseName, tableName)).isFalse();
     }
 
     /**
@@ -307,9 +327,9 @@ public class GlueCatalogTest {
         glueCatalog.createDatabase(databaseName, catalogDatabase, false);
         
         // Act & Assert - should not throw exception with ifExists=true
-        assertDoesNotThrow(() -> {
+        assertThatCode(() -> {
             glueCatalog.dropTable(new ObjectPath(databaseName, "nonExistingTable"), true);
-        });
+        }).doesNotThrowAnyException();
     }
 
     /**
@@ -328,9 +348,9 @@ public class GlueCatalogTest {
         ResolvedCatalogTable resolvedCatalogTable = new ResolvedCatalogTable(catalogTable, resolvedSchema);
         
         // Act & Assert
-        assertThrows(DatabaseNotExistException.class, () -> {
+        assertThatThrownBy(() -> {
             glueCatalog.createTable(new ObjectPath(databaseName, tableName), resolvedCatalogTable, false);
-        });
+        }).isInstanceOf(DatabaseNotExistException.class);
     }
 
     /**
@@ -339,9 +359,9 @@ public class GlueCatalogTest {
     @Test
     public void testListTablesNonExistingDatabase() {
         // Act & Assert
-        assertThrows(DatabaseNotExistException.class, () -> {
+        assertThatThrownBy(() -> {
             glueCatalog.listTables("nonExistingDatabase");
-        });
+        }).isInstanceOf(DatabaseNotExistException.class);
     }
 
     //-------------------------------------------------------------------------
@@ -378,11 +398,11 @@ public class GlueCatalogTest {
         
         // Assert view can be retrieved
         CatalogBaseTable retrievedView = glueCatalog.getTable(new ObjectPath(databaseName, viewName));
-        assertEquals(CatalogBaseTable.TableKind.VIEW, retrievedView.getTableKind());
+        assertThat(retrievedView.getTableKind()).isEqualTo(CatalogBaseTable.TableKind.VIEW);
         
         // Assert view is listed in listViews
         List<String> views = glueCatalog.listViews(databaseName);
-        assertTrue(views.contains(viewName), "View should be in the list of views");
+        assertThat(views).contains(viewName);
     }
 
     /**
@@ -391,9 +411,9 @@ public class GlueCatalogTest {
     @Test
     public void testListViewsNonExistingDatabase() {
         // Act & Assert
-        assertThrows(DatabaseNotExistException.class, () -> {
+        assertThatThrownBy(() -> {
             glueCatalog.listViews("nonExistingDatabase");
-        });
+        }).isInstanceOf(DatabaseNotExistException.class);
     }
 
     //-------------------------------------------------------------------------
@@ -412,8 +432,8 @@ public class GlueCatalogTest {
         ObjectPath normalizedPath = glueCatalog.normalize(originalPath);
         
         // Assert
-        assertEquals("testDb", normalizedPath.getDatabaseName());
-        assertEquals(FunctionIdentifier.normalizeName("TestFunction"), normalizedPath.getObjectName());
+        assertThat(normalizedPath.getDatabaseName()).isEqualTo("testDb");
+        assertThat(FunctionIdentifier.normalizeName("TestFunction")).isEqualTo(normalizedPath.getObjectName());
     }
     
     /**
@@ -442,11 +462,11 @@ public class GlueCatalogTest {
         glueCatalog.createFunction(functionPath, function, false);
         
         // Check if function exists
-        assertTrue(glueCatalog.functionExists(functionPath));
+        assertThat(glueCatalog.functionExists(functionPath)).isTrue();
         
         // List functions
         List<String> functions = glueCatalog.listFunctions(databaseName);
-        assertTrue(functions.contains(functionName.toLowerCase()));
+        assertThat(functions).contains(functionName.toLowerCase());
     }
 
     /**
@@ -472,9 +492,9 @@ public class GlueCatalogTest {
         glueCatalog.createFunction(functionPath, function, false);
         
         // Test createFunction with ignoreIfExists=true
-        assertDoesNotThrow(() -> {
+        assertThatCode(() -> {
             glueCatalog.createFunction(functionPath, function, true);
-        });
+        }).doesNotThrowAnyException();
     }
 
     /**
@@ -510,7 +530,7 @@ public class GlueCatalogTest {
         
         // Assert
         CatalogFunction retrievedFunction = glueCatalog.getFunction(functionPath);
-        assertEquals(newFunction.getClassName(), retrievedFunction.getClassName());
+        assertThat(retrievedFunction.getClassName()).isEqualTo(newFunction.getClassName());
     }
 
     /**
@@ -541,7 +561,7 @@ public class GlueCatalogTest {
         } catch (FunctionNotExistException e) {
             // We expect this exception to be thrown but it should be handled internally
             // when ignoreIfNotExists=true
-            fail("FunctionNotExistException should not be thrown when ignoreIfNotExists=true");
+            assertThat(e).isInstanceOf(FunctionNotExistException.class);
         }
     }
 
@@ -571,7 +591,7 @@ public class GlueCatalogTest {
         glueCatalog.dropFunction(functionPath, false);
         
         // Check function no longer exists
-        assertFalse(glueCatalog.functionExists(functionPath));
+        assertThat(glueCatalog.functionExists(functionPath)).isFalse();
     }
 
     /**
@@ -586,12 +606,12 @@ public class GlueCatalogTest {
         glueCatalog.createDatabase(databaseName, catalogDatabase, false);
         
         // Test dropFunction with ignoreIfNotExists=true
-        assertDoesNotThrow(() -> {
+        assertThatCode(() -> {
             glueCatalog.dropFunction(
                     new ObjectPath(databaseName, "nonExistingFunction"), 
                     true
             );
-        });
+        }).doesNotThrowAnyException();
     }
 
     /**
@@ -606,7 +626,7 @@ public class GlueCatalogTest {
         
         // Act & Assert
         // Function in non-existing database
-        assertFalse(glueCatalog.functionExists(new ObjectPath("nonExistingDb", "testFunction")));
+        assertThat(glueCatalog.functionExists(new ObjectPath("nonExistingDb", "testFunction"))).isFalse();
     }
 
     //-------------------------------------------------------------------------
@@ -619,16 +639,16 @@ public class GlueCatalogTest {
     @Test
     public void testNullParameterHandling() {
         // Act & Assert
-        assertThrows(NullPointerException.class, () -> {
+        assertThatThrownBy(() -> {
             glueCatalog.createTable(null, null, false);
-        });
+        }).isInstanceOf(NullPointerException.class);
         
-        assertThrows(NullPointerException.class, () -> {
+        assertThatThrownBy(() -> {
             glueCatalog.createTable(new ObjectPath("db", "table"), null, false);
-        });
+        }).isInstanceOf(NullPointerException.class);
         
-        assertThrows(NullPointerException.class, () -> {
+        assertThatThrownBy(() -> {
             glueCatalog.normalize(null);
-        });
+        }).isInstanceOf(NullPointerException.class);
     }
 }
