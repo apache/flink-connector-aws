@@ -1,1 +1,1 @@
-com.amazonaws.services.msf.GlueCatalogFactory
+org.apache.apache.flink.table.catalog.glue.GlueCatalogFactory

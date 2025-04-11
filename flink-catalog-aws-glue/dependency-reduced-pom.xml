@@ -35,7 +35,7 @@
         </executions>
         <configuration>
           <excludes>
-            <exclude>com.amazonaws.services.msf.StreamingJob</exclude>
+            <exclude>org.apache.apache.flink.table.catalog.glue.StreamingJob</exclude>
           </excludes>
         </configuration>
       </plugin>
@@ -70,7 +70,7 @@
               <transformers>
                 <transformer />
                 <transformer>
-                  <mainClass>com.amazonaws.services.msf.StreamingJob</mainClass>
+                  <mainClass>org.apache.apache.flink.table.catalog.glue.StreamingJob</mainClass>
                 </transformer>
               </transformers>
             </configuration>

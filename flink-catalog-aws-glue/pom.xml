@@ -4,7 +4,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.amazonaws</groupId>
+    <groupId>org.apache.flink</groupId>
     <artifactId>flink-catalog-aws-glue</artifactId>
     <version>1.0</version>
     <packaging>jar</packaging>
@@ -149,7 +149,7 @@
                 <version>0.8.12</version>
                 <configuration>
                     <excludes>
-                        <exclude>com.amazonaws.services.msf.StreamingJob</exclude>
+                        <exclude>org.apache.apache.flink.table.catalog.glue.StreamingJob</exclude>
                     </excludes>
                 </configuration>
                 <executions>
@@ -202,7 +202,7 @@
                                         implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                                 <transformer
                                         implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>com.amazonaws.services.msf.StreamingJob</mainClass>
+                                    <mainClass>org.apache.apache.flink.table.catalog.glue.StreamingJob</mainClass>
                                 </transformer>
                             </transformers>
                         </configuration>
