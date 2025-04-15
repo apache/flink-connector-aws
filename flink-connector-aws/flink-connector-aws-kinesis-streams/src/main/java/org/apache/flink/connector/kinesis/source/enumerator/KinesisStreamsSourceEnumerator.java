@@ -137,16 +137,26 @@ public class KinesisStreamsSourceEnumerator
         }
     }
 
-    private void handleFinishedSplits(int subtask, SplitsFinishedEvent splitsFinishedEvent) {
+    private void handleFinishedSplits(int subtaskId, SplitsFinishedEvent splitsFinishedEvent) {
         splitTracker.markAsFinished(splitsFinishedEvent.getFinishedSplitIds());
-        splitAssignment
-                .get(subtask)
-                .removeIf(
-                        split ->
-                                splitsFinishedEvent
-                                        .getFinishedSplitIds()
-                                        .contains(split.splitId()));
+        Set<KinesisShardSplit> splitsAssignment = splitAssignment.get(subtaskId);
+        // during recovery, splitAssignment may return null since there might be no split assigned
+        // to the subtask, but there might be SplitsFinishedEvent from that subtask.
+        // We will not do child shard assignment if that is the case since that might lead to child
+        // shards trying to get assigned before there being any readers.
+        if (splitsAssignment == null) {
+            LOG.info(
+                    "handleFinishedSplits called for subtask: {} which doesn't have any "
+                            + "assigned splits right now. This might happen due to job restarts. "
+                            + "Child shard discovery might be delayed until we have enough readers."
+                            + "Finished split ids: {}",
+                    subtaskId,
+                    splitsFinishedEvent.getFinishedSplitIds());
+            return;
+        }
 
+        splitsAssignment.removeIf(
+                split -> splitsFinishedEvent.getFinishedSplitIds().contains(split.splitId()));
         assignSplits();
     }
 

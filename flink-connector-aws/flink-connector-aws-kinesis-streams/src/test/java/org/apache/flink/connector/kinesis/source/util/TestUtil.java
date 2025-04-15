@@ -35,7 +35,9 @@ import software.amazon.awssdk.services.kinesis.model.Shard;
 
 import java.math.BigInteger;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.IntStream;
@@ -137,6 +139,17 @@ public class TestUtil {
                 Collections.emptySet(),
                 STARTING_HASH_KEY_TEST_VALUE,
                 ENDING_HASH_KEY_TEST_VALUE);
+    }
+
+    public static KinesisShardSplit getFinishedTestSplit(String shardId) {
+        return new KinesisShardSplit(
+                STREAM_ARN,
+                shardId,
+                StartingPosition.fromStart(),
+                new HashSet<>(Arrays.asList(generateShardId(2), generateShardId(5))),
+                STARTING_HASH_KEY_TEST_VALUE,
+                ENDING_HASH_KEY_TEST_VALUE,
+                true);
     }
 
     public static KinesisShardSplit getTestSplit(

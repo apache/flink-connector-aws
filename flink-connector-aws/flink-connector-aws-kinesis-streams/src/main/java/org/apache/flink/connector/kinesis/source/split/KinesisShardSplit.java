@@ -44,6 +44,7 @@ public final class KinesisShardSplit implements SourceSplit {
     private final Set<String> parentShardIds;
     private final String startingHashKey;
     private final String endingHashKey;
+    private final boolean finished;
 
     public KinesisShardSplit(
             String streamArn,
@@ -52,6 +53,24 @@ public final class KinesisShardSplit implements SourceSplit {
             Set<String> parentShardIds,
             String startingHashKey,
             String endingHashKey) {
+        this(
+                streamArn,
+                shardId,
+                startingPosition,
+                parentShardIds,
+                startingHashKey,
+                endingHashKey,
+                false);
+    }
+
+    public KinesisShardSplit(
+            String streamArn,
+            String shardId,
+            StartingPosition startingPosition,
+            Set<String> parentShardIds,
+            String startingHashKey,
+            String endingHashKey,
+            boolean finished) {
         checkNotNull(streamArn, "streamArn cannot be null");
         checkNotNull(shardId, "shardId cannot be null");
         checkNotNull(startingPosition, "startingPosition cannot be null");
@@ -65,6 +84,11 @@ public final class KinesisShardSplit implements SourceSplit {
         this.parentShardIds = new HashSet<>(parentShardIds);
         this.startingHashKey = startingHashKey;
         this.endingHashKey = endingHashKey;
+        this.finished = finished;
+    }
+
+    public boolean isFinished() {
+        return finished;
     }
 
     @Override
@@ -116,6 +140,8 @@ public final class KinesisShardSplit implements SourceSplit {
                 + ", endingHashKey='"
                 + endingHashKey
                 + '\''
+                + ", finished="
+                + finished
                 + '}';
     }
 
@@ -133,7 +159,8 @@ public final class KinesisShardSplit implements SourceSplit {
                 && Objects.equals(startingPosition, that.startingPosition)
                 && Objects.equals(parentShardIds, that.parentShardIds)
                 && Objects.equals(startingHashKey, that.startingHashKey)
-                && Objects.equals(endingHashKey, that.endingHashKey);
+                && Objects.equals(endingHashKey, that.endingHashKey)
+                && Objects.equals(finished, that.finished);
     }
 
     @Override
@@ -144,6 +171,7 @@ public final class KinesisShardSplit implements SourceSplit {
                 startingPosition,
                 parentShardIds,
                 startingHashKey,
-                endingHashKey);
+                endingHashKey,
+                finished);
     }
 }
