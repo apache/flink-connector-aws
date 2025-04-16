@@ -19,6 +19,7 @@ package org.apache.flink.connector.kinesis.sink;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.PublicEvolving;
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.connector.base.sink.AsyncSinkBase;
 import org.apache.flink.connector.base.sink.writer.BufferedRequestState;
 import org.apache.flink.connector.base.sink.writer.ElementConverter;
@@ -72,6 +73,8 @@ public class KinesisStreamsSink<InputT> extends AsyncSinkBase<InputT, PutRecords
     private final String streamArn;
     private final Properties kinesisClientProperties;
 
+    @VisibleForTesting private KinesisClientProvider kinesisClientProvider;
+
     KinesisStreamsSink(
             ElementConverter<InputT, PutRecordsRequestEntry> elementConverter,
             Integer maxBatchSize,
@@ -124,6 +127,19 @@ public class KinesisStreamsSink<InputT> extends AsyncSinkBase<InputT, PutRecords
         return new KinesisStreamsSinkBuilder<>();
     }
 
+    /**
+     * Set a custom KinesisAsyncClient provider for testing purposes. This method is only intended
+     * to be used in tests.
+     *
+     * @param kinesisClientProvider The provider that supplies the KinesisAsyncClient
+     */
+    @VisibleForTesting
+    void setKinesisClientProvider(KinesisClientProvider kinesisClientProvider) {
+        this.kinesisClientProvider =
+                Preconditions.checkNotNull(
+                        kinesisClientProvider, "The kinesisClientProvider must not be null.");
+    }
+
     @Internal
     @Override
     public StatefulSinkWriter<InputT, BufferedRequestState<PutRecordsRequestEntry>> createWriter(
@@ -141,7 +157,8 @@ public class KinesisStreamsSink<InputT> extends AsyncSinkBase<InputT, PutRecords
                 streamName,
                 streamArn,
                 kinesisClientProperties,
-                Collections.emptyList());
+                Collections.emptyList(),
+                kinesisClientProvider);
     }
 
     @Internal
@@ -170,6 +187,7 @@ public class KinesisStreamsSink<InputT> extends AsyncSinkBase<InputT, PutRecords
                 streamName,
                 streamArn,
                 kinesisClientProperties,
-                recoveredState);
+                recoveredState,
+                kinesisClientProvider);
     }
 }
