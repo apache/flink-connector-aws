@@ -30,6 +30,7 @@ import static org.apache.flink.connector.aws.config.AWSConfigConstants.externalI
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.profileName;
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.profilePath;
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.roleArn;
+import static org.apache.flink.connector.aws.config.AWSConfigConstants.roleCredentialsProvider;
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.roleSessionName;
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.roleStsEndpoint;
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.secretKey;
@@ -129,7 +130,7 @@ public class AWSConfigOptions {
                                     + " type is set to WEB_IDENTITY_TOKEN.");
 
     public static final ConfigOption<String> AWS_ROLE_CREDENTIALS_PROVIDER_OPTION =
-            ConfigOptions.key(webIdentityTokenFile(AWS_CREDENTIALS_PROVIDER))
+            ConfigOptions.key(roleCredentialsProvider(AWS_CREDENTIALS_PROVIDER))
                     .stringType()
                     .noDefaultValue()
                     .withDescription(
