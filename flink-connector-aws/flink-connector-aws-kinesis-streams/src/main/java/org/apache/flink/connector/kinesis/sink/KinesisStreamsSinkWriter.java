@@ -18,6 +18,7 @@
 package org.apache.flink.connector.kinesis.sink;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.connector.aws.util.AWSClientUtil;
 import org.apache.flink.connector.aws.util.AWSGeneralUtil;
@@ -32,6 +33,7 @@ import org.apache.flink.connector.base.sink.writer.strategy.CongestionControlRat
 import org.apache.flink.connector.base.sink.writer.strategy.RateLimitingStrategy;
 import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.groups.SinkWriterMetricGroup;
+import org.apache.flink.util.Preconditions;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,10 +45,13 @@ import software.amazon.awssdk.services.kinesis.model.PutRecordsResponse;
 import software.amazon.awssdk.services.kinesis.model.PutRecordsResultEntry;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 
@@ -96,11 +101,8 @@ class KinesisStreamsSinkWriter<InputT> extends AsyncSinkWriter<InputT, PutRecord
     /* The sink writer metric group */
     private final SinkWriterMetricGroup metrics;
 
-    /* The asynchronous http client for the asynchronous Kinesis client */
-    private final SdkAsyncHttpClient httpClient;
-
-    /* The asynchronous Kinesis client - construction is by kinesisClientProperties */
-    private final KinesisAsyncClient kinesisClient;
+    /* The client provider */
+    private KinesisClientProvider kinesisClientProvider;
 
     /* Flag to whether fatally fail any time we encounter an exception when persisting records */
     private final boolean failOnError;
@@ -148,6 +150,36 @@ class KinesisStreamsSinkWriter<InputT> extends AsyncSinkWriter<InputT, PutRecord
             String streamArn,
             Properties kinesisClientProperties,
             Collection<BufferedRequestState<PutRecordsRequestEntry>> states) {
+        this(
+                elementConverter,
+                context,
+                maxBatchSize,
+                maxInFlightRequests,
+                maxBufferedRequests,
+                maxBatchSizeInBytes,
+                maxTimeInBufferMS,
+                maxRecordSizeInBytes,
+                failOnError,
+                streamName,
+                streamArn,
+                states,
+                createDefaultClientProvider(kinesisClientProperties));
+    }
+
+    KinesisStreamsSinkWriter(
+            ElementConverter<InputT, PutRecordsRequestEntry> elementConverter,
+            Sink.InitContext context,
+            int maxBatchSize,
+            int maxInFlightRequests,
+            int maxBufferedRequests,
+            long maxBatchSizeInBytes,
+            long maxTimeInBufferMS,
+            long maxRecordSizeInBytes,
+            boolean failOnError,
+            String streamName,
+            String streamArn,
+            Collection<BufferedRequestState<PutRecordsRequestEntry>> states,
+            KinesisClientProvider kinesisClientProvider) {
         super(
                 elementConverter,
                 context,
@@ -167,11 +199,48 @@ class KinesisStreamsSinkWriter<InputT> extends AsyncSinkWriter<InputT, PutRecord
         this.streamArn = streamArn;
         this.metrics = context.metricGroup();
         this.numRecordsOutErrorsCounter = metrics.getNumRecordsOutErrorsCounter();
-        this.httpClient = AWSGeneralUtil.createAsyncHttpClient(kinesisClientProperties);
-        this.kinesisClient = buildClient(kinesisClientProperties, this.httpClient);
+        setKinesisClientProvider(kinesisClientProvider);
     }
 
-    private KinesisAsyncClient buildClient(
+    /**
+     * Create a default KinesisClientProvider to manage the Kinesis client and HTTP client.
+     *
+     * @param kinesisClientProperties Properties for configuring the Kinesis client
+     * @return A KinesisClientProvider implementation
+     */
+    private static KinesisClientProvider createDefaultClientProvider(Properties kinesisClientProperties) {
+        return new KinesisClientProvider() {
+            private final SdkAsyncHttpClient httpClient =
+                AWSGeneralUtil.createAsyncHttpClient(kinesisClientProperties);
+            private final KinesisAsyncClient kinesisClient =
+                buildClient(kinesisClientProperties, httpClient);
+
+            @Override
+            public KinesisAsyncClient get() {
+                return kinesisClient;
+            }
+
+            @Override
+            public void close() {
+                AWSGeneralUtil.closeResources(httpClient, kinesisClient);
+            }
+        };
+    }
+
+    /**
+     * Set a custom KinesisAsyncClient provider for testing purposes. This method is only intended
+     * to be used in tests.
+     *
+     * @param kinesisClientProvider The provider that supplies the KinesisAsyncClient
+     */
+    @VisibleForTesting
+    void setKinesisClientProvider(KinesisClientProvider kinesisClientProvider) {
+        this.kinesisClientProvider =
+                Preconditions.checkNotNull(
+                        kinesisClientProvider, "The kinesisClientProvider must not be null.");
+    }
+
+    private static KinesisAsyncClient buildClient(
             Properties kinesisClientProperties, SdkAsyncHttpClient httpClient) {
         AWSGeneralUtil.validateAwsCredentials(kinesisClientProperties);
 
@@ -208,6 +277,7 @@ class KinesisStreamsSinkWriter<InputT> extends AsyncSinkWriter<InputT, PutRecord
                         .streamARN(streamArn)
                         .build();
 
+        KinesisAsyncClient kinesisClient = kinesisClientProvider.get();
         CompletableFuture<PutRecordsResponse> future = kinesisClient.putRecords(batchRequest);
 
         future.whenComplete(
@@ -232,7 +302,7 @@ class KinesisStreamsSinkWriter<InputT> extends AsyncSinkWriter<InputT, PutRecord
             List<PutRecordsRequestEntry> requestEntries,
             ResultHandler<PutRecordsRequestEntry> resultHandler) {
         LOG.warn(
-                "KDS Sink failed to write and will retry {} entries to KDS",
+                "Kinesis Data Stream Sink failed to write and will retry {} entries to KDS",
                 requestEntries.size(),
                 err);
         numRecordsOutErrorsCounter.inc(requestEntries.size());
@@ -244,34 +314,117 @@ class KinesisStreamsSinkWriter<InputT> extends AsyncSinkWriter<InputT, PutRecord
 
     @Override
     public void close() {
-        AWSGeneralUtil.closeResources(httpClient, kinesisClient);
+        try {
+            kinesisClientProvider.close();
+        } catch (IOException e) {
+            throw new KinesisStreamsException("Failed to close the kinesisClientProvider", e);
+        }
     }
 
     private void handlePartiallyFailedRequest(
             PutRecordsResponse response,
             List<PutRecordsRequestEntry> requestEntries,
             ResultHandler<PutRecordsRequestEntry> resultHandler) {
-        LOG.warn(
-                "KDS Sink failed to write and will retry {} entries to KDS",
-                response.failedRecordCount());
-        numRecordsOutErrorsCounter.inc(response.failedRecordCount());
+        int failedRecordCount = response.failedRecordCount();
+        LOG.warn("Kinesis Data Stream Sink failed to write and will retry {} entries to KDS", failedRecordCount);
+        numRecordsOutErrorsCounter.inc(failedRecordCount);
 
         if (failOnError) {
             resultHandler.completeExceptionally(
                     new KinesisStreamsException.KinesisStreamsFailFastException());
             return;
         }
-        List<PutRecordsRequestEntry> failedRequestEntries =
-                new ArrayList<>(response.failedRecordCount());
+
+        List<PutRecordsRequestEntry> failedRequestEntries = new ArrayList<>(failedRecordCount);
         List<PutRecordsResultEntry> records = response.records();
 
+        // Collect error information and build the list of failed entries
+        Map<String, ErrorSummary> errorSummaries =
+                collectErrorSummaries(records, requestEntries, failedRequestEntries);
+
+        // Log aggregated error information
+        logErrorSummaries(errorSummaries);
+
+        // Return the failed entries for retry
+        resultHandler.retryForEntries(failedRequestEntries);
+    }
+
+    /**
+     * Collect error summaries from failed records and build a list of failed request entries.
+     *
+     * @param records The result entries from the Kinesis response
+     * @param requestEntries The original request entries
+     * @param failedRequestEntries List to populate with failed entries (modified as a side effect)
+     * @return A map of error codes to their summaries
+     */
+    private Map<String, ErrorSummary> collectErrorSummaries(
+            List<PutRecordsResultEntry> records,
+            List<PutRecordsRequestEntry> requestEntries,
+            List<PutRecordsRequestEntry> failedRequestEntries) {
+
+        // We capture error info while minimizing logging overhead in the data path,
+        // which is critical for maintaining throughput performance
+        Map<String, ErrorSummary> errorSummaries = new HashMap<>();
+
         for (int i = 0; i < records.size(); i++) {
-            if (records.get(i).errorCode() != null) {
+            PutRecordsResultEntry resultEntry = records.get(i);
+            String errorCode = resultEntry.errorCode();
+
+            if (errorCode != null) {
+                // Track the frequency of each error code to identify patterns
+                ErrorSummary summary =
+                        errorSummaries.computeIfAbsent(
+                                errorCode, code -> new ErrorSummary(resultEntry.errorMessage()));
+                summary.incrementCount();
+
                 failedRequestEntries.add(requestEntries.get(i));
             }
         }
 
-        resultHandler.retryForEntries(failedRequestEntries);
+        return errorSummaries;
+    }
+
+    /**
+     * Log aggregated error information at WARN level.
+     *
+     * @param errorSummaries Map of error codes to their summaries
+     */
+    private void logErrorSummaries(Map<String, ErrorSummary> errorSummaries) {
+        // We log aggregated error information at WARN level to ensure visibility in production
+        // while avoiding the performance impact of logging each individual failure
+        if (!errorSummaries.isEmpty()) {
+            // Using a single WARN log with aggregated information provides operational
+            // visibility into errors without flooding logs in high-throughput scenarios
+            LOG.warn("Kinesis Data Stream Sink failed to write, Errors summary: " + errorSummaries);
+        }
+    }
+
+    /** Helper class to store error summary information. */
+    static class ErrorSummary {
+        private final String exampleMessage;
+        private int count;
+
+        ErrorSummary(String exampleMessage) {
+            this.exampleMessage = exampleMessage;
+            this.count = 0;
+        }
+
+        void incrementCount() {
+            count++;
+        }
+
+        int getCount() {
+            return count;
+        }
+
+        String getExampleMessage() {
+            return exampleMessage;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("[%d records, example: %s]", count, exampleMessage);
+        }
     }
 
     private boolean isRetryable(
