@@ -18,24 +18,48 @@
 
 package org.apache.flink.table.catalog.glue;
 
+import org.apache.flink.table.api.Schema;
+import org.apache.flink.table.catalog.AbstractCatalog;
+import org.apache.flink.table.catalog.CatalogBaseTable;
+import org.apache.flink.table.catalog.CatalogDatabase;
+import org.apache.flink.table.catalog.CatalogFunction;
+import org.apache.flink.table.catalog.CatalogPartition;
+import org.apache.flink.table.catalog.CatalogPartitionSpec;
+import org.apache.flink.table.catalog.CatalogTable;
+import org.apache.flink.table.catalog.CatalogView;
+import org.apache.flink.table.catalog.ObjectPath;
+import org.apache.flink.table.catalog.ResolvedCatalogBaseTable;
+import org.apache.flink.table.catalog.exceptions.CatalogException;
+import org.apache.flink.table.catalog.exceptions.DatabaseAlreadyExistException;
+import org.apache.flink.table.catalog.exceptions.DatabaseNotEmptyException;
+import org.apache.flink.table.catalog.exceptions.DatabaseNotExistException;
+import org.apache.flink.table.catalog.exceptions.FunctionAlreadyExistException;
+import org.apache.flink.table.catalog.exceptions.FunctionNotExistException;
+import org.apache.flink.table.catalog.exceptions.PartitionAlreadyExistsException;
+import org.apache.flink.table.catalog.exceptions.PartitionNotExistException;
+import org.apache.flink.table.catalog.exceptions.PartitionSpecInvalidException;
+import org.apache.flink.table.catalog.exceptions.TableAlreadyExistException;
+import org.apache.flink.table.catalog.exceptions.TableNotExistException;
+import org.apache.flink.table.catalog.exceptions.TableNotPartitionedException;
+import org.apache.flink.table.catalog.exceptions.TablePartitionedException;
 import org.apache.flink.table.catalog.glue.operations.GlueDatabaseOperations;
 import org.apache.flink.table.catalog.glue.operations.GlueFunctionsOperations;
 import org.apache.flink.table.catalog.glue.operations.GlueTableOperations;
 import org.apache.flink.table.catalog.glue.util.GlueCatalogConstants;
 import org.apache.flink.table.catalog.glue.util.GlueTableUtils;
 import org.apache.flink.table.catalog.glue.util.GlueTypeConverter;
-import org.apache.flink.table.api.Schema;
-import org.apache.flink.table.catalog.*;
-import org.apache.flink.table.catalog.exceptions.*;
 import org.apache.flink.table.catalog.stats.CatalogColumnStatistics;
 import org.apache.flink.table.catalog.stats.CatalogTableStatistics;
 import org.apache.flink.table.expressions.Expression;
 import org.apache.flink.table.functions.FunctionIdentifier;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.glue.GlueClient;
-import software.amazon.awssdk.services.glue.model.*;
+import software.amazon.awssdk.services.glue.model.StorageDescriptor;
+import software.amazon.awssdk.services.glue.model.Table;
+import software.amazon.awssdk.services.glue.model.TableInput;
 
 import java.util.HashMap;
 import java.util.List;
@@ -98,8 +122,10 @@ public class GlueCatalog extends AbstractCatalog {
     public GlueCatalog(String name, String defaultDatabase, String region) {
         super(name, defaultDatabase);
 
+        // Create a synchronized client builder to avoid concurrent modification exceptions
         this.glueClient = GlueClient.builder()
                 .region(Region.of(region))
+                .credentialsProvider(software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider.create())
                 .build();
         this.glueTypeConverter = new GlueTypeConverter();
         this.glueTableUtils = new GlueTableUtils(glueTypeConverter);
@@ -267,74 +293,74 @@ public class GlueCatalog extends AbstractCatalog {
         try {
             // Parse schema from Glue table structure
             Schema schemaInfo = glueTableUtils.getSchemaFromGlueTable(glueTable);
-            
+
             // Extract partition keys
-            List<String> partitionKeys = glueTable.partitionKeys() != null 
+            List<String> partitionKeys = glueTable.partitionKeys() != null
                 ? glueTable.partitionKeys().stream()
                     .map(software.amazon.awssdk.services.glue.model.Column::name)
                     .collect(Collectors.toList())
                 : List.of();
-                
+
             // Collect all properties
             Map<String, String> properties = new HashMap<>();
-            
+
             // Add table parameters
             if (glueTable.parameters() != null) {
                 properties.putAll(glueTable.parameters());
             }
-            
+
             // Add owner if present
             if (glueTable.owner() != null) {
                 properties.put(GlueCatalogConstants.TABLE_OWNER, glueTable.owner());
             }
-            
+
             // Add storage parameters if present
             if (glueTable.storageDescriptor() != null) {
                 if (glueTable.storageDescriptor().hasParameters()) {
                     properties.putAll(glueTable.storageDescriptor().parameters());
                 }
-                
+
                 // Add input/output formats if present
                 if (glueTable.storageDescriptor().inputFormat() != null) {
                     properties.put(
                             GlueCatalogConstants.TABLE_INPUT_FORMAT,
                             glueTable.storageDescriptor().inputFormat());
                 }
-                
+
                 if (glueTable.storageDescriptor().outputFormat() != null) {
                     properties.put(
                             GlueCatalogConstants.TABLE_OUTPUT_FORMAT,
                             glueTable.storageDescriptor().outputFormat());
                 }
             }
-            
+
             // Check table type and create appropriate catalog object
             String tableType = glueTable.tableType();
             if (tableType == null) {
                 LOG.warn("Table type is null for table {}, defaulting to TABLE", glueTable.name());
                 tableType = CatalogBaseTable.TableKind.TABLE.name();
             }
-            
+
             if (tableType.equalsIgnoreCase(CatalogBaseTable.TableKind.TABLE.name())) {
                 return CatalogTable.of(
-                        schemaInfo, 
-                        glueTable.description(), 
-                        partitionKeys, 
+                        schemaInfo,
+                        glueTable.description(),
+                        partitionKeys,
                         properties);
             } else if (tableType.equalsIgnoreCase(CatalogBaseTable.TableKind.VIEW.name())) {
                 String originalQuery = glueTable.viewOriginalText();
                 String expandedQuery = glueTable.viewExpandedText();
-                
+
                 if (originalQuery == null) {
                     throw new CatalogException(
                             String.format("View '%s' is missing its original query text", glueTable.name()));
                 }
-                
+
                 // If expanded query is null, use original query
                 if (expandedQuery == null) {
                     expandedQuery = originalQuery;
                 }
-                
+
                 return CatalogView.of(
                         schemaInfo,
                         glueTable.description(),
@@ -347,7 +373,7 @@ public class GlueCatalog extends AbstractCatalog {
             }
         } catch (Exception e) {
             throw new CatalogException(
-                    String.format("Failed to convert Glue table '%s' to Flink table: %s", 
+                    String.format("Failed to convert Glue table '%s' to Flink table: %s",
                             glueTable.name(), e.getMessage()), e);
         }
     }
@@ -404,9 +430,9 @@ public class GlueCatalog extends AbstractCatalog {
      * @throws CatalogException           if an error occurs while creating the table
      */
     @Override
-    public void createTable(ObjectPath objectPath, CatalogBaseTable catalogBaseTable, boolean ifNotExists) 
+    public void createTable(ObjectPath objectPath, CatalogBaseTable catalogBaseTable, boolean ifNotExists)
             throws TableAlreadyExistException, DatabaseNotExistException, CatalogException {
-        
+
         String databaseName = objectPath.getDatabaseName();
         String tableName = objectPath.getObjectName();
         LOG.debug("Creating table {}.{} of kind {}", databaseName, tableName, catalogBaseTable.getTableKind());
@@ -427,7 +453,7 @@ public class GlueCatalog extends AbstractCatalog {
 
         // Get common properties
         Map<String, String> tableProperties = new HashMap<>(catalogBaseTable.getOptions());
-        
+
         try {
             // Process based on table type
             if (catalogBaseTable.getTableKind() == CatalogBaseTable.TableKind.TABLE) {
@@ -443,7 +469,7 @@ public class GlueCatalog extends AbstractCatalog {
                     String.format("Failed to create table %s.%s: %s", databaseName, tableName, e.getMessage()), e);
         }
     }
-    
+
     /**
      * Creates a regular table in the Glue catalog.
      *
@@ -453,13 +479,13 @@ public class GlueCatalog extends AbstractCatalog {
      * @throws CatalogException if an error occurs during table creation
      */
     private void createRegularTable(
-            ObjectPath objectPath, 
-            CatalogTable catalogTable, 
+            ObjectPath objectPath,
+            CatalogTable catalogTable,
             Map<String, String> tableProperties) throws CatalogException {
-        
+
         String databaseName = objectPath.getDatabaseName();
         String tableName = objectPath.getObjectName();
-        
+
         // Extract table location
         String tableLocation = glueTableUtils.extractTableLocation(tableProperties, objectPath);
 
@@ -479,7 +505,7 @@ public class GlueCatalog extends AbstractCatalog {
         // Create the table
         glueTableOperations.createTable(databaseName, tableInput);
     }
-    
+
     /**
      * Creates a view in the Glue catalog.
      *
@@ -489,20 +515,20 @@ public class GlueCatalog extends AbstractCatalog {
      * @throws CatalogException if an error occurs during view creation
      */
     private void createView(
-            ObjectPath objectPath, 
-            CatalogView catalogView, 
+            ObjectPath objectPath,
+            CatalogView catalogView,
             Map<String, String> tableProperties) throws CatalogException {
-            
+
         String databaseName = objectPath.getDatabaseName();
         String tableName = objectPath.getObjectName();
-        
+
         // Resolve the schema and map Flink columns to Glue columns
         ResolvedCatalogBaseTable<?> resolvedView = (ResolvedCatalogBaseTable<?>) catalogView;
         List<software.amazon.awssdk.services.glue.model.Column> glueColumns = resolvedView.getResolvedSchema().getColumns()
                 .stream()
                 .map(glueTableUtils::mapFlinkColumnToGlueColumn)
                 .collect(Collectors.toList());
-                
+
         // Build a minimal storage descriptor for views
         StorageDescriptor storageDescriptor = StorageDescriptor.builder()
                 .columns(glueColumns)
@@ -534,7 +560,7 @@ public class GlueCatalog extends AbstractCatalog {
     @Override
     public List<String> listViews(String databaseName) throws DatabaseNotExistException, CatalogException {
         LOG.debug("Listing views in database: {}", databaseName);
-        
+
         // Check if the database exists before listing views
         if (!databaseExists(databaseName)) {
             throw new DatabaseNotExistException(getName(), databaseName);
@@ -544,7 +570,7 @@ public class GlueCatalog extends AbstractCatalog {
             // Get all tables in the database
             List<Table> allTables = glueClient.getTables(builder -> builder.databaseName(databaseName))
                     .tableList();
-            
+
             // Filter tables to only include those that are of type VIEW
             List<String> viewNames = allTables.stream()
                     .filter(table -> {
@@ -553,7 +579,7 @@ public class GlueCatalog extends AbstractCatalog {
                     })
                     .map(Table::name)
                     .collect(Collectors.toList());
-                    
+
             LOG.debug("Found {} views in database {}", viewNames.size(), databaseName);
             return viewNames;
         } catch (Exception e) {
@@ -633,7 +659,7 @@ public class GlueCatalog extends AbstractCatalog {
     public ObjectPath normalize(ObjectPath path) {
 
         return new ObjectPath(
-                path.getDatabaseName(), 
+                path.getDatabaseName(),
                 FunctionIdentifier.normalizeName(path.getObjectName()));
     }
 
@@ -648,11 +674,11 @@ public class GlueCatalog extends AbstractCatalog {
     @Override
     public List<String> listFunctions(String databaseName) throws DatabaseNotExistException, CatalogException {
         LOG.debug("Listing functions in database: {}", databaseName);
-        
+
         if (!databaseExists(databaseName)) {
             throw new DatabaseNotExistException(getName(), databaseName);
         }
-        
+
         try {
             List<String> functions = glueFunctionsOperations.listGlueFunctions(databaseName);
             LOG.debug("Found {} functions in database {}", functions.size(), databaseName);
@@ -704,11 +730,11 @@ public class GlueCatalog extends AbstractCatalog {
 
         // Normalize the path for case-insensitive handling
         ObjectPath normalizedPath = normalize(functionPath);
-        
+
         if (!databaseExists(normalizedPath.getDatabaseName())) {
             return false;
         }
-        
+
         try {
             return glueFunctionsOperations.glueFunctionExists(normalizedPath);
         } catch (Exception e) {
@@ -774,7 +800,7 @@ public class GlueCatalog extends AbstractCatalog {
         try {
             // Check if function exists without throwing an exception first
             boolean functionExists = functionExists(normalizedPath);
-            
+
             if (!functionExists) {
                 if (ignoreIfNotExists) {
                     LOG.debug("Function {} does not exist and ignoreIfNotExists is set to true. Returning.", normalizedPath.getFullName());
@@ -783,7 +809,7 @@ public class GlueCatalog extends AbstractCatalog {
                     throw new FunctionNotExistException(getName(), normalizedPath);
                 }
             }
-            
+
             // Check for type compatibility of function
             CatalogFunction existingFunction = getFunction(normalizedPath);
             if (existingFunction.getClass() != newFunction.getClass()) {
@@ -840,7 +866,7 @@ public class GlueCatalog extends AbstractCatalog {
                     throw new FunctionNotExistException(getName(), normalizedPath);
                 }
             }
-            
+
             // Function exists, proceed with dropping it
             glueFunctionsOperations.dropGlueFunction(normalizedPath);
         } catch (FunctionNotExistException e) {

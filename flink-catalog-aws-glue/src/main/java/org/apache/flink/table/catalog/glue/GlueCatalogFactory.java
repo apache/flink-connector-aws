@@ -28,6 +28,9 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * Factory for creating GlueCatalog instances.
+ */
 public class GlueCatalogFactory implements CatalogFactory {
 
     // Define configuration options that users must provide
@@ -65,7 +68,7 @@ public class GlueCatalogFactory implements CatalogFactory {
     @Override
     public Catalog createCatalog(Context context) {
         // Read the configuration options
-        Map<String,String> config = context.getOptions();
+        Map<String, String> config = context.getOptions();
         String name = context.getName();
         String region = config.get("region");
         String defaultDatabase = config.get("default-database");

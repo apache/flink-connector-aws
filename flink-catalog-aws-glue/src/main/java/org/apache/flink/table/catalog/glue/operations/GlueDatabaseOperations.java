@@ -20,11 +20,24 @@ package org.apache.flink.table.catalog.glue.operations;
 
 import org.apache.flink.table.catalog.CatalogDatabase;
 import org.apache.flink.table.catalog.CatalogDatabaseImpl;
-import org.apache.flink.table.catalog.exceptions.*;
+import org.apache.flink.table.catalog.exceptions.CatalogException;
+import org.apache.flink.table.catalog.exceptions.DatabaseAlreadyExistException;
+import org.apache.flink.table.catalog.exceptions.DatabaseNotExistException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.glue.GlueClient;
-import software.amazon.awssdk.services.glue.model.*;
+import software.amazon.awssdk.services.glue.model.AlreadyExistsException;
+import software.amazon.awssdk.services.glue.model.Database;
+import software.amazon.awssdk.services.glue.model.DeleteDatabaseRequest;
+import software.amazon.awssdk.services.glue.model.EntityNotFoundException;
+import software.amazon.awssdk.services.glue.model.GetDatabaseRequest;
+import software.amazon.awssdk.services.glue.model.GetDatabaseResponse;
+import software.amazon.awssdk.services.glue.model.GetDatabasesRequest;
+import software.amazon.awssdk.services.glue.model.GlueException;
+import software.amazon.awssdk.services.glue.model.InvalidInputException;
+import software.amazon.awssdk.services.glue.model.OperationTimeoutException;
+import software.amazon.awssdk.services.glue.model.ResourceNumberLimitExceededException;
 
 import java.util.HashMap;
 import java.util.List;
@@ -150,12 +163,12 @@ public class GlueDatabaseOperations extends AbstractGlueOperations {
      * @throws DatabaseAlreadyExistException If the database already exists.
      * @throws CatalogException If there is any error creating the database.
      */
-    public void createDatabase(String databaseName, CatalogDatabase catalogDatabase) 
+    public void createDatabase(String databaseName, CatalogDatabase catalogDatabase)
             throws DatabaseAlreadyExistException, CatalogException {
         try {
             glueClient.createDatabase(builder -> builder.databaseInput(db ->
                     db.name(databaseName)
-                            .description(String.valueOf(catalogDatabase.getDescription()))
+                            .description(catalogDatabase.getDescription().orElse(null))
                             .parameters(catalogDatabase.getProperties())));
         } catch (AlreadyExistsException e) {
             throw new DatabaseAlreadyExistException(catalogName, databaseName);

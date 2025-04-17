@@ -18,22 +18,41 @@
 
 package org.apache.flink.table.catalog.glue;
 
+import org.apache.flink.table.api.Schema;
+import org.apache.flink.table.catalog.CatalogBaseTable;
+import org.apache.flink.table.catalog.CatalogDatabase;
+import org.apache.flink.table.catalog.CatalogDatabaseImpl;
+import org.apache.flink.table.catalog.CatalogFunction;
+import org.apache.flink.table.catalog.CatalogFunctionImpl;
+import org.apache.flink.table.catalog.CatalogTable;
+import org.apache.flink.table.catalog.CatalogView;
+import org.apache.flink.table.catalog.FunctionLanguage;
+import org.apache.flink.table.catalog.ObjectPath;
+import org.apache.flink.table.catalog.ResolvedCatalogTable;
+import org.apache.flink.table.catalog.ResolvedCatalogView;
+import org.apache.flink.table.catalog.ResolvedSchema;
+import org.apache.flink.table.catalog.exceptions.CatalogException;
+import org.apache.flink.table.catalog.exceptions.DatabaseAlreadyExistException;
+import org.apache.flink.table.catalog.exceptions.DatabaseNotEmptyException;
+import org.apache.flink.table.catalog.exceptions.DatabaseNotExistException;
+import org.apache.flink.table.catalog.exceptions.FunctionAlreadyExistException;
+import org.apache.flink.table.catalog.exceptions.FunctionNotExistException;
+import org.apache.flink.table.catalog.exceptions.TableAlreadyExistException;
+import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.flink.table.catalog.glue.operations.FakeGlueClient;
 import org.apache.flink.table.catalog.glue.operations.GlueDatabaseOperations;
 import org.apache.flink.table.catalog.glue.operations.GlueTableOperations;
-import org.apache.flink.table.api.Schema;
-import org.apache.flink.table.catalog.*;
-import org.apache.flink.table.catalog.exceptions.*;
 import org.apache.flink.table.functions.FunctionIdentifier;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.util.Collections;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-import java.util.Collections;
-import java.util.List;
 
 /**
  * Comprehensive tests for GlueCatalog.
@@ -64,13 +83,13 @@ public class GlueCatalogTest {
     //-------------------------------------------------------------------------
 
     /**
-     * Test constructor without explicit GlueClient
+     * Test constructor without explicit GlueClient.
      */
     @Test
     public void testConstructorWithoutGlueClient() {
         // Act
         GlueCatalog catalog = new GlueCatalog("glueCatalog", "default", "us-east-1");
-        
+
         // Assert
         assertThat(catalog).isNotNull();
         // Verify it can be opened and closed without exceptions
@@ -81,7 +100,7 @@ public class GlueCatalogTest {
     }
 
     /**
-     * Test open and close methods
+     * Test open and close methods.
      */
     @Test
     public void testOpenAndClose() {
@@ -97,7 +116,7 @@ public class GlueCatalogTest {
     //-------------------------------------------------------------------------
 
     /**
-     * Test creating a database
+     * Test creating a database.
      */
     @Test
     public void testCreateDatabase() throws CatalogException, DatabaseAlreadyExistException {
@@ -113,7 +132,7 @@ public class GlueCatalogTest {
     }
 
     /**
-     * Test database exists
+     * Test database exists.
      */
     @Test
     public void testDatabaseExists() throws DatabaseAlreadyExistException {
@@ -128,28 +147,28 @@ public class GlueCatalogTest {
     }
 
     /**
-     * Test create database with ifNotExists=true
+     * Test create database with ifNotExists=true.
      */
     @Test
     public void testCreateDatabaseIfNotExists() throws DatabaseAlreadyExistException {
         // Arrange
         String databaseName = "testDatabase";
         CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test");
-        
+
         // Create database first time
         glueCatalog.createDatabase(databaseName, catalogDatabase, false);
-        
+
         // Act - Create again with ifNotExists=true should not throw exception
         assertThatCode(() -> {
             glueCatalog.createDatabase(databaseName, catalogDatabase, true);
         }).doesNotThrowAnyException();
-        
+
         // Assert
         assertThat(glueCatalog.databaseExists(databaseName)).isTrue();
     }
 
     /**
-     * Test drop database
+     * Test drop database.
      */
     @Test
     public void testDropDatabase() throws DatabaseAlreadyExistException, DatabaseNotExistException, DatabaseNotEmptyException {
@@ -157,16 +176,16 @@ public class GlueCatalogTest {
         String databaseName = "testDatabase";
         CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test");
         glueCatalog.createDatabase(databaseName, catalogDatabase, false);
-        
+
         // Act
         glueCatalog.dropDatabase(databaseName, false, false);
-        
+
         // Assert
         assertThat(glueCatalog.databaseExists(databaseName)).isFalse();
     }
 
     /**
-     * Test drop database with ignoreIfNotExists=true
+     * Test drop database with ignoreIfNotExists=true.
      */
     @Test
     public void testDropDatabaseIgnoreIfNotExists() {
@@ -177,7 +196,7 @@ public class GlueCatalogTest {
     }
 
     /**
-     * Test drop database with ignoreIfNotExists=false
+     * Test drop database with ignoreIfNotExists=false.
      */
     @Test
     public void testDropDatabaseFailIfNotExists() {
@@ -192,7 +211,7 @@ public class GlueCatalogTest {
     //-------------------------------------------------------------------------
 
     /**
-     * Test create table
+     * Test create table.
      */
     @Test
     public void testCreateTable() throws CatalogException, DatabaseAlreadyExistException, TableAlreadyExistException, DatabaseNotExistException {
@@ -218,27 +237,27 @@ public class GlueCatalogTest {
     }
 
     /**
-     * Test create table with ifNotExists=true
+     * Test create table with ifNotExists=true.
      */
     @Test
-    public void testCreateTableIfNotExists() throws DatabaseAlreadyExistException, 
+    public void testCreateTableIfNotExists() throws DatabaseAlreadyExistException,
             TableAlreadyExistException, DatabaseNotExistException {
         // Arrange
         String databaseName = "testDatabase";
         String tableName = "testTable";
-        
+
         CatalogTable catalogTable = CatalogTable.newBuilder()
                 .schema(Schema.newBuilder().build())
                 .build();
         ResolvedSchema resolvedSchema = ResolvedSchema.of();
         ResolvedCatalogTable resolvedCatalogTable = new ResolvedCatalogTable(catalogTable, resolvedSchema);
-        
+
         CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test");
         glueCatalog.createDatabase(databaseName, catalogDatabase, false);
-        
+
         // Create table first time
         glueCatalog.createTable(new ObjectPath(databaseName, tableName), resolvedCatalogTable, false);
-        
+
         // Act - Create again with ifNotExists=true
         assertThatCode(() -> {
             glueCatalog.createTable(new ObjectPath(databaseName, tableName), resolvedCatalogTable, true);
@@ -246,7 +265,7 @@ public class GlueCatalogTest {
     }
 
     /**
-     * Test get table
+     * Test get table.
      */
     @Test
     public void testGetTable() throws CatalogException, DatabaseAlreadyExistException, TableAlreadyExistException, DatabaseNotExistException, TableNotExistException {
@@ -274,7 +293,7 @@ public class GlueCatalogTest {
     }
 
     /**
-     * Test table not exist
+     * Test table not exist check.
      */
     @Test
     public void testTableNotExist() {
@@ -289,7 +308,7 @@ public class GlueCatalogTest {
     }
 
     /**
-     * Test drop table
+     * Test drop table operation.
      */
     @Test
     public void testDropTable() throws CatalogException, DatabaseAlreadyExistException, TableAlreadyExistException, DatabaseNotExistException, TableNotExistException {
@@ -317,7 +336,7 @@ public class GlueCatalogTest {
     }
 
     /**
-     * Test drop table with ifExists=true for non-existing table
+     * Test drop table with ifExists=true for non-existing table.
      */
     @Test
     public void testDropTableWithIfExists() throws DatabaseAlreadyExistException {
@@ -325,7 +344,7 @@ public class GlueCatalogTest {
         String databaseName = "testDatabase";
         CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test");
         glueCatalog.createDatabase(databaseName, catalogDatabase, false);
-        
+
         // Act & Assert - should not throw exception with ifExists=true
         assertThatCode(() -> {
             glueCatalog.dropTable(new ObjectPath(databaseName, "nonExistingTable"), true);
@@ -333,20 +352,20 @@ public class GlueCatalogTest {
     }
 
     /**
-     * Test error handling when creating table in non-existing database
+     * Test create table with non-existing database.
      */
     @Test
     public void testCreateTableNonExistingDatabase() {
         // Arrange
         String databaseName = "nonExistingDatabase";
         String tableName = "testTable";
-        
+
         CatalogTable catalogTable = CatalogTable.newBuilder()
                 .schema(Schema.newBuilder().build())
                 .build();
         ResolvedSchema resolvedSchema = ResolvedSchema.of();
         ResolvedCatalogTable resolvedCatalogTable = new ResolvedCatalogTable(catalogTable, resolvedSchema);
-        
+
         // Act & Assert
         assertThatThrownBy(() -> {
             glueCatalog.createTable(new ObjectPath(databaseName, tableName), resolvedCatalogTable, false);
@@ -354,7 +373,7 @@ public class GlueCatalogTest {
     }
 
     /**
-     * Test list tables when database does not exist
+     * Test listing tables for non-existing database.
      */
     @Test
     public void testListTablesNonExistingDatabase() {
@@ -369,7 +388,7 @@ public class GlueCatalogTest {
     //-------------------------------------------------------------------------
 
     /**
-     * Test creating and listing views
+     * Test creating and listing views.
      */
     @Test
     public void testCreatingAndListingViews() throws DatabaseAlreadyExistException, DatabaseNotExistException,
@@ -377,11 +396,11 @@ public class GlueCatalogTest {
         // Arrange
         String databaseName = "testDatabase";
         String viewName = "testView";
-        
+
         // Create database
         CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test");
         glueCatalog.createDatabase(databaseName, catalogDatabase, false);
-        
+
         // Create view
         CatalogView view = CatalogView.of(
                 Schema.newBuilder().build(),
@@ -392,21 +411,21 @@ public class GlueCatalogTest {
         );
         ResolvedSchema resolvedSchema = ResolvedSchema.of();
         ResolvedCatalogView resolvedView = new ResolvedCatalogView(view, resolvedSchema);
-        
+
         // Act
         glueCatalog.createTable(new ObjectPath(databaseName, viewName), resolvedView, false);
-        
+
         // Assert view can be retrieved
         CatalogBaseTable retrievedView = glueCatalog.getTable(new ObjectPath(databaseName, viewName));
         assertThat(retrievedView.getTableKind()).isEqualTo(CatalogBaseTable.TableKind.VIEW);
-        
+
         // Assert view is listed in listViews
         List<String> views = glueCatalog.listViews(databaseName);
         assertThat(views).contains(viewName);
     }
 
     /**
-     * Test listViews when database does not exist
+     * Test listing views for non-existing database.
      */
     @Test
     public void testListViewsNonExistingDatabase() {
@@ -421,23 +440,23 @@ public class GlueCatalogTest {
     //-------------------------------------------------------------------------
 
     /**
-     * Test normalize method for object paths
+     * Test name normalization.
      */
     @Test
     public void testNormalize() {
         // Arrange
         ObjectPath originalPath = new ObjectPath("testDb", "TestFunction");
-        
+
         // Act
         ObjectPath normalizedPath = glueCatalog.normalize(originalPath);
-        
+
         // Assert
         assertThat(normalizedPath.getDatabaseName()).isEqualTo("testDb");
         assertThat(FunctionIdentifier.normalizeName("TestFunction")).isEqualTo(normalizedPath.getObjectName());
     }
-    
+
     /**
-     * Test function operations separately to avoid dependency issues
+     * Test function operations.
      */
     @Test
     public void testFunctionOperations() throws DatabaseAlreadyExistException, DatabaseNotExistException,
@@ -446,51 +465,51 @@ public class GlueCatalogTest {
         String databaseName = "testDatabase";
         String functionName = "testFunction";
         ObjectPath functionPath = new ObjectPath(databaseName, functionName);
-        
+
         // Create database
         CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test");
         glueCatalog.createDatabase(databaseName, catalogDatabase, false);
-        
+
         // Create function
         CatalogFunction function = new CatalogFunctionImpl(
                 "org.apache.flink.table.functions.BuiltInFunctions",
                 FunctionLanguage.JAVA
         );
-        
+
         // Act & Assert
         // Create function
         glueCatalog.createFunction(functionPath, function, false);
-        
+
         // Check if function exists
         assertThat(glueCatalog.functionExists(functionPath)).isTrue();
-        
+
         // List functions
         List<String> functions = glueCatalog.listFunctions(databaseName);
         assertThat(functions).contains(functionName.toLowerCase());
     }
 
     /**
-     * Test function operations with ignoreIfExists flag
+     * Test function operations with ignore flags.
      */
     @Test
-    public void testFunctionOperationsWithIgnoreFlags() throws DatabaseAlreadyExistException, 
+    public void testFunctionOperationsWithIgnoreFlags() throws DatabaseAlreadyExistException,
             DatabaseNotExistException, FunctionAlreadyExistException {
         // Arrange
         String databaseName = "testDatabase";
         String functionName = "testFunction";
         ObjectPath functionPath = new ObjectPath(databaseName, functionName);
-        
+
         // Create database
         CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test");
         glueCatalog.createDatabase(databaseName, catalogDatabase, false);
-        
+
         // Create function
         CatalogFunction function = new CatalogFunctionImpl(
                 "org.apache.flink.table.functions.BuiltInFunctions",
                 FunctionLanguage.JAVA
         );
         glueCatalog.createFunction(functionPath, function, false);
-        
+
         // Test createFunction with ignoreIfExists=true
         assertThatCode(() -> {
             glueCatalog.createFunction(functionPath, function, true);
@@ -498,7 +517,7 @@ public class GlueCatalogTest {
     }
 
     /**
-     * Test alter function
+     * Test alter function.
      */
     @Test
     public void testAlterFunction() throws DatabaseAlreadyExistException, DatabaseNotExistException,
@@ -507,34 +526,34 @@ public class GlueCatalogTest {
         String databaseName = "testDatabase";
         String functionName = "testFunction";
         ObjectPath functionPath = new ObjectPath(databaseName, functionName);
-        
+
         // Create database
         CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test");
         glueCatalog.createDatabase(databaseName, catalogDatabase, false);
-        
+
         // Create function
         CatalogFunction function = new CatalogFunctionImpl(
                 "org.apache.flink.table.functions.BuiltInFunctions",
                 FunctionLanguage.JAVA
         );
         glueCatalog.createFunction(functionPath, function, false);
-        
+
         // Create a new function definition
         CatalogFunction newFunction = new CatalogFunctionImpl(
                 "org.apache.flink.table.functions.ScalarFunction",
                 FunctionLanguage.JAVA
         );
-        
+
         // Act
         glueCatalog.alterFunction(functionPath, newFunction, false);
-        
+
         // Assert
         CatalogFunction retrievedFunction = glueCatalog.getFunction(functionPath);
         assertThat(retrievedFunction.getClassName()).isEqualTo(newFunction.getClassName());
     }
 
     /**
-     * Test alter function with ignoreIfNotExists flag
+     * Test alter function with ignore if not exists flag.
      */
     @Test
     public void testAlterFunctionIgnoreIfNotExists() throws DatabaseAlreadyExistException, DatabaseNotExistException {
@@ -542,14 +561,14 @@ public class GlueCatalogTest {
         String databaseName = "testDatabase";
         CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test");
         glueCatalog.createDatabase(databaseName, catalogDatabase, false);
-        
+
         // Create a function definition
         CatalogFunction newFunction = new CatalogFunctionImpl(
                 "org.apache.flink.table.functions.ScalarFunction",
                 FunctionLanguage.JAVA
         );
-        
-        // Manually handle the exception since the implementation may not be properly 
+
+        // Manually handle the exception since the implementation may not be properly
         // checking ignoreIfNotExists flag internally
         try {
             glueCatalog.alterFunction(
@@ -566,7 +585,7 @@ public class GlueCatalogTest {
     }
 
     /**
-     * Test drop function
+     * Test drop function.
      */
     @Test
     public void testDropFunction() throws DatabaseAlreadyExistException, DatabaseNotExistException,
@@ -575,47 +594,47 @@ public class GlueCatalogTest {
         String databaseName = "testDatabase";
         String functionName = "testFunction";
         ObjectPath functionPath = new ObjectPath(databaseName, functionName);
-        
+
         // Create database
         CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test");
         glueCatalog.createDatabase(databaseName, catalogDatabase, false);
-        
+
         // Create function
         CatalogFunction function = new CatalogFunctionImpl(
                 "org.apache.flink.table.functions.BuiltInFunctions",
                 FunctionLanguage.JAVA
         );
         glueCatalog.createFunction(functionPath, function, false);
-        
+
         // Drop function
         glueCatalog.dropFunction(functionPath, false);
-        
+
         // Check function no longer exists
         assertThat(glueCatalog.functionExists(functionPath)).isFalse();
     }
 
     /**
-     * Test drop function with ignoreIfNotExists flag
+     * Test drop function with ignore flag.
      */
     @Test
-    public void testDropFunctionWithIgnoreFlag() throws DatabaseAlreadyExistException, 
+    public void testDropFunctionWithIgnoreFlag() throws DatabaseAlreadyExistException,
             DatabaseNotExistException {
         // Arrange
         String databaseName = "testDatabase";
         CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test");
         glueCatalog.createDatabase(databaseName, catalogDatabase, false);
-        
+
         // Test dropFunction with ignoreIfNotExists=true
         assertThatCode(() -> {
             glueCatalog.dropFunction(
-                    new ObjectPath(databaseName, "nonExistingFunction"), 
+                    new ObjectPath(databaseName, "nonExistingFunction"),
                     true
             );
         }).doesNotThrowAnyException();
     }
 
     /**
-     * Test function exists edge cases
+     * Test function exists edge cases.
      */
     @Test
     public void testFunctionExistsEdgeCases() throws DatabaseAlreadyExistException {
@@ -623,7 +642,7 @@ public class GlueCatalogTest {
         String databaseName = "testDatabase";
         CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test");
         glueCatalog.createDatabase(databaseName, catalogDatabase, false);
-        
+
         // Act & Assert
         // Function in non-existing database
         assertThat(glueCatalog.functionExists(new ObjectPath("nonExistingDb", "testFunction"))).isFalse();
@@ -634,7 +653,7 @@ public class GlueCatalogTest {
     //-------------------------------------------------------------------------
 
     /**
-     * Test error handling for null parameters
+     * Test null parameter handling.
      */
     @Test
     public void testNullParameterHandling() {
@@ -642,11 +661,11 @@ public class GlueCatalogTest {
         assertThatThrownBy(() -> {
             glueCatalog.createTable(null, null, false);
         }).isInstanceOf(NullPointerException.class);
-        
+
         assertThatThrownBy(() -> {
             glueCatalog.createTable(new ObjectPath("db", "table"), null, false);
         }).isInstanceOf(NullPointerException.class);
-        
+
         assertThatThrownBy(() -> {
             glueCatalog.normalize(null);
         }).isInstanceOf(NullPointerException.class);

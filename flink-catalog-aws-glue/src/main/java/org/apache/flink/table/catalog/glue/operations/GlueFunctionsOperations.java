@@ -18,8 +18,6 @@
 
 package org.apache.flink.table.catalog.glue.operations;
 
-import org.apache.flink.table.catalog.glue.util.GlueCatalogConstants;
-import org.apache.flink.table.catalog.glue.util.GlueFunctionsUtil;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.table.catalog.CatalogFunction;
 import org.apache.flink.table.catalog.CatalogFunctionImpl;
@@ -27,6 +25,8 @@ import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.catalog.exceptions.CatalogException;
 import org.apache.flink.table.catalog.exceptions.FunctionAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.FunctionNotExistException;
+import org.apache.flink.table.catalog.glue.util.GlueCatalogConstants;
+import org.apache.flink.table.catalog.glue.util.GlueFunctionsUtil;
 import org.apache.flink.table.resource.ResourceUri;
 
 import org.slf4j.Logger;

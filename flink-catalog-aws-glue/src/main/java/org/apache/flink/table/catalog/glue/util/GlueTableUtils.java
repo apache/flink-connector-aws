@@ -18,14 +18,15 @@
 
 package org.apache.flink.table.catalog.glue.util;
 
-import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.api.Schema;
+import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.types.DataType;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.glue.model.Column;
 import software.amazon.awssdk.services.glue.model.StorageDescriptor;
 import software.amazon.awssdk.services.glue.model.Table;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;

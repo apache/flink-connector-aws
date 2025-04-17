@@ -20,7 +20,13 @@ package org.apache.flink.table.catalog.glue.util;
 
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.DataType;
-import org.apache.flink.table.types.logical.*;
+import org.apache.flink.table.types.logical.ArrayType;
+import org.apache.flink.table.types.logical.DecimalType;
+import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.flink.table.types.logical.LogicalTypeRoot;
+import org.apache.flink.table.types.logical.MapType;
+import org.apache.flink.table.types.logical.RowType;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -98,7 +104,9 @@ public class GlueTypeConverter {
                 RowType rowType = (RowType) logicalType;
                 StringBuilder structBuilder = new StringBuilder("struct<");
                 for (int i = 0; i < rowType.getFieldCount(); i++) {
-                    if (i > 0) structBuilder.append(",");
+                    if (i > 0) {
+                        structBuilder.append(",");
+                    }
                     // Keep original field name for nested structs
                     structBuilder.append(rowType.getFieldNames().get(i))
                             .append(":")
@@ -151,16 +159,16 @@ public class GlueTypeConverter {
             int contentStart = trimmedGlueType.indexOf('<') + 1;
             int contentEnd = trimmedGlueType.lastIndexOf('>');
             String mapContent = trimmedGlueType.substring(contentStart, contentEnd);
-            
+
             // Split key and value types
             int commaPos = findMapTypeSeparator(mapContent);
             if (commaPos < 0) {
                 throw new IllegalArgumentException("Invalid map type format: " + glueType);
             }
-            
+
             String keyType = mapContent.substring(0, commaPos).trim();
             String valueType = mapContent.substring(commaPos + 1).trim();
-            
+
             return DataTypes.MAP(
                     toFlinkType(keyType),
                     toFlinkType(valueType)
@@ -174,7 +182,7 @@ public class GlueTypeConverter {
             int contentStart = trimmedGlueType.indexOf('<') + 1;
             int contentEnd = trimmedGlueType.lastIndexOf('>');
             String structContent = trimmedGlueType.substring(contentStart, contentEnd);
-            
+
             return parseStructType(structContent);
         }
 
@@ -220,9 +228,11 @@ public class GlueTypeConverter {
         int nestedLevel = 0;
         for (int i = 0; i < mapContent.length(); i++) {
             char c = mapContent.charAt(i);
-            if (c == '<') nestedLevel++;
-            else if (c == '>') nestedLevel--;
-            else if (c == ',' && nestedLevel == 0) {
+            if (c == '<') {
+                nestedLevel++;
+            } else if (c == '>') {
+                nestedLevel--;
+            } else if (c == ',' && nestedLevel == 0) {
                 return i;
             }
         }
@@ -250,14 +260,14 @@ public class GlueTypeConverter {
                 LOG.warn("Invalid struct field definition (no colon found): {}", field);
                 continue;
             }
-            
+
             // Extract field name and type, preserving the original case of the field name
             // This is crucial because Glue preserves case for struct fields
             String fieldName = field.substring(0, colonPos).trim();
             String fieldType = field.substring(colonPos + 1).trim();
-            
+
             LOG.debug("Parsed struct field - name: '{}', type: '{}'", fieldName, fieldType);
-            
+
             // Add field with its original case preserved from Glue
             flinkFields.add(DataTypes.FIELD(fieldName, toFlinkType(fieldType)));
         }
@@ -278,8 +288,11 @@ public class GlueTypeConverter {
 
         // Parse the struct fields while handling nested angle brackets.
         for (char c : structDefinition.toCharArray()) {
-            if (c == '<') nestedLevel++;
-            else if (c == '>') nestedLevel--;
+            if (c == '<') {
+                nestedLevel++;
+            } else if (c == '>') {
+                nestedLevel--;
+            }
 
             if (c == ',' && nestedLevel == 0) {
                 fields.add(currentField.toString().trim());

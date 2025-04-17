@@ -22,6 +22,10 @@ import org.apache.flink.annotation.Internal;
 
 import java.util.regex.Pattern;
 
+/**
+ * Constants used throughout the Glue catalog implementation.
+ * Includes string literals, patterns, and configuration keys.
+ */
 @Internal
 public class GlueCatalogConstants {
     public static final String COMMENT = "comment";
