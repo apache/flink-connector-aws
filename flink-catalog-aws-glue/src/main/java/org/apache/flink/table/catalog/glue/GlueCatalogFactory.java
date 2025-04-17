@@ -48,7 +48,7 @@ public class GlueCatalogFactory implements CatalogFactory {
 
     @Override
     public String factoryIdentifier() {
-        return "glue"; // This allows users to use `type = 'glue'` in SQL
+        return "glue";
     }
 
     @Override
@@ -78,7 +78,6 @@ public class GlueCatalogFactory implements CatalogFactory {
             throw new CatalogException("The 'region' property must be specified for the Glue catalog.");
         }
 
-        // Create and return the GlueCatalog instance
         return new GlueCatalog(name, defaultDatabase, region);
     }
 }

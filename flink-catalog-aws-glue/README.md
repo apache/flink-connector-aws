@@ -14,25 +14,14 @@ The Flink AWS Glue Catalog connector provides integration between Apache Flink a
 
 Before getting started, ensure you have the following:
 
-- **Apache Flink 1.20+** installed or running in a managed environment
 - **AWS account** with appropriate permissions for AWS Glue and other required services
 - **AWS credentials** properly configured
-- **Java 11** or later
-- **Maven 3.8+** for building the project
 
 ## Getting Started
 
 ### 1. Add Dependency
 
 Add the AWS Glue Catalog connector to your Flink project:
-
-```xml
-<dependency>
-    <groupId>org.apache.flink</groupId>
-    <artifactId>flink-connector-aws-glue-catalog</artifactId>
-    <version>${flink.version}</version>
-</dependency>
-```
 
 ### 2. Configure AWS Credentials
 
@@ -360,15 +349,6 @@ The connector handles mapping between Flink data types and AWS Glue data types a
 2. **Authentication errors**: Check AWS credentials and permissions.
 3. **Case sensitivity errors**: Ensure you're using the original column names as defined in your schema.
 4. **Type conversion errors**: Verify that data types are compatible between Flink and Glue.
-
-### Logging
-
-Enable detailed logging for troubleshooting:
-
-```java
-// Set to DEBUG level for more detailed logs
-LOG.setLevel(Level.DEBUG);
-```
 
 ## Additional Resources
 
