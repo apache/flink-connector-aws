@@ -120,7 +120,10 @@ public class GlueTableOperations extends AbstractGlueOperations {
                     .databaseName(databaseName)
                     .tableInput(tableInput)
                     .build();
-            glueClient.createTable(request);
+            var response = glueClient.createTable(request);
+            if(response == null || !response.sdkHttpResponse().isSuccessful()) {
+                throw new CatalogException("Error");
+            }
         } catch (AlreadyExistsException e) {
             throw new CatalogException("Table already exists: " + e.getMessage(), e);
         } catch (GlueException e) {
