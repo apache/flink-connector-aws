@@ -70,8 +70,8 @@ public class GlueCatalogFactory implements CatalogFactory {
         // Read the configuration options
         Map<String, String> config = context.getOptions();
         String name = context.getName();
-        String region = config.get("region");
-        String defaultDatabase = config.get("default-database");
+        String region = config.get(REGION.key());
+        String defaultDatabase = config.getOrDefault(DEFAULT_DATABASE.key(), DEFAULT_DATABASE.defaultValue());
 
         // Ensure required properties are present
         if (region == null || region.isEmpty()) {

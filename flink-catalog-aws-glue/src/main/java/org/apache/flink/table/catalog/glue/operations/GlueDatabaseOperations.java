@@ -148,8 +148,6 @@ public class GlueDatabaseOperations extends AbstractGlueOperations {
             return true;
         } catch (EntityNotFoundException e) {
             return false;
-        } catch (InvalidInputException | OperationTimeoutException | ResourceNumberLimitExceededException e) {
-            throw new CatalogException("Error checking database existence: " + databaseName, e);
         } catch (GlueException e) {
             throw new CatalogException("Error checking database existence: " + databaseName, e);
         }
@@ -172,8 +170,6 @@ public class GlueDatabaseOperations extends AbstractGlueOperations {
                             .parameters(catalogDatabase.getProperties())));
         } catch (AlreadyExistsException e) {
             throw new DatabaseAlreadyExistException(catalogName, databaseName);
-        } catch (InvalidInputException | ResourceNumberLimitExceededException | OperationTimeoutException e) {
-            throw new CatalogException("Error creating database: " + databaseName, e);
         } catch (GlueException e) {
             throw new CatalogException("Error creating database: " + databaseName, e);
         }
@@ -196,8 +192,6 @@ public class GlueDatabaseOperations extends AbstractGlueOperations {
             LOG.info("Successfully dropped database: {}", databaseName);
         } catch (EntityNotFoundException e) {
             throw new DatabaseNotExistException(catalogName, databaseName);
-        } catch (InvalidInputException | OperationTimeoutException e) {
-            throw new CatalogException("Error dropping database: " + databaseName, e);
         } catch (GlueException e) {
             throw new CatalogException("Error dropping database: " + databaseName, e);
         }
