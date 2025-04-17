@@ -67,7 +67,6 @@ public class GlueCatalogFactory implements CatalogFactory {
 
     @Override
     public Catalog createCatalog(Context context) {
-        // Read the configuration options
         Map<String, String> config = context.getOptions();
         String name = context.getName();
         String region = config.get(REGION.key());

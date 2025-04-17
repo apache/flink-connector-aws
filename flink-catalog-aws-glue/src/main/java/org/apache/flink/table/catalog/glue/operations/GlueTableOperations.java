@@ -29,15 +29,13 @@ import software.amazon.awssdk.services.glue.GlueClient;
 import software.amazon.awssdk.services.glue.model.AlreadyExistsException;
 import software.amazon.awssdk.services.glue.model.Column;
 import software.amazon.awssdk.services.glue.model.CreateTableRequest;
+import software.amazon.awssdk.services.glue.model.CreateTableResponse;
 import software.amazon.awssdk.services.glue.model.DeleteTableRequest;
 import software.amazon.awssdk.services.glue.model.EntityNotFoundException;
 import software.amazon.awssdk.services.glue.model.GetTableRequest;
 import software.amazon.awssdk.services.glue.model.GetTablesRequest;
 import software.amazon.awssdk.services.glue.model.GetTablesResponse;
 import software.amazon.awssdk.services.glue.model.GlueException;
-import software.amazon.awssdk.services.glue.model.InvalidInputException;
-import software.amazon.awssdk.services.glue.model.OperationTimeoutException;
-import software.amazon.awssdk.services.glue.model.ResourceNumberLimitExceededException;
 import software.amazon.awssdk.services.glue.model.StorageDescriptor;
 import software.amazon.awssdk.services.glue.model.Table;
 import software.amazon.awssdk.services.glue.model.TableInput;
@@ -120,9 +118,9 @@ public class GlueTableOperations extends AbstractGlueOperations {
                     .databaseName(databaseName)
                     .tableInput(tableInput)
                     .build();
-            var response = glueClient.createTable(request);
-            if(response == null || !response.sdkHttpResponse().isSuccessful()) {
-                throw new CatalogException("Error");
+            CreateTableResponse response = glueClient.createTable(request);
+            if (response == null || (response.sdkHttpResponse() != null && !response.sdkHttpResponse().isSuccessful())) {
+                throw new CatalogException("Error creating table: " + databaseName + "." + tableInput.name());
             }
         } catch (AlreadyExistsException e) {
             throw new CatalogException("Table already exists: " + e.getMessage(), e);
