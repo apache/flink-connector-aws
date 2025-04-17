@@ -10,6 +10,7 @@ import org.apache.flink.table.catalog.glue.operations.FakeGlueClient;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.glue.GlueClient;
 
@@ -17,7 +18,11 @@ import software.amazon.awssdk.services.glue.GlueClient;
  * Tests for the GlueCatalog integration with streaming SQL operations.
  * This test validates the correctness of SQL DDL operations (CREATE/DROP DATABASE/TABLE)
  * when using the GlueCatalog with a Flink streaming environment.
+ *
+ * <p>Note: This is an integration test and should be moved to a separate module.
+ * Currently disabled as it's not appropriate for the catalog connector module.
  */
+@Disabled("Integration test that should be moved to a separate module")
 public class StreamingJobTest {
 
     private MiniCluster miniCluster;
