@@ -19,9 +19,11 @@
 package org.apache.flink.connector.kinesis.source.reader;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitReader;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsChange;
+import org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions;
 import org.apache.flink.connector.kinesis.source.metrics.KinesisShardMetrics;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplitState;
@@ -38,12 +40,14 @@ import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 
 import static java.util.Collections.singleton;
 
@@ -60,8 +64,17 @@ public abstract class KinesisShardSplitReaderBase
     private final Set<String> pausedSplitIds = new HashSet<>();
     private final Map<String, KinesisShardMetrics> shardMetricGroupMap;
 
-    protected KinesisShardSplitReaderBase(Map<String, KinesisShardMetrics> shardMetricGroupMap) {
+    private final long emptyRecordsIntervalMillis;
+
+    private final Map<KinesisShardSplitState, Long> scheduledFetchTimes = new WeakHashMap<>();
+
+    protected KinesisShardSplitReaderBase(
+            Map<String, KinesisShardMetrics> shardMetricGroupMap, Configuration configuration) {
         this.shardMetricGroupMap = shardMetricGroupMap;
+        this.emptyRecordsIntervalMillis =
+                configuration
+                        .get(KinesisSourceConfigOptions.READER_EMPTY_RECORDS_FETCH_INTERVAL)
+                        .toMillis();
     }
 
     @Override
@@ -69,7 +82,12 @@ public abstract class KinesisShardSplitReaderBase
         KinesisShardSplitState splitState = assignedSplits.poll();
 
         // When there are no assigned splits, return quickly
-        if (splitState == null) {
+        if (skipWhenNoAssignedSplit(splitState)) {
+            return INCOMPLETE_SHARD_EMPTY_RECORDS;
+        }
+
+        if (skipUntilScheduledFetchTime(splitState)) {
+            assignedSplits.add(splitState);
             return INCOMPLETE_SHARD_EMPTY_RECORDS;
         }
 
@@ -82,6 +100,7 @@ public abstract class KinesisShardSplitReaderBase
         RecordBatch recordBatch;
         try {
             recordBatch = fetchRecords(splitState);
+            scheduleNextFetchTime(splitState, recordBatch);
         } catch (ResourceNotFoundException e) {
             LOG.warn(
                     "Failed to fetch records from shard {}: shard no longer exists. Marking split as complete",
@@ -123,6 +142,66 @@ public abstract class KinesisShardSplitReaderBase
                 recordBatch.getRecords().iterator(),
                 splitState.getSplitId(),
                 recordBatch.isCompleted());
+    }
+
+    private boolean skipWhenNoAssignedSplit(KinesisShardSplitState splitState) throws IOException {
+        if (splitState == null) {
+            try {
+                // Small sleep to prevent busy polling
+                Thread.sleep(1);
+                return true;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Sleep was interrupted while skipping no assigned split", e);
+            }
+        }
+
+        return false;
+    }
+
+    private boolean skipUntilScheduledFetchTime(KinesisShardSplitState splitState)
+            throws IOException {
+        if (scheduledFetchTimes.containsKey(splitState)
+                && scheduledFetchTimes.get(splitState) > System.currentTimeMillis()) {
+            try {
+                // Small sleep to prevent busy polling
+                Thread.sleep(1);
+                return true;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException(
+                        "Sleep was interrupted while skipping until scheduled fetch record time",
+                        e);
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Schedules next fetch time, to be called immediately on the result of a fetchRecords() call.
+     *
+     * <p>If recordBatch does not contain records, next fetchRecords() is scheduled. Before
+     * scheduled time, fetcher thread will skip fetching (and have small sleep) for the split.
+     *
+     * <p>If recordBatch is not empty, next fetchRecords() time is not scheduled resulting in next
+     * fetch on the split is performed at first opportunity.
+     *
+     * @param splitState splitState on which the fetchRecords() was called on
+     * @param recordBatch recordBatch returned by fetchRecords()
+     */
+    private void scheduleNextFetchTime(KinesisShardSplitState splitState, RecordBatch recordBatch) {
+        if (recordBatch == null || recordBatch.getRecords().isEmpty()) {
+            long scheduledGetRecordTimeMillis =
+                    System.currentTimeMillis() + emptyRecordsIntervalMillis;
+            this.scheduledFetchTimes.put(splitState, scheduledGetRecordTimeMillis);
+            if (LOG.isDebugEnabled()) {
+                LOG.debug(
+                        "Fetched zero records from split {}, scheduling next fetch to {}",
+                        splitState.getSplitId(),
+                        new Date(scheduledGetRecordTimeMillis).toInstant());
+            }
+        }
     }
 
     /**

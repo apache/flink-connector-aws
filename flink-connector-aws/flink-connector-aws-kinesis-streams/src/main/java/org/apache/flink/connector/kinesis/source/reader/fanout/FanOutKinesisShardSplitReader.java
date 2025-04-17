@@ -19,6 +19,7 @@
 package org.apache.flink.connector.kinesis.source.reader.fanout;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsChange;
 import org.apache.flink.connector.kinesis.source.metrics.KinesisShardMetrics;
 import org.apache.flink.connector.kinesis.source.proxy.AsyncStreamProxy;
@@ -31,6 +32,8 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+
+import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.EFO_CONSUMER_SUBSCRIPTION_TIMEOUT;
 
 /**
  * An implementation of the KinesisShardSplitReader that consumes from Kinesis using Enhanced
@@ -48,11 +51,11 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
             AsyncStreamProxy asyncStreamProxy,
             String consumerArn,
             Map<String, KinesisShardMetrics> shardMetricGroupMap,
-            Duration subscriptionTimeout) {
-        super(shardMetricGroupMap);
+            Configuration configuration) {
+        super(shardMetricGroupMap, configuration);
         this.asyncStreamProxy = asyncStreamProxy;
         this.consumerArn = consumerArn;
-        this.subscriptionTimeout = subscriptionTimeout;
+        this.subscriptionTimeout = configuration.get(EFO_CONSUMER_SUBSCRIPTION_TIMEOUT);
     }
 
     @Override
