@@ -40,6 +40,7 @@ import software.amazon.awssdk.services.glue.model.StorageDescriptor;
 import software.amazon.awssdk.services.glue.model.Table;
 import software.amazon.awssdk.services.glue.model.TableInput;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -93,13 +94,32 @@ public class GlueTableOperations extends AbstractGlueOperations {
      */
     public List<String> listTables(String databaseName) {
         try {
-            GetTablesRequest request = GetTablesRequest.builder()
-                    .databaseName(databaseName)
-                    .build();
-            GetTablesResponse response = glueClient.getTables(request);
-            return response.tableList().stream()
-                    .map(Table::name)
-                    .collect(Collectors.toList());
+            List<String> tableNames = new ArrayList<>();
+            String nextToken = null;
+
+            do {
+                GetTablesRequest.Builder requestBuilder = GetTablesRequest.builder()
+                        .databaseName(databaseName);
+
+                // Add the next token if we have one
+                if (nextToken != null) {
+                    requestBuilder.nextToken(nextToken);
+                }
+
+                GetTablesResponse response = glueClient.getTables(requestBuilder.build());
+
+                // Add all found tables to our list
+                tableNames.addAll(response.tableList().stream()
+                        .map(Table::name)
+                        .collect(Collectors.toList()));
+
+                // Update the next token
+                nextToken = response.nextToken();
+
+                // Continue until no more pages (nextToken is null)
+            } while (nextToken != null);
+
+            return tableNames;
         } catch (GlueException e) {
             throw new CatalogException("Error listing tables: " + e.getMessage(), e);
         }

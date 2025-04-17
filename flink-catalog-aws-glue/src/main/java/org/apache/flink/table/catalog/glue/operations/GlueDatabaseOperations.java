@@ -34,11 +34,12 @@ import software.amazon.awssdk.services.glue.model.EntityNotFoundException;
 import software.amazon.awssdk.services.glue.model.GetDatabaseRequest;
 import software.amazon.awssdk.services.glue.model.GetDatabaseResponse;
 import software.amazon.awssdk.services.glue.model.GetDatabasesRequest;
+import software.amazon.awssdk.services.glue.model.GetDatabasesResponse;
 import software.amazon.awssdk.services.glue.model.GlueException;
 import software.amazon.awssdk.services.glue.model.InvalidInputException;
 import software.amazon.awssdk.services.glue.model.OperationTimeoutException;
-import software.amazon.awssdk.services.glue.model.ResourceNumberLimitExceededException;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -73,17 +74,25 @@ public class GlueDatabaseOperations extends AbstractGlueOperations {
     public List<String> listDatabases() throws CatalogException {
         try {
             LOG.debug("Listing databases from Glue catalog");
-            return glueClient.getDatabases(GetDatabasesRequest.builder().build())
-                    .databaseList()
-                    .stream()
-                    .map(Database::name)
-                    .collect(Collectors.toList());
-        } catch (OperationTimeoutException e) {
-            LOG.error("Timeout while listing databases in Glue", e);
-            throw new CatalogException("Timeout while listing databases: " + e.getMessage(), e);
-        } catch (ResourceNumberLimitExceededException e) {
-            LOG.error("Resource limit exceeded while listing databases in Glue", e);
-            throw new CatalogException("Resource limit exceeded while listing databases: " + e.getMessage(), e);
+            List<String> databaseNames = new ArrayList<>();
+            String nextToken = null;
+            do {
+                GetDatabasesRequest.Builder requestBuilder = GetDatabasesRequest.builder();
+                // Add the next token if we have one
+                if (nextToken != null) {
+                    requestBuilder.nextToken(nextToken);
+                }
+                GetDatabasesResponse response = glueClient.getDatabases(requestBuilder.build());
+                // Add all found databases to our list
+                databaseNames.addAll(response.databaseList().stream()
+                        .map(Database::name)
+                        .collect(Collectors.toList()));
+                // Update the next token
+                nextToken = response.nextToken();
+                // Continue until no more pages (nextToken is null)
+            } while (nextToken != null);
+            LOG.debug("Found {} databases in Glue catalog", databaseNames.size());
+            return databaseNames;
         } catch (GlueException e) {
             LOG.error("Failed to list databases in Glue", e);
             throw new CatalogException("Failed to list databases: " + e.getMessage(), e);
