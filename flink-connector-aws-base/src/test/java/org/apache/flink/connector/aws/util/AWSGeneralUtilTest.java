@@ -26,6 +26,7 @@ import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.EnvironmentVariableCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.ProfileProviderCredentialsContext;
 import software.amazon.awssdk.auth.credentials.SystemPropertyCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.WebIdentityTokenFileCredentialsProvider;
 import software.amazon.awssdk.core.exception.SdkClientException;
@@ -34,11 +35,16 @@ import software.amazon.awssdk.http.SdkHttpConfigurationOption;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
 import software.amazon.awssdk.http.nio.netty.internal.NettyConfiguration;
+import software.amazon.awssdk.profiles.Profile;
+import software.amazon.awssdk.profiles.ProfileFile;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.sso.auth.SsoProfileCredentialsProviderFactory;
 import software.amazon.awssdk.services.sts.auth.StsAssumeRoleCredentialsProvider;
 import software.amazon.awssdk.utils.AttributeMap;
 import software.amazon.awssdk.utils.ImmutableMap;
+import software.amazon.awssdk.utils.StringInputStream;
 
+import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Paths;
 import java.time.Duration;
@@ -952,4 +958,41 @@ class AWSGeneralUtilTest {
 
         return builder;
     }
+
+  @Test
+  void testGetCredentialsProviderReturnsSsoProviderForSsoProfile() throws IOException {
+    String profileName = "my-sso-profile";
+    String ssoStartUrl = "https://my-dummy-sso-portal.awsapps.com/start";
+    String ssoRegion = "us-east-1";
+    String ssoAccountId = "123456789012";
+    String ssoRoleName = "MyTestRole";
+
+    String configFileContent =
+      "[profile " + profileName + "]\n"
+        + "sso_start_url = " + ssoStartUrl + "\n"
+        + "sso_region = " + ssoRegion + "\n"
+        + "sso_account_id = " + ssoAccountId + "\n"
+        + "sso_role_name = " + ssoRoleName + "\n"
+        + "region = " + ssoRegion + "\n";
+
+    ProfileFile profileFile = ProfileFile.builder()
+      .content(new StringInputStream(configFileContent))
+      .type(ProfileFile.Type.CONFIGURATION)
+      .build();
+
+    Profile profile = profileFile.profile(profileName).orElseThrow();
+
+    ProfileProviderCredentialsContext context = ProfileProviderCredentialsContext.builder()
+      .profile(profile)
+      .profileFile(profileFile)
+      .build();
+
+    SsoProfileCredentialsProviderFactory factory = new SsoProfileCredentialsProviderFactory();
+
+    assertThatThrownBy(() -> factory.create(context))
+      .isInstanceOf(java.io.UncheckedIOException.class)
+      .hasRootCauseInstanceOf(java.nio.file.NoSuchFileException.class)
+      .hasMessageContaining(".aws/sso/cache/");
+  }
+
 }
