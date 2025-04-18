@@ -28,6 +28,7 @@ import software.amazon.awssdk.services.glue.model.Column;
 import software.amazon.awssdk.services.glue.model.StorageDescriptor;
 import software.amazon.awssdk.services.glue.model.Table;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -109,7 +110,7 @@ public class GlueTableUtils {
         return Column.builder()
                 .name(flinkColumn.getName().toLowerCase())
                 .type(glueType)
-                .parameters(Map.of("originalName", flinkColumn.getName()))
+                .parameters(Collections.singletonMap("originalName", flinkColumn.getName()))
                 .build();
     }
 

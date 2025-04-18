@@ -102,7 +102,7 @@ CREATE TABLE customer_table (
   region STRING
 ) WITH (
   'connector' = 'kinesis',
-  'stream' = 'customer-stream',
+  'stream.arn' = 'customer-stream',
   'aws.region' = 'us-east-1',
   'format' = 'json'
 );
@@ -157,9 +157,10 @@ CREATE TABLE orders (
   PRIMARY KEY (order_id) NOT ENFORCED
 ) COMMENT 'Table storing order information'
 WITH (
-  'connector' = 's3',
-  'path' = 's3://bucket/path/to/orders',
-  'format' = 'parquet'
+  'connector' = 'kinesis',
+  'stream.arn' = 'customer-stream',
+  'aws.region' = 'us-east-1',
+  'format' = 'json'
 );
 
 -- Create table if not exists

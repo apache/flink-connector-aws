@@ -43,6 +43,7 @@ import software.amazon.awssdk.services.glue.model.TableInput;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -57,6 +58,12 @@ public class GlueTableOperations extends AbstractGlueOperations {
     private static final Logger LOG = LoggerFactory.getLogger(GlueTableOperations.class);
 
     /**
+     * Pattern for validating table names.
+     * AWS Glue lowercases all names, so we enforce lowercase to avoid identification issues.
+     */
+    private static final Pattern VALID_NAME_PATTERN = Pattern.compile("^[a-z0-9_]+$");
+
+    /**
      * Constructor for GlueTableOperations.
      * Initializes the Glue client and catalog name.
      *
@@ -65,6 +72,25 @@ public class GlueTableOperations extends AbstractGlueOperations {
      */
     public GlueTableOperations(GlueClient glueClient, String catalogName) {
         super(glueClient, catalogName);
+    }
+
+    /**
+     * Validates that a table name contains only lowercase letters, numbers, and underscores.
+     * AWS Glue lowercases all identifiers, which can lead to name conflicts if uppercase is used.
+     *
+     * @param tableName The table name to validate
+     * @throws CatalogException if the table name contains uppercase letters or invalid characters
+     */
+    private void validateTableName(String tableName) {
+        if (tableName == null || tableName.isEmpty()) {
+            throw new CatalogException("Table name cannot be null or empty");
+        }
+
+        if (!VALID_NAME_PATTERN.matcher(tableName).matches()) {
+            throw new CatalogException(
+                    "Table name can only contain lowercase letters, numbers, and underscores. " +
+                    "AWS Glue lowercases all identifiers, which can cause identification issues with mixed-case names.");
+        }
     }
 
     /**
@@ -134,6 +160,9 @@ public class GlueTableOperations extends AbstractGlueOperations {
      */
     public void createTable(String databaseName, TableInput tableInput) {
         try {
+            // Validate table name before attempting to create
+            validateTableName(tableInput.name());
+
             CreateTableRequest request = CreateTableRequest.builder()
                     .databaseName(databaseName)
                     .tableInput(tableInput)
@@ -164,7 +193,11 @@ public class GlueTableOperations extends AbstractGlueOperations {
                     .databaseName(databaseName)
                     .name(tableName)
                     .build();
-            return glueClient.getTable(request).table();
+            Table table = glueClient.getTable(request).table();
+            if (table == null) {
+                throw new TableNotExistException(catalogName, new ObjectPath(databaseName, tableName));
+            }
+            return table;
         } catch (EntityNotFoundException e) {
             throw new TableNotExistException(catalogName, new ObjectPath(databaseName, tableName));
         } catch (GlueException e) {
@@ -186,6 +219,9 @@ public class GlueTableOperations extends AbstractGlueOperations {
             String tableName, List<Column> glueColumns,
             CatalogTable catalogTable,
             StorageDescriptor storageDescriptor, Map<String, String> properties) {
+
+        // Validate table name before building TableInput
+        validateTableName(tableName);
 
         return TableInput.builder()
                 .name(tableName)

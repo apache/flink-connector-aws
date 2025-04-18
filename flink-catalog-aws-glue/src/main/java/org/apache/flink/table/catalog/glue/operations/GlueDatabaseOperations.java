@@ -43,6 +43,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -55,6 +56,12 @@ public class GlueDatabaseOperations extends AbstractGlueOperations {
     private static final Logger LOG = LoggerFactory.getLogger(GlueDatabaseOperations.class);
 
     /**
+     * Pattern for validating database names.
+     * AWS Glue lowercases all names, so we enforce lowercase to avoid identification issues.
+     */
+    private static final Pattern VALID_NAME_PATTERN = Pattern.compile("^[a-z0-9_]+$");
+
+    /**
      * Constructor for GlueDatabaseOperations.
      * Initializes the Glue client and catalog name.
      *
@@ -63,6 +70,25 @@ public class GlueDatabaseOperations extends AbstractGlueOperations {
      */
     public GlueDatabaseOperations(GlueClient glueClient, String catalogName) {
         super(glueClient, catalogName);
+    }
+
+    /**
+     * Validates that a database name contains only lowercase letters, numbers, and underscores.
+     * AWS Glue lowercases all identifiers, which can lead to name conflicts if uppercase is used.
+     *
+     * @param databaseName The database name to validate
+     * @throws CatalogException if the database name contains uppercase letters or invalid characters
+     */
+    private void validateDatabaseName(String databaseName) {
+        if (databaseName == null || databaseName.isEmpty()) {
+            throw new CatalogException("Database name cannot be null or empty");
+        }
+
+        if (!VALID_NAME_PATTERN.matcher(databaseName).matches()) {
+            throw new CatalogException(
+                    "Database name can only contain lowercase letters, numbers, and underscores. " +
+                    "AWS Glue lowercases all identifiers, which can cause identification issues with mixed-case names.");
+        }
     }
 
     /**
@@ -116,6 +142,9 @@ public class GlueDatabaseOperations extends AbstractGlueOperations {
             );
 
             Database glueDatabase = response.database();
+            if (glueDatabase == null) {
+                throw new DatabaseNotExistException(catalogName, databaseName);
+            }
             return convertGlueDatabase(glueDatabase);
         } catch (EntityNotFoundException e) {
             throw new DatabaseNotExistException(catalogName, databaseName);
@@ -173,6 +202,9 @@ public class GlueDatabaseOperations extends AbstractGlueOperations {
     public void createDatabase(String databaseName, CatalogDatabase catalogDatabase)
             throws DatabaseAlreadyExistException, CatalogException {
         try {
+            // Validate database name before creating
+            validateDatabaseName(databaseName);
+
             glueClient.createDatabase(builder -> builder.databaseInput(db ->
                     db.name(databaseName)
                             .description(catalogDatabase.getDescription().orElse(null))

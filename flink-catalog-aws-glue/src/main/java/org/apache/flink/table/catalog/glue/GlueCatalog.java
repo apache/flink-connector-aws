@@ -61,6 +61,7 @@ import software.amazon.awssdk.services.glue.model.StorageDescriptor;
 import software.amazon.awssdk.services.glue.model.Table;
 import software.amazon.awssdk.services.glue.model.TableInput;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -299,7 +300,7 @@ public class GlueCatalog extends AbstractCatalog {
                 ? glueTable.partitionKeys().stream()
                     .map(software.amazon.awssdk.services.glue.model.Column::name)
                     .collect(Collectors.toList())
-                : List.of();
+                : Collections.emptyList();
 
             // Collect all properties
             Map<String, String> properties = new HashMap<>();
@@ -607,19 +608,19 @@ public class GlueCatalog extends AbstractCatalog {
     @Override
     public List<CatalogPartitionSpec> listPartitions(ObjectPath objectPath) throws TableNotExistException, TableNotPartitionedException, CatalogException {
         // Not supported yet
-        return List.of();
+        return Collections.emptyList();
     }
 
     @Override
     public List<CatalogPartitionSpec> listPartitions(ObjectPath objectPath, CatalogPartitionSpec catalogPartitionSpec) throws TableNotExistException, TableNotPartitionedException, PartitionSpecInvalidException, CatalogException {
         // Not supported yet
-        return List.of();
+        return Collections.emptyList();
     }
 
     @Override
     public List<CatalogPartitionSpec> listPartitionsByFilter(ObjectPath objectPath, List<Expression> list) throws TableNotExistException, TableNotPartitionedException, CatalogException {
         // Not supported yet
-        return List.of();
+        return Collections.emptyList();
     }
 
     @Override

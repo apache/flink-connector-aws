@@ -42,6 +42,39 @@ class GlueDatabaseOperationsTest {
     }
 
     @Test
+    void testCreateDatabaseWithUppercaseLetters() {
+        CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test");
+        CatalogException exception = Assertions.assertThrows(
+                CatalogException.class,
+                () -> glueDatabaseOperations.createDatabase("DB1", catalogDatabase));
+        Assertions.assertTrue(
+                exception.getMessage().contains("lowercase letters"),
+                "Exception message should mention lowercase letters");
+    }
+
+    @Test
+    void testCreateDatabaseWithHyphens() {
+        CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test");
+        CatalogException exception = Assertions.assertThrows(
+                CatalogException.class,
+                () -> glueDatabaseOperations.createDatabase("db-1", catalogDatabase));
+        Assertions.assertTrue(
+                exception.getMessage().contains("lowercase letters"),
+                "Exception message should mention lowercase letters");
+    }
+
+    @Test
+    void testCreateDatabaseWithSpecialCharacters() {
+        CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test");
+        CatalogException exception = Assertions.assertThrows(
+                CatalogException.class,
+                () -> glueDatabaseOperations.createDatabase("db.1", catalogDatabase));
+        Assertions.assertTrue(
+                exception.getMessage().contains("lowercase letters"),
+                "Exception message should mention lowercase letters");
+    }
+
+    @Test
     void testCreateDatabaseAlreadyExists() throws DatabaseAlreadyExistException {
         CatalogDatabase catalogDatabase =
                 new CatalogDatabaseImpl(Collections.emptyMap(), "Description");

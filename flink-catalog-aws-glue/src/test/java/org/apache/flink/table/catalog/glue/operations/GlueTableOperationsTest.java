@@ -22,9 +22,9 @@ import java.util.List;
  */
 public class GlueTableOperationsTest {
 
-    private static final String CATALOG_NAME = "test-catalog";
-    private static final String DATABASE_NAME = "test-db";
-    private static final String TABLE_NAME = "test-table";
+    private static final String CATALOG_NAME = "testcatalog";
+    private static final String DATABASE_NAME = "testdb";
+    private static final String TABLE_NAME = "testtable";
 
     private FakeGlueClient fakeGlueClient;
     private GlueTableOperations glueTableOperations;
@@ -90,6 +90,61 @@ public class GlueTableOperationsTest {
 
         Assertions.assertDoesNotThrow(() -> glueTableOperations.createTable(DATABASE_NAME, tableInput));
         Assertions.assertTrue(glueTableOperations.glueTableExists(DATABASE_NAME, TABLE_NAME));
+    }
+
+    @Test
+    void testCreateTableWithUppercaseLetters() {
+        TableInput tableInput = TableInput.builder().name("TestTable").build();
+
+        CatalogException exception = Assertions.assertThrows(
+                CatalogException.class,
+                () -> glueTableOperations.createTable(DATABASE_NAME, tableInput));
+
+        Assertions.assertTrue(
+                exception.getMessage().contains("lowercase letters"),
+                "Exception message should mention lowercase letters requirement");
+    }
+
+    @Test
+    void testCreateTableWithHyphens() {
+        TableInput tableInput = TableInput.builder().name("test-table").build();
+
+        CatalogException exception = Assertions.assertThrows(
+                CatalogException.class,
+                () -> glueTableOperations.createTable(DATABASE_NAME, tableInput));
+
+        Assertions.assertTrue(
+                exception.getMessage().contains("lowercase letters"),
+                "Exception message should mention allowed characters");
+    }
+
+    @Test
+    void testCreateTableWithSpecialCharacters() {
+        TableInput tableInput = TableInput.builder().name("test.table").build();
+
+        CatalogException exception = Assertions.assertThrows(
+                CatalogException.class,
+                () -> glueTableOperations.createTable(DATABASE_NAME, tableInput));
+
+        Assertions.assertTrue(
+                exception.getMessage().contains("lowercase letters"),
+                "Exception message should mention allowed characters");
+    }
+
+    @Test
+    void testBuildTableInputWithInvalidName() {
+        CatalogException exception = Assertions.assertThrows(
+                CatalogException.class,
+                () -> glueTableOperations.buildTableInput(
+                        "Invalid-Name",
+                        null,
+                        null,
+                        null,
+                        null));
+
+        Assertions.assertTrue(
+                exception.getMessage().contains("lowercase letters"),
+                "Exception message should mention allowed characters");
     }
 
     @Test
@@ -217,14 +272,14 @@ public class GlueTableOperationsTest {
     void testCreateView() {
         TableInput viewInput =
                 TableInput.builder()
-                        .name("test-view")
+                        .name("testview")
                         .tableType("VIEW")
                         .viewOriginalText("SELECT * FROM source_table")
                         .viewExpandedText("SELECT * FROM database.source_table")
                         .build();
 
         Assertions.assertDoesNotThrow(() -> glueTableOperations.createTable(DATABASE_NAME, viewInput));
-        Assertions.assertTrue(glueTableOperations.glueTableExists(DATABASE_NAME, "test-view"));
+        Assertions.assertTrue(glueTableOperations.glueTableExists(DATABASE_NAME, "testview"));
     }
 
     @Test
@@ -232,7 +287,7 @@ public class GlueTableOperationsTest {
         // First create a view
         TableInput viewInput =
                 TableInput.builder()
-                        .name("test-view")
+                        .name("testview")
                         .tableType("VIEW")
                         .viewOriginalText("SELECT * FROM source_table")
                         .viewExpandedText("SELECT * FROM database.source_table")
@@ -244,8 +299,8 @@ public class GlueTableOperationsTest {
                         .tableInput(viewInput)
                         .build());
 
-        Table result = glueTableOperations.getGlueTable(DATABASE_NAME, "test-view");
-        Assertions.assertEquals("test-view", result.name());
+        Table result = glueTableOperations.getGlueTable(DATABASE_NAME, "testview");
+        Assertions.assertEquals("testview", result.name());
         Assertions.assertEquals("VIEW", result.tableType());
         Assertions.assertEquals("SELECT * FROM source_table", result.viewOriginalText());
         Assertions.assertEquals("SELECT * FROM database.source_table", result.viewExpandedText());
@@ -256,7 +311,7 @@ public class GlueTableOperationsTest {
         // First create the view
         TableInput viewInput =
                 TableInput.builder()
-                        .name("test-view")
+                        .name("testview")
                         .tableType("VIEW")
                         .viewOriginalText("SELECT * FROM source_table")
                         .viewExpandedText("SELECT * FROM database.source_table")
