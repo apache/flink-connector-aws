@@ -960,7 +960,7 @@ class AWSGeneralUtilTest {
     }
 
   @Test
-  void testGetCredentialsProviderReturnsSsoProviderForSsoProfile() throws IOException {
+  void testSsoProfileCredentialsThrowsExceptionWhenCacheFileIsMissing() throws IOException {
     String profileName = "my-sso-profile";
     String ssoStartUrl = "https://my-dummy-sso-portal.awsapps.com/start";
     String ssoRegion = "us-east-1";
@@ -988,7 +988,6 @@ class AWSGeneralUtilTest {
       .build();
 
     SsoProfileCredentialsProviderFactory factory = new SsoProfileCredentialsProviderFactory();
-
     assertThatThrownBy(() -> factory.create(context))
       .isInstanceOf(java.io.UncheckedIOException.class)
       .hasRootCauseInstanceOf(java.nio.file.NoSuchFileException.class)
