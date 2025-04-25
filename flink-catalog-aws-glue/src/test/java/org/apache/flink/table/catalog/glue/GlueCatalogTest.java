@@ -698,59 +698,48 @@ public class GlueCatalogTest {
         String lowerCaseName = "testdb";
         CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test_database");
         glueCatalog.createDatabase(lowerCaseName, catalogDatabase, false);
-        
         // Verify database exists
         assertThat(glueCatalog.databaseExists(lowerCaseName)).isTrue();
-        
         // This simulates what happens with SHOW DATABASES
         List<String> databases = glueCatalog.listDatabases();
         assertThat(databases).contains(lowerCaseName);
-        
         // This simulates what happens with SHOW CREATE DATABASE
         CatalogDatabase retrievedDb = glueCatalog.getDatabase(lowerCaseName);
         assertThat(retrievedDb.getDescription().orElse(null)).isEqualTo("test_database");
-        
         // Create a table in the database
         ObjectPath tablePath = new ObjectPath(lowerCaseName, "testtable");
         CatalogTable catalogTable = createTestTable();
         glueCatalog.createTable(tablePath, catalogTable, false);
-        
         // Verify table exists
         assertThat(glueCatalog.tableExists(tablePath)).isTrue();
-        
         // List tables - simulates SHOW TABLES
         List<String> tables = glueCatalog.listTables(lowerCaseName);
         assertThat(tables).contains("testtable");
-        
         // Try accessing with case variations
         // When Flink SQL parser converts identifiers to lowercase by default,
         // the catalog should still be able to find the objects
         ObjectPath upperCaseDbPath = new ObjectPath("TESTDB", "testtable");
         ObjectPath mixedCaseTablePath = new ObjectPath(lowerCaseName, "TestTable");
-        
         // Following assertions demonstrate that case-mismatch can lead to objects not being found
         assertThat(glueCatalog.databaseExists("TESTDB")).isFalse();
         assertThat(glueCatalog.tableExists(upperCaseDbPath)).isFalse();
         assertThat(glueCatalog.tableExists(mixedCaseTablePath)).isFalse();
-        
         // This demonstrates why it's important to maintain correct case in queries
         assertThatThrownBy(() -> glueCatalog.listTables("TestDB"))
                 .isInstanceOf(DatabaseNotExistException.class);
     }
-    
+
     private ResolvedCatalogTable createTestTable() {
         Schema schema = Schema.newBuilder()
                 .column("id", DataTypes.INT())
                 .column("name", DataTypes.STRING())
                 .build();
-        
         CatalogTable catalogTable = CatalogTable.of(
                 schema,
                 "Test table for case sensitivity",
                 Collections.emptyList(),
                 Collections.emptyMap()
         );
-        
         ResolvedSchema resolvedSchema = ResolvedSchema.of();
         return new ResolvedCatalogTable(catalogTable, resolvedSchema);
     }
