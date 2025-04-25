@@ -234,4 +234,36 @@ class GlueDatabaseOperationsTest {
         Assertions.assertThrows(
                 CatalogException.class, () -> glueDatabaseOperations.glueDatabaseExists("db1"));
     }
+
+    @Test
+    void testCaseSensitivityInDatabaseOperations() throws Exception {
+        CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test_database");
+        
+        // Create a database with lowercase name
+        String lowerCaseName = "testdb";
+        glueDatabaseOperations.createDatabase(lowerCaseName, catalogDatabase);
+        
+        // Verify the database exists
+        Assertions.assertTrue(glueDatabaseOperations.glueDatabaseExists(lowerCaseName));
+        
+        // Test retrieval with the same name
+        CatalogDatabase retrievedDb = glueDatabaseOperations.getDatabase(lowerCaseName);
+        Assertions.assertEquals("test_database", retrievedDb.getDescription().orElse(null));
+        
+        // Try to access with different case variations
+        Assertions.assertFalse(glueDatabaseOperations.glueDatabaseExists("TestDB"),
+                "AWS Glue is case-sensitive for database operations despite lowercasing identifiers internally");
+        Assertions.assertFalse(glueDatabaseOperations.glueDatabaseExists("TESTDB"),
+                "AWS Glue is case-sensitive for database operations despite lowercasing identifiers internally");
+        
+        // This simulates what would happen with SHOW DATABASES
+        List<String> databases = glueDatabaseOperations.listDatabases();
+        Assertions.assertTrue(databases.contains(lowerCaseName), "Database should appear in the list with original case");
+        
+        // Ensure we can't create another database with the same name but different case
+        String upperCaseName = "TESTDB";
+        Assertions.assertThrows(CatalogException.class,
+                () -> glueDatabaseOperations.createDatabase(upperCaseName, catalogDatabase),
+                "Should reject uppercase database names");
+    }
 }
