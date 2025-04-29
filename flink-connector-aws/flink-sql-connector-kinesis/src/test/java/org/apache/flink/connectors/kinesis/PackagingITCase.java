@@ -22,10 +22,19 @@ import org.apache.flink.packaging.PackagingTestUtils;
 import org.apache.flink.table.factories.Factory;
 import org.apache.flink.test.resources.ResourceTestUtils;
 
+import org.apache.commons.io.IOUtils;
 import org.junit.jupiter.api.Test;
 
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 class PackagingITCase {
 
@@ -42,5 +51,42 @@ class PackagingITCase {
                         "cacerts/",
                         "google/"));
         PackagingTestUtils.assertJarContainsServiceEntry(jar, Factory.class);
+    }
+
+    @Test
+    void testNotice() throws Exception {
+        final Path jarPath =
+                ResourceTestUtils.getResource(".*/flink-sql-connector-kinesis[^/]*\\.jar");
+
+        final String notice =
+                IOUtils.toString(
+                        new URL(String.format("jar:file:%s!/META-INF/NOTICE", jarPath))
+                                .openStream(),
+                        StandardCharsets.UTF_8);
+
+        final String dependencies =
+                IOUtils.toString(
+                        new URL(String.format("jar:file:%s!/META-INF/DEPENDENCIES", jarPath))
+                                .openStream(),
+                        StandardCharsets.UTF_8);
+
+        Pattern pattern =
+                Pattern.compile(
+                        "\\b[a-zA-Z0-9_.-]+:[a-zA-Z0-9_.-]+:[a-zA-Z0-9_.-]+:[a-zA-Z0-9_.-]+\\b");
+        Matcher matcher = pattern.matcher(dependencies);
+
+        List<String> packageMissingFromNotice = new ArrayList<>();
+        while (matcher.find()) {
+            String packageId = matcher.group().replace(":jar:", ":").replace(":bundle:", ":");
+            if (!notice.contains(packageId)) {
+                packageMissingFromNotice.add(packageId);
+            }
+        }
+
+        assertThat(packageMissingFromNotice)
+                .withFailMessage(
+                        "The following packages were missing from META-INF/NOTICE: %s",
+                        packageMissingFromNotice)
+                .isEmpty();
     }
 }

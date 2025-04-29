@@ -1,12 +1,29 @@
 flink-sql-connector-aws-kinesis-firehose
 
-Copyright 2014-2024 The Apache Software Foundation
+Copyright 2014-2025 The Apache Software Foundation
 
 This product includes software developed at
 The Apache Software Foundation (http://www.apache.org/).
 
 This project bundles the following dependencies under the Apache Software License 2.0. (http://www.apache.org/licenses/LICENSE-2.0.txt)
 
+
+
+
+- com.esotericsoftware.kryo:kryo:2.24.0
+- com.esotericsoftware.minlog:minlog:1.2
+- com.google.code.findbugs:jsr305:1.3.9
+- com.ibm.icu:icu4j:67.1
+- org.snakeyaml:snakeyaml-engine:2.6
+- com.fasterxml.jackson.core:jackson-annotations:2.14.3
+- com.fasterxml.jackson.core:jackson-core:2.14.3
+- com.fasterxml.jackson.core:jackson-databind:2.14.3
+- com.fasterxml.jackson.datatype:jackson-datatype-jdk8:2.14.3
+- com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.14.3
+- commons-collections:commons-collections:3.2.2
+- commons-codec:commons-codec:1.15
+- commons-io:commons-io:2.15.1
+- commons-logging:commons-logging:1.1.3
 - software.amazon.awssdk:checksums-spi:2.26.19
 - software.amazon.awssdk:checksums:2.26.19
 - software.amazon.awssdk:utils:2.26.19
@@ -35,8 +52,23 @@ This project bundles the following dependencies under the Apache Software Licens
 - software.amazon.awssdk:apache-client:2.26.19
 - software.amazon.awssdk:annotations:2.26.19
 - software.amazon.awssdk:arns:2.26.19
+- software.amazon.eventstream:eventstream:1.0.1
+- org.apache.commons:commons-compress:1.26.1
+- org.apache.commons:commons-lang3:3.12.0
+- org.apache.commons:commons-text:1.10.0
+- org.apache.flink:flink-annotations:1.19.0
+- org.apache.flink:flink-connector-aws-base:5.1-SNAPSHOT
+- org.apache.flink:flink-connector-aws-kinesis-firehose:5.1-SNAPSHOT
+- org.apache.flink:flink-core:1.19.0
+- org.apache.flink:flink-metrics-core:1.19.0
+- org.apache.flink:flink-shaded-asm-9:9.5-17.0
+- org.apache.flink:flink-shaded-guava:31.1-jre-17.0
+- org.apache.flink:flink-shaded-jackson:2.14.2-17.0
+- org.apache.flink:flink-table-common:1.19.0
 - org.apache.httpcomponents:httpcore:4.4.14
 - org.apache.httpcomponents:httpclient:4.5.13
+- org.objenesis:objenesis:2.1
+- org.slf4j:slf4j-api:1.7.36
 - io.netty:netty-transport:4.1.86.Final
 - io.netty:netty-transport-native-unix-common:4.1.86.Final
 - io.netty:netty-transport-classes-epoll:4.1.86.Final
@@ -47,7 +79,6 @@ This project bundles the following dependencies under the Apache Software Licens
 - io.netty:netty-codec-http:4.1.86.Final
 - io.netty:netty-codec-http2:4.1.86.Final
 - io.netty:netty-buffer:4.1.86.Final
-- commons-logging:commons-logging:1.1.3
 
 This project bundles the following dependencies under the MIT-0 license (https://spdx.org/licenses/MIT-0.html).
 
