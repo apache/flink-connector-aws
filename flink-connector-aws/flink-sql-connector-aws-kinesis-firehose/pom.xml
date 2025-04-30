@@ -65,7 +65,6 @@
                                     <include>io.netty:*</include>
                                     <include>org.reactivestreams:*</include>
                                     <include>org.apache.httpcomponents:*</include>
-                                    <include>com.typesafe.netty:*</include>
                                     <include>commons-logging:commons-logging</include>
                                 </includes>
                             </artifactSet>
@@ -88,11 +87,6 @@
                                 <relocation>
                                     <pattern>org.apache.http</pattern>
                                     <shadedPattern>org.apache.flink.connector.firehose.sink.shaded.org.apache.http
-                                    </shadedPattern>
-                                </relocation>
-                                <relocation>
-                                    <pattern>com.typesafe.netty</pattern>
-                                    <shadedPattern>org.apache.flink.connector.firehose.sink.shaded.com.typesafe.netty
                                     </shadedPattern>
                                 </relocation>
                             </relocations>

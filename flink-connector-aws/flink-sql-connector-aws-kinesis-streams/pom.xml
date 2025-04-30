@@ -81,11 +81,6 @@
                                     </shadedPattern>
                                 </relocation>
                                 <relocation>
-                                    <pattern>com.typesafe.netty</pattern>
-                                    <shadedPattern>org.apache.flink.connector.kinesis.sink.shaded.com.typesafe.netty
-                                    </shadedPattern>
-                                </relocation>
-                                <relocation>
                                     <pattern>org.apache.http</pattern>
                                     <shadedPattern>org.apache.flink.connector.kinesis.sink.shaded.org.apache.http
                                     </shadedPattern>
