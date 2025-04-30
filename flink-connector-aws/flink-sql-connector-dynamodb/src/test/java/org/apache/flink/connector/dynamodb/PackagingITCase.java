@@ -38,7 +38,6 @@ class PackagingITCase {
                 jar,
                 Arrays.asList(
                         "org/apache/flink/",
-                        "org/apache/commons/",
                         "META-INF/",
                         "mozilla/",
                         "mime.types",
