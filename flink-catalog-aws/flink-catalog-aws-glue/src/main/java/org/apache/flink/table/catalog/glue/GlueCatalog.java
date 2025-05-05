@@ -18,24 +18,17 @@
 
 package org.apache.flink.table.catalog.glue;
 
-import org.apache.flink.annotation.PublicEvolving;
-import org.apache.flink.annotation.VisibleForTesting;
-import org.apache.flink.configuration.ReadableConfig;
-import org.apache.flink.connector.aws.util.AWSClientUtil;
-import org.apache.flink.connector.aws.util.AWSGeneralUtil;
+import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.catalog.AbstractCatalog;
 import org.apache.flink.table.catalog.CatalogBaseTable;
 import org.apache.flink.table.catalog.CatalogDatabase;
 import org.apache.flink.table.catalog.CatalogFunction;
 import org.apache.flink.table.catalog.CatalogPartition;
-import org.apache.flink.table.catalog.CatalogPartitionImpl;
 import org.apache.flink.table.catalog.CatalogPartitionSpec;
 import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.catalog.CatalogView;
 import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.catalog.ResolvedCatalogBaseTable;
-import org.apache.flink.table.catalog.ResolvedCatalogTable;
-import org.apache.flink.table.catalog.ResolvedCatalogView;
 import org.apache.flink.table.catalog.exceptions.CatalogException;
 import org.apache.flink.table.catalog.exceptions.DatabaseAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.DatabaseNotEmptyException;
@@ -49,595 +42,618 @@ import org.apache.flink.table.catalog.exceptions.TableAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.flink.table.catalog.exceptions.TableNotPartitionedException;
 import org.apache.flink.table.catalog.exceptions.TablePartitionedException;
-import org.apache.flink.table.catalog.glue.constants.GlueCatalogConstants;
 import org.apache.flink.table.catalog.glue.operator.GlueDatabaseOperator;
 import org.apache.flink.table.catalog.glue.operator.GlueFunctionOperator;
-import org.apache.flink.table.catalog.glue.operator.GluePartitionOperator;
 import org.apache.flink.table.catalog.glue.operator.GlueTableOperator;
-import org.apache.flink.table.catalog.glue.util.GlueUtils;
+import org.apache.flink.table.catalog.glue.util.GlueCatalogConstants;
+import org.apache.flink.table.catalog.glue.util.GlueTableUtils;
+import org.apache.flink.table.catalog.glue.util.GlueTypeConverter;
 import org.apache.flink.table.catalog.stats.CatalogColumnStatistics;
 import org.apache.flink.table.catalog.stats.CatalogTableStatistics;
 import org.apache.flink.table.expressions.Expression;
 import org.apache.flink.table.functions.FunctionIdentifier;
-import org.apache.flink.util.StringUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import software.amazon.awssdk.http.apache.ApacheHttpClient;
+import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.glue.GlueClient;
-import software.amazon.awssdk.services.glue.model.GetTablesRequest;
-import software.amazon.awssdk.services.glue.model.GetTablesResponse;
-import software.amazon.awssdk.services.glue.model.GetUserDefinedFunctionsRequest;
-import software.amazon.awssdk.services.glue.model.GetUserDefinedFunctionsResponse;
-import software.amazon.awssdk.services.glue.model.GlueException;
-import software.amazon.awssdk.services.glue.model.Partition;
+import software.amazon.awssdk.services.glue.model.StorageDescriptor;
 import software.amazon.awssdk.services.glue.model.Table;
+import software.amazon.awssdk.services.glue.model.TableInput;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
+import java.util.stream.Collectors;
 
-import static org.apache.flink.util.Preconditions.checkArgument;
-import static org.apache.flink.util.Preconditions.checkNotNull;
-import static org.apache.flink.util.StringUtils.isNullOrWhitespaceOnly;
-
-/** Glue catalog implementation that uses AWS Glue Data Catalog as persistence at backend. */
-@PublicEvolving
+/**
+ * GlueCatalog is an implementation of the Flink AbstractCatalog that interacts with AWS Glue.
+ * This class allows Flink to perform various catalog operations such as creating, deleting, and retrieving
+ * databases and tables from Glue. It encapsulates AWS Glue's API and provides a Flink-compatible interface.
+ *
+ * <p>This catalog uses GlueClient to interact with AWS Glue services, and operations related to databases and
+ * tables are delegated to respective helper classes like GlueDatabaseOperations and GlueTableOperations.</p>
+ */
 public class GlueCatalog extends AbstractCatalog {
 
     private static final Logger LOG = LoggerFactory.getLogger(GlueCatalog.class);
 
-    /** instance of GlueOperator to facilitate glue related actions. */
-    public GlueDatabaseOperator glueDatabaseOperator;
+    private final GlueClient glueClient;
+    private final GlueTypeConverter glueTypeConverter;
+    private final GlueDatabaseOperator glueDatabaseOperations;
+    private final GlueTableOperator glueTableOperations;
+    private final GlueFunctionOperator glueFunctionsOperations;
+    private final GlueTableUtils glueTableUtils;
 
-    public GlueTableOperator glueTableOperator;
-    public GluePartitionOperator gluePartitionOperator;
-    public GlueFunctionOperator glueFunctionOperator;
+    /**
+     * Constructs a GlueCatalog with a provided Glue client.
+     *
+     * @param name            the name of the catalog
+     * @param defaultDatabase the default database for the catalog
+     * @param region          the AWS region to be used for Glue operations
+     * @param glueClient      Glue Client so we can decide which one to use for testing
+     */
+    public GlueCatalog(String name, String defaultDatabase, String region, GlueClient glueClient) {
+        super(name, defaultDatabase);
 
-    public GlueClient glueClient;
-
-    /** Default database name if not passed as part of catalog. */
-    public static final String DEFAULT_DB = "default";
-
-    public GlueCatalog(
-            String catalogName,
-            String databaseName,
-            ReadableConfig catalogConfig,
-            Properties glueClientProperties) {
-        super(catalogName, databaseName);
-        checkNotNull(catalogConfig, "Catalog config cannot be null.");
-        String glueCatalogId =
-                String.valueOf(
-                        catalogConfig.getOptional(GlueCatalogOptions.GLUE_CATALOG_ID).orElse(null));
-        glueClient = createClient(glueClientProperties);
-        this.glueDatabaseOperator = new GlueDatabaseOperator(getName(), glueClient, glueCatalogId);
-        this.glueTableOperator = new GlueTableOperator(getName(), glueClient, glueCatalogId);
-        this.gluePartitionOperator =
-                new GluePartitionOperator(getName(), glueClient, glueCatalogId);
-        this.glueFunctionOperator = new GlueFunctionOperator(getName(), glueClient, glueCatalogId);
-    }
-
-    private static GlueClient createClient(Properties glueClientProperties) {
-        return AWSClientUtil.createAwsSyncClient(
-                glueClientProperties,
-                AWSGeneralUtil.createSyncHttpClient(
-                        glueClientProperties, ApacheHttpClient.builder()),
-                GlueClient.builder(),
-                GlueCatalogConstants.BASE_GLUE_USER_AGENT_PREFIX_FORMAT,
-                GlueCatalogConstants.GLUE_CLIENT_USER_AGENT_PREFIX);
-    }
-
-    @VisibleForTesting
-    public GlueCatalog(
-            String catalogName,
-            String databaseName,
-            GlueClient glueClient,
-            GlueDatabaseOperator glueDatabaseOperator,
-            GlueTableOperator glueTableOperator,
-            GluePartitionOperator gluePartitionOperator,
-            GlueFunctionOperator glueFunctionOperator) {
-        super(catalogName, databaseName);
-        this.glueClient = glueClient;
-        this.glueDatabaseOperator = glueDatabaseOperator;
-        this.glueTableOperator = glueTableOperator;
-        this.gluePartitionOperator = gluePartitionOperator;
-        this.glueFunctionOperator = glueFunctionOperator;
+        // Initialize GlueClient in the constructor
+        if (glueClient != null) {
+            this.glueClient = glueClient;
+        } else {
+            // If no GlueClient is provided, initialize it using the default region
+            this.glueClient = GlueClient.builder()
+                    .region(Region.of(region))
+                    .build();
+        }
+        this.glueTypeConverter = new GlueTypeConverter();
+        this.glueTableUtils = new GlueTableUtils(glueTypeConverter);
+        this.glueDatabaseOperations = new GlueDatabaseOperator(glueClient, getName());
+        this.glueTableOperations = new GlueTableOperator(glueClient, getName());
+        this.glueFunctionsOperations = new GlueFunctionOperator(glueClient, getName());
     }
 
     /**
-     * Open the catalog. Used for any required preparation in initialization phase.
+     * Constructs a GlueCatalog with default client.
      *
-     * @throws CatalogException in case of any runtime exception
+     * @param name            the name of the catalog
+     * @param defaultDatabase the default database for the catalog
+     * @param region          the AWS region to be used for Glue operations
+     */
+    public GlueCatalog(String name, String defaultDatabase, String region) {
+        super(name, defaultDatabase);
+
+        // Create a synchronized client builder to avoid concurrent modification exceptions
+        this.glueClient = GlueClient.builder()
+                .region(Region.of(region))
+                .credentialsProvider(software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider.create())
+                .build();
+        this.glueTypeConverter = new GlueTypeConverter();
+        this.glueTableUtils = new GlueTableUtils(glueTypeConverter);
+        this.glueDatabaseOperations = new GlueDatabaseOperator(glueClient, getName());
+        this.glueTableOperations = new GlueTableOperator(glueClient, getName());
+        this.glueFunctionsOperations = new GlueFunctionOperator(glueClient, getName());
+    }
+
+    /**
+     * Opens the GlueCatalog and initializes necessary resources.
+     *
+     * @throws CatalogException if an error occurs during the opening process
      */
     @Override
-    public void open() throws CatalogException {}
+    public void open() throws CatalogException {
+        LOG.info("Opening GlueCatalog with client: {}", glueClient);
+    }
 
     /**
-     * Close the catalog when it is no longer needed and release any resource that it might be
-     * holding.
+     * Closes the GlueCatalog and releases resources.
      *
-     * @throws CatalogException in case of any runtime exception
+     * @throws CatalogException if an error occurs during the closing process
      */
     @Override
     public void close() throws CatalogException {
-        try {
-            glueClient.close();
-        } catch (Exception e) {
-            throw new CatalogException("Glue Client is not closed properly!", e);
+        if (glueClient != null) {
+            LOG.info("Closing GlueCatalog client");
+            int maxRetries = 3;
+            int retryCount = 0;
+            long retryDelayMs = 200;
+            while (retryCount < maxRetries) {
+                try {
+                    glueClient.close();
+                    LOG.info("Successfully closed GlueCatalog client");
+                    return;
+                } catch (RuntimeException e) {
+                    retryCount++;
+                    if (retryCount >= maxRetries) {
+                        LOG.warn("Failed to close GlueCatalog client after {} retries", maxRetries, e);
+                        throw new CatalogException("Failed to close GlueCatalog client", e);
+                    }
+                    LOG.warn("Failed to close GlueCatalog client (attempt {}/{}), retrying in {} ms",
+                            retryCount, maxRetries, retryDelayMs, e);
+                    try {
+                        Thread.sleep(retryDelayMs);
+                        // Exponential backoff
+                        retryDelayMs *= 2;
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new CatalogException("Interrupted while retrying to close GlueCatalog client", ie);
+                    }
+                }
+            }
         }
     }
 
-    // ------ databases ------
-
     /**
-     * Create a database.
+     * Lists all the databases available in the Glue catalog.
      *
-     * @param databaseName Name of the database to be created
-     * @param database The database definition
-     * @param ignoreIfExists Flag to specify behavior when a database with the given name already
-     *     exists: if set to false, throw a DatabaseAlreadyExistException, if set to true, do
-     *     nothing.
-     * @throws DatabaseAlreadyExistException if the given database already exists and ignoreIfExists
-     *     is false
-     * @throws CatalogException in case of any runtime exception
+     * @return a list of database names
+     * @throws CatalogException if an error occurs while listing the databases
      */
     @Override
-    public void createDatabase(
-            String databaseName, CatalogDatabase database, boolean ignoreIfExists)
+    public List<String> listDatabases() throws CatalogException {
+        return glueDatabaseOperations.listDatabases();
+    }
+
+    /**
+     * Retrieves a specific database by its name.
+     *
+     * @param databaseName the name of the database to retrieve
+     * @return the database if found
+     * @throws DatabaseNotExistException if the database does not exist
+     * @throws CatalogException          if an error occurs while retrieving the database
+     */
+    @Override
+    public CatalogDatabase getDatabase(String databaseName) throws DatabaseNotExistException, CatalogException {
+        boolean databaseExists = databaseExists(databaseName);
+        if (!databaseExists) {
+            throw new DatabaseNotExistException(getName(), databaseName);
+        }
+
+        return glueDatabaseOperations.getDatabase(databaseName);
+    }
+
+    /**
+     * Checks if a database exists in Glue.
+     *
+     * @param databaseName the name of the database
+     * @return true if the database exists, false otherwise
+     * @throws CatalogException if an error occurs while checking the database
+     */
+    @Override
+    public boolean databaseExists(String databaseName) throws CatalogException {
+        return glueDatabaseOperations.glueDatabaseExists(databaseName);
+    }
+
+    /**
+     * Creates a new database in Glue.
+     *
+     * @param databaseName    the name of the database to create
+     * @param catalogDatabase the catalog database object containing database metadata
+     * @param ifNotExists     flag indicating whether to ignore the error if the database already exists
+     * @throws DatabaseAlreadyExistException if the database already exists and ifNotExists is false
+     * @throws CatalogException              if an error occurs while creating the database
+     */
+    @Override
+    public void createDatabase(String databaseName, CatalogDatabase catalogDatabase, boolean ifNotExists)
             throws DatabaseAlreadyExistException, CatalogException {
-        checkArgument(
-                !StringUtils.isNullOrWhitespaceOnly(databaseName),
-                "Database name cannot be null or empty.");
-        checkNotNull(database, "Database cannot be null.");
-        databaseName = GlueUtils.getGlueConventionalName(databaseName);
-        if (databaseExists(databaseName) && !ignoreIfExists) {
+        boolean exists = databaseExists(databaseName);
+
+        if (exists && !ifNotExists) {
             throw new DatabaseAlreadyExistException(getName(), databaseName);
-        } else {
-            glueDatabaseOperator.createGlueDatabase(databaseName, database);
-            LOG.info("Created Database {}.", databaseName);
+        }
+
+        if (!exists) {
+            glueDatabaseOperations.createDatabase(databaseName, catalogDatabase);
         }
     }
 
     /**
-     * Drop a database.
+     * Drops an existing database in Glue.
      *
-     * @param databaseName Name of the database to be dropped.
-     * @param ignoreIfNotExists Flag to specify behavior when the database does not exist: if set to
-     *     false, throw an exception, if set to true, do nothing.
-     * @param cascade Flag to specify behavior when the database contains table or function: if set
-     *     to true, delete all tables and functions in the database and then delete the database, if
-     *     set to false, throw an exception.
-     * @throws DatabaseNotExistException if the given database does not exist
-     * @throws DatabaseNotEmptyException if the given database is not empty and isRestrict is true
-     * @throws CatalogException in case of any runtime exception
+     * @param databaseName      the name of the database to drop
+     * @param ignoreIfNotExists flag to ignore the exception if the database doesn't exist
+     * @param cascade           flag indicating whether to cascade the operation to drop related objects
+     * @throws DatabaseNotExistException if the database does not exist and ignoreIfNotExists is false
+     * @throws DatabaseNotEmptyException if the database contains objects and cascade is false
+     * @throws CatalogException          if an error occurs while dropping the database
      */
     @Override
     public void dropDatabase(String databaseName, boolean ignoreIfNotExists, boolean cascade)
             throws DatabaseNotExistException, DatabaseNotEmptyException, CatalogException {
-        checkArgument(
-                !StringUtils.isNullOrWhitespaceOnly(databaseName),
-                "Database name cannot be null or empty.");
-        databaseName = GlueUtils.getGlueConventionalName(databaseName);
         if (databaseExists(databaseName)) {
-            if (cascade) {
-                List<String> tables = listTables(databaseName);
-                if (!tables.isEmpty()) {
-                    glueDatabaseOperator.deleteTablesFromDatabase(databaseName, tables);
-                    LOG.info("{} Tables deleted from Database {}.", tables.size(), databaseName);
-                }
-                List<String> functions = listFunctions(databaseName);
-                if (!functions.isEmpty()) {
-                    glueDatabaseOperator.deleteFunctionsFromDatabase(databaseName, functions);
-                    LOG.info(
-                            "{} Functions deleted from Database {}.",
-                            functions.size(),
-                            databaseName);
-                }
-            }
-            if (!isDatabaseEmpty(databaseName)) {
-                throw new DatabaseNotEmptyException(getName(), databaseName);
-            }
-            glueDatabaseOperator.dropGlueDatabase(databaseName);
-            LOG.info("Dropped Database: {}.", databaseName);
+            glueDatabaseOperations.dropGlueDatabase(databaseName);
         } else if (!ignoreIfNotExists) {
             throw new DatabaseNotExistException(getName(), databaseName);
         }
     }
 
     /**
-     * Modify existing database.
+     * Lists all tables in a specified database.
      *
-     * @param name Name of the database to be modified
-     * @param newDatabase The new database definition
-     * @param ignoreIfNotExists Flag to specify behavior when the given database does not exist: if
-     *     set to false, throw an exception, if set to true, do nothing.
-     * @throws DatabaseNotExistException if the given database does not exist
-     * @throws CatalogException in case of any runtime exception
+     * @param databaseName the name of the database
+     * @return a list of table names in the database
+     * @throws DatabaseNotExistException if the database does not exist
+     * @throws CatalogException          if an error occurs while listing the tables
      */
     @Override
-    public void alterDatabase(String name, CatalogDatabase newDatabase, boolean ignoreIfNotExists)
-            throws DatabaseNotExistException, CatalogException {
-        checkArgument(
-                !StringUtils.isNullOrWhitespaceOnly(name),
-                "Database name cannot be null or empty.");
-        checkNotNull(newDatabase, "Database cannot be null.");
-        name = GlueUtils.getGlueConventionalName(name);
+    public List<String> listTables(String databaseName) throws DatabaseNotExistException, CatalogException {
+        if (!databaseExists(databaseName)) {
+            throw new DatabaseNotExistException(getName(), databaseName);
+        }
+
+        return glueTableOperations.listTables(databaseName);
+    }
+
+    /**
+     * Retrieves a table from the catalog using its object path.
+     *
+     * @param objectPath the object path of the table to retrieve
+     * @return the corresponding CatalogBaseTable for the specified table
+     * @throws TableNotExistException if the table does not exist
+     * @throws CatalogException       if an error occurs while retrieving the table
+     */
+    @Override
+    public CatalogBaseTable getTable(ObjectPath objectPath) throws TableNotExistException, CatalogException {
+        String databaseName = objectPath.getDatabaseName();
+        String tableName = objectPath.getObjectName();
+
+        Table glueTable = glueTableOperations.getGlueTable(databaseName, tableName);
+        return getCatalogBaseTableFromGlueTable(glueTable);
+    }
+
+    /**
+     * Checks if a table exists in the Glue catalog.
+     *
+     * @param objectPath the object path of the table to check
+     * @return true if the table exists, false otherwise
+     * @throws CatalogException if an error occurs while checking the table's existence
+     */
+    @Override
+    public boolean tableExists(ObjectPath objectPath) throws CatalogException {
+        String databaseName = objectPath.getDatabaseName();
+        String tableName = objectPath.getObjectName();
+
+        // Delegate existence check to GlueTableOperations
+        return glueTableOperations.glueTableExists(databaseName, tableName);
+    }
+
+    /**
+     * Drops a table from the Glue catalog.
+     *
+     * @param objectPath the object path of the table to drop
+     * @param ifExists   flag indicating whether to ignore the exception if the table does not exist
+     * @throws TableNotExistException if the table does not exist and ifExists is false
+     * @throws CatalogException       if an error occurs while dropping the table
+     */
+    @Override
+    public void dropTable(ObjectPath objectPath, boolean ifExists) throws TableNotExistException, CatalogException {
+        String databaseName = objectPath.getDatabaseName();
+        String tableName = objectPath.getObjectName();
+
+        if (!glueTableOperations.glueTableExists(databaseName, tableName)) {
+            if (!ifExists) {
+                throw new TableNotExistException(getName(), objectPath);
+            }
+            return; // Table doesn't exist, and IF EXISTS is true
+        }
+
+        glueTableOperations.dropTable(databaseName, tableName);
+    }
+
+    /**
+     * Creates a table in the Glue catalog.
+     *
+     * @param objectPath       the object path of the table to create
+     * @param catalogBaseTable the table definition containing the schema and properties
+     * @param ifNotExists      flag indicating whether to ignore the exception if the table already exists
+     * @throws TableAlreadyExistException if the table already exists and ifNotExists is false
+     * @throws DatabaseNotExistException  if the database does not exist
+     * @throws CatalogException           if an error occurs while creating the table
+     */
+    @Override
+    public void createTable(ObjectPath objectPath, CatalogBaseTable catalogBaseTable, boolean ifNotExists)
+            throws TableAlreadyExistException, DatabaseNotExistException, CatalogException {
+
+        // Validate that required parameters are not null
+        if (objectPath == null) {
+            throw new NullPointerException("ObjectPath cannot be null");
+        }
+
+        if (catalogBaseTable == null) {
+            throw new NullPointerException("CatalogBaseTable cannot be null");
+        }
+
+        String databaseName = objectPath.getDatabaseName();
+        String tableName = objectPath.getObjectName();
+
+        // Check if the database exists
+        if (!databaseExists(databaseName)) {
+            throw new DatabaseNotExistException(getName(), databaseName);
+        }
+
+        // Check if the table already exists
+        if (glueTableOperations.glueTableExists(databaseName, tableName)) {
+            if (!ifNotExists) {
+                throw new TableAlreadyExistException(getName(), objectPath);
+            }
+            return; // Table exists, and IF NOT EXISTS is true
+        }
+
+        // Get common properties
+        Map<String, String> tableProperties = new HashMap<>(catalogBaseTable.getOptions());
+
         try {
-            CatalogDatabase existingDatabase = glueDatabaseOperator.getDatabase(name);
-            if (existingDatabase != null) {
-                if (existingDatabase.getClass() != newDatabase.getClass()) {
-                    throw new CatalogException(
-                            String.format(
-                                    "Database types don't match. Existing database is '%s' and new database is '%s'.",
-                                    existingDatabase.getClass().getName(),
-                                    newDatabase.getClass().getName()));
-                }
-                glueDatabaseOperator.updateGlueDatabase(name, newDatabase);
+            // Process based on table type
+            if (catalogBaseTable.getTableKind() == CatalogBaseTable.TableKind.TABLE) {
+                createRegularTable(objectPath, (CatalogTable) catalogBaseTable, tableProperties);
+            } else if (catalogBaseTable.getTableKind() == CatalogBaseTable.TableKind.VIEW) {
+                createView(objectPath, (CatalogView) catalogBaseTable, tableProperties);
+            } else {
+                throw new CatalogException("Unsupported table kind: " + catalogBaseTable.getTableKind());
             }
-        } catch (DatabaseNotExistException e) {
-            if (!ignoreIfNotExists) {
-                throw new DatabaseNotExistException(getName(), name);
-            }
+            LOG.info("Successfully created {}.{} of kind {}", databaseName, tableName, catalogBaseTable.getTableKind());
+        } catch (Exception e) {
+            throw new CatalogException(
+                    String.format("Failed to create table %s.%s: %s", databaseName, tableName, e.getMessage()), e);
         }
     }
 
     /**
-     * Get list of databases in catalog.
+     * Lists all views in a specified database.
      *
-     * @return a list of the names of all databases
-     * @throws CatalogException in case of any runtime exception
-     */
-    @Override
-    public List<String> listDatabases() throws CatalogException {
-        return glueDatabaseOperator.listGlueDatabases();
-    }
-
-    /**
-     * Get a database from this catalog.
-     *
-     * @param databaseName Name of the database
-     * @return The requested database
+     * @param databaseName the name of the database
+     * @return a list of view names in the database
      * @throws DatabaseNotExistException if the database does not exist
-     * @throws CatalogException in case of any runtime exception
+     * @throws CatalogException          if an error occurs while listing the views
      */
     @Override
-    public CatalogDatabase getDatabase(String databaseName)
-            throws DatabaseNotExistException, CatalogException {
-        checkArgument(
-                !StringUtils.isNullOrWhitespaceOnly(databaseName),
-                "Database name cannot be null or empty.");
-        databaseName = GlueUtils.getGlueConventionalName(databaseName);
-        return glueDatabaseOperator.getDatabase(databaseName);
+    public List<String> listViews(String databaseName) throws DatabaseNotExistException, CatalogException {
+
+        // Check if the database exists before listing views
+        if (!databaseExists(databaseName)) {
+            throw new DatabaseNotExistException(getName(), databaseName);
+        }
+
+        try {
+            // Get all tables in the database
+            List<Table> allTables = glueClient.getTables(builder -> builder.databaseName(databaseName))
+                    .tableList();
+
+            // Filter tables to only include those that are of type VIEW
+            List<String> viewNames = allTables.stream()
+                    .filter(table -> {
+                        String tableType = table.tableType();
+                        return tableType != null && tableType.equalsIgnoreCase(CatalogBaseTable.TableKind.VIEW.name());
+                    })
+                    .map(Table::name)
+                    .collect(Collectors.toList());
+
+            return viewNames;
+        } catch (Exception e) {
+            LOG.error("Failed to list views in database {}: {}", databaseName, e.getMessage());
+            throw new CatalogException(
+                    String.format("Error listing views in database %s: %s", databaseName, e.getMessage()), e);
+        }
+    }
+
+    @Override
+    public void alterDatabase(String s, CatalogDatabase catalogDatabase, boolean b) throws DatabaseNotExistException, CatalogException {
+        throw new UnsupportedOperationException("Altering databases is not supported by the Glue Catalog.");
+    }
+
+    @Override
+    public void renameTable(ObjectPath objectPath, String s, boolean b) throws TableNotExistException, TableAlreadyExistException, CatalogException {
+        throw new UnsupportedOperationException("Renaming tables is not supported by the Glue Catalog.");
+    }
+
+    @Override
+    public void alterTable(ObjectPath objectPath, CatalogBaseTable catalogBaseTable, boolean b) throws TableNotExistException, CatalogException {
+        throw new UnsupportedOperationException("Altering tables is not supported by the Glue Catalog.");
+    }
+
+    @Override
+    public List<CatalogPartitionSpec> listPartitions(ObjectPath objectPath) throws TableNotExistException, TableNotPartitionedException, CatalogException {
+        throw new UnsupportedOperationException("Table partitioning operations are not supported by the Glue Catalog.");
+    }
+
+    @Override
+    public List<CatalogPartitionSpec> listPartitions(ObjectPath objectPath, CatalogPartitionSpec catalogPartitionSpec) throws TableNotExistException, TableNotPartitionedException, PartitionSpecInvalidException, CatalogException {
+        throw new UnsupportedOperationException("Table partitioning operations are not supported by the Glue Catalog.");
+    }
+
+    @Override
+    public List<CatalogPartitionSpec> listPartitionsByFilter(ObjectPath objectPath, List<Expression> list) throws TableNotExistException, TableNotPartitionedException, CatalogException {
+        throw new UnsupportedOperationException("Table partitioning operations are not supported by the Glue Catalog.");
+    }
+
+    @Override
+    public CatalogPartition getPartition(ObjectPath objectPath, CatalogPartitionSpec catalogPartitionSpec) throws PartitionNotExistException, CatalogException {
+        throw new UnsupportedOperationException("Table partitioning operations are not supported by the Glue Catalog.");
+    }
+
+    @Override
+    public boolean partitionExists(ObjectPath objectPath, CatalogPartitionSpec catalogPartitionSpec) throws CatalogException {
+        throw new UnsupportedOperationException("Table partitioning operations are not supported by the Glue Catalog.");
+    }
+
+    @Override
+    public void createPartition(ObjectPath objectPath, CatalogPartitionSpec catalogPartitionSpec, CatalogPartition catalogPartition, boolean b) throws TableNotExistException, TableNotPartitionedException, PartitionSpecInvalidException, PartitionAlreadyExistsException, CatalogException {
+        throw new UnsupportedOperationException("Table partitioning operations are not supported by the Glue Catalog.");
+    }
+
+    @Override
+    public void dropPartition(ObjectPath objectPath, CatalogPartitionSpec catalogPartitionSpec, boolean b) throws PartitionNotExistException, CatalogException {
+        throw new UnsupportedOperationException("Table partitioning operations are not supported by the Glue Catalog.");
+    }
+
+    @Override
+    public void alterPartition(ObjectPath objectPath, CatalogPartitionSpec catalogPartitionSpec, CatalogPartition catalogPartition, boolean b) throws PartitionNotExistException, CatalogException {
+        throw new UnsupportedOperationException("Table partitioning operations are not supported by the Glue Catalog.");
     }
 
     /**
-     * Check if a database exists in this catalog.
+     * Normalizes an object path according to catalog-specific normalization rules.
+     * For functions, this ensures consistent case handling in function names.
      *
-     * @param databaseName Name of the database
-     * @return true if the given database exists in the catalog false otherwise
-     * @throws CatalogException in case of any runtime exception
+     * @param path the object path to normalize
+     * @return the normalized object path
+     */
+    public ObjectPath normalize(ObjectPath path) {
+        if (path == null) {
+            throw new NullPointerException("ObjectPath cannot be null");
+        }
+
+        return new ObjectPath(
+                path.getDatabaseName(),
+                FunctionIdentifier.normalizeName(path.getObjectName()));
+    }
+
+    /**
+     * Lists all functions in a specified database.
+     *
+     * @param databaseName the name of the database
+     * @return a list of function names in the database
+     * @throws DatabaseNotExistException if the database does not exist
+     * @throws CatalogException          if an error occurs while listing the functions
      */
     @Override
-    public boolean databaseExists(String databaseName) throws CatalogException {
-        checkArgument(
-                !StringUtils.isNullOrWhitespaceOnly(databaseName),
-                "Database name cannot be null or empty.");
+    public List<String> listFunctions(String databaseName) throws DatabaseNotExistException, CatalogException {
+        if (!databaseExists(databaseName)) {
+            throw new DatabaseNotExistException(getName(), databaseName);
+        }
+
         try {
-            return getDatabase(databaseName) != null;
-        } catch (DatabaseNotExistException e) {
+            List<String> functions = glueFunctionsOperations.listGlueFunctions(databaseName);
+            return functions;
+        } catch (CatalogException e) {
+            LOG.error("Failed to list functions in database {}: {}", databaseName, e.getMessage());
+            throw new CatalogException(
+                    String.format("Error listing functions in database %s: %s", databaseName, e.getMessage()), e);
+        }
+    }
+
+    /**
+     * Retrieves a function from the catalog.
+     *
+     * @param functionPath the object path of the function to retrieve
+     * @return the corresponding CatalogFunction
+     * @throws FunctionNotExistException if the function does not exist
+     * @throws CatalogException          if an error occurs while retrieving the function
+     */
+    @Override
+    public CatalogFunction getFunction(ObjectPath functionPath) throws FunctionNotExistException, CatalogException {
+
+        // Normalize the path for case-insensitive handling
+        ObjectPath normalizedPath = normalize(functionPath);
+
+        if (!databaseExists(normalizedPath.getDatabaseName())) {
+            throw new CatalogException(getName());
+        }
+
+        try {
+            return glueFunctionsOperations.getGlueFunction(normalizedPath);
+        } catch (FunctionNotExistException e) {
+            throw e;
+        } catch (CatalogException e) {
+            throw new CatalogException(
+                    String.format("Failed to get function %s", normalizedPath.getFullName()), e);
+        }
+    }
+
+    /**
+     * Checks if a function exists in the catalog.
+     *
+     * @param functionPath the object path of the function to check
+     * @return true if the function exists, false otherwise
+     * @throws CatalogException if an error occurs while checking the function's existence
+     */
+    @Override
+    public boolean functionExists(ObjectPath functionPath) throws CatalogException {
+
+        // Normalize the path for case-insensitive handling
+        ObjectPath normalizedPath = normalize(functionPath);
+
+        if (!databaseExists(normalizedPath.getDatabaseName())) {
             return false;
         }
-    }
 
-    /**
-     * Check if database is empty. i.e. it should not contain 1. table 2. functions
-     *
-     * @param databaseName name of database.
-     * @return boolean True/False based on the content of database.
-     * @throws CatalogException Any Exception thrown due to glue error
-     */
-    public boolean isDatabaseEmpty(String databaseName) throws CatalogException {
-        checkArgument(
-                !isNullOrWhitespaceOnly(databaseName), "Database name cannot be null or empty.");
-        GlueUtils.validate(databaseName);
-        GetTablesRequest tablesRequest =
-                GetTablesRequest.builder()
-                        .catalogId(glueTableOperator.getGlueCatalogId())
-                        .databaseName(databaseName)
-                        .maxResults(1)
-                        .build();
-        GetUserDefinedFunctionsRequest functionsRequest =
-                GetUserDefinedFunctionsRequest.builder()
-                        .databaseName(databaseName)
-                        .catalogId(glueFunctionOperator.getGlueCatalogId())
-                        .maxResults(1)
-                        .build();
         try {
-            GetTablesResponse tableResponse = glueClient.getTables(tablesRequest);
-            GetUserDefinedFunctionsResponse functionResponse =
-                    glueClient.getUserDefinedFunctions(functionsRequest);
-            if (tableResponse.sdkHttpResponse().isSuccessful()
-                    && functionResponse.sdkHttpResponse().isSuccessful()) {
-                return tableResponse.tableList().isEmpty()
-                        && functionResponse.userDefinedFunctions().isEmpty();
-            } else {
-                String errorMessage =
-                        String.format(
-                                "Error checking if database '%s' is empty. Glue API requests failed with the following IDs:\n"
-                                        + "1. GetTables: %s\n"
-                                        + "2. GetUserDefinedFunctions: %s\n"
-                                        + "Please check the Glue service logs for more details.",
-                                databaseName,
-                                tableResponse.responseMetadata().requestId(),
-                                functionResponse.responseMetadata().requestId());
-                throw new CatalogException(errorMessage);
-            }
-        } catch (GlueException e) {
-            throw new CatalogException(GlueCatalogConstants.GLUE_EXCEPTION_MSG_IDENTIFIER, e);
-        }
-    }
-
-    // ------ tables ------
-
-    /**
-     * Creates a new table or view.
-     *
-     * <p>The framework will make sure to call this method with fully validated {@link
-     * ResolvedCatalogTable} or {@link ResolvedCatalogView}. Those instances are easy to serialize
-     * for a durable catalog implementation.
-     *
-     * @param tablePath path of the table or view to be created
-     * @param table the table definition
-     * @param ignoreIfExists flag to specify behavior when a table or view already exists at the
-     *     given path: if set to false, it throws a TableAlreadyExistException, if set to true, do
-     *     nothing.
-     * @throws TableAlreadyExistException if table already exists and ignoreIfExists is false
-     * @throws DatabaseNotExistException if the database in tablePath doesn't exist
-     * @throws CatalogException in case of any runtime exception
-     */
-    @Override
-    public void createTable(ObjectPath tablePath, CatalogBaseTable table, boolean ignoreIfExists)
-            throws TableAlreadyExistException, DatabaseNotExistException, CatalogException {
-        checkNotNull(tablePath, "tablePath cannot be null");
-        checkNotNull(table, "table cannot be null");
-        checkArgument(table instanceof ResolvedCatalogBaseTable, "table should be resolved");
-        if (!databaseExists(tablePath.getDatabaseName())) {
-            throw new DatabaseNotExistException(getName(), tablePath.getDatabaseName());
-        }
-        if (tableExists(tablePath)) {
-            if (!ignoreIfExists) {
-                throw new TableAlreadyExistException(getName(), tablePath);
-            }
-        } else {
-            glueTableOperator.createGlueTable(tablePath, table);
+            return glueFunctionsOperations.glueFunctionExists(normalizedPath);
+        } catch (CatalogException e) {
+            throw new CatalogException(
+                    String.format("Failed to check if function %s exists", normalizedPath.getFullName()), e);
         }
     }
 
     /**
-     * Modifies an existing table or view. Note that the new and old {@link CatalogBaseTable} must
-     * be of the same kind. For example, this doesn't allow altering a regular table to partitioned
-     * table, or altering a view to a table, and vice versa.
+     * Creates a function in the catalog.
      *
-     * <p>The framework will make sure to call this method with fully validated {@link
-     * ResolvedCatalogTable} or {@link ResolvedCatalogView}. Those instances are easy to serialize
-     * for a durable catalog implementation.
-     *
-     * @param tablePath path of the table or view to be modified
-     * @param newTable the new table definition
-     * @param ignoreIfNotExists flag to specify behavior when the table or view does not exist: if
-     *     set to false, throw an exception, if set to true, do nothing.
-     * @throws TableNotExistException if the table does not exist
-     * @throws CatalogException in case of any runtime exception
+     * @param functionPath      the object path of the function to create
+     * @param function          the function definition
+     * @param ignoreIfExists    flag indicating whether to ignore the exception if the function already exists
+     * @throws FunctionAlreadyExistException if the function already exists and ignoreIfExists is false
+     * @throws DatabaseNotExistException     if the database does not exist
+     * @throws CatalogException              if an error occurs while creating the function
      */
     @Override
-    public void alterTable(
-            ObjectPath tablePath, CatalogBaseTable newTable, boolean ignoreIfNotExists)
-            throws TableNotExistException, CatalogException {
-        checkNotNull(tablePath, "TablePath cannot be null");
-        checkNotNull(newTable, "Table cannot be null.");
-        CatalogBaseTable existingTable = getTable(tablePath);
-        if (existingTable != null) {
-            if (existingTable.getTableKind() != newTable.getTableKind()) {
-                throw new CatalogException(
-                        String.format(
-                                "Table types don't match. Existing table is '%s' and new table is '%s'.",
-                                existingTable.getTableKind(), newTable.getTableKind()));
-            }
-            glueTableOperator.alterGlueTable(tablePath, newTable);
-        } else if (!ignoreIfNotExists) {
-            throw new TableNotExistException(getName(), tablePath);
-        }
-    }
-
-    // ------ tables and views ------
-
-    /**
-     * Drop a table or view.
-     *
-     * @param tablePath Path of the table or view to be dropped
-     * @param ignoreIfNotExists Flag to specify behavior when the table or view does not exist: if
-     *     set to false, throw an exception, if set to true, do nothing.
-     * @throws TableNotExistException if the table or view does not exist
-     * @throws CatalogException in case of any runtime exception
-     */
-    @Override
-    public void dropTable(ObjectPath tablePath, boolean ignoreIfNotExists)
-            throws TableNotExistException, CatalogException {
-        checkNotNull(tablePath, "TablePath cannot be null");
-        if (tableExists(tablePath)) {
-            glueTableOperator.dropGlueTable(tablePath);
-        } else if (!ignoreIfNotExists) {
-            throw new TableNotExistException(getName(), tablePath);
-        }
-    }
-
-    /**
-     * Rename an existing table or view.
-     *
-     * @param tablePath Path of the table or view to be renamed
-     * @param newTableName the new name of the table or view
-     * @param ignoreIfNotExists Flag to specify behavior when the table or view does not exist: if
-     *     set to false, throw an exception, if set to true, do nothing.
-     * @throws TableNotExistException if the table does not exist
-     * @throws CatalogException in case of any runtime exception
-     */
-    @Override
-    public void renameTable(ObjectPath tablePath, String newTableName, boolean ignoreIfNotExists)
-            throws TableNotExistException, TableAlreadyExistException, CatalogException {
-
-        checkNotNull(tablePath, "TablePath cannot be null");
-        checkArgument(
-                !StringUtils.isNullOrWhitespaceOnly(newTableName),
-                "Table name cannot be null or empty.");
-
-        if (tableExists(tablePath)) {
-            ObjectPath newTablePath = new ObjectPath(tablePath.getDatabaseName(), newTableName);
-            if (tableExists(newTablePath)) {
-                throw new TableAlreadyExistException(getName(), newTablePath);
-            }
-            glueTableOperator.renameGlueTable(tablePath, newTablePath);
-        } else if (!ignoreIfNotExists) {
-            throw new TableNotExistException(getName(), tablePath);
-        }
-    }
-
-    /**
-     * Get names of all tables and views under this database. An empty list is returned if none
-     * exists.
-     *
-     * @param databaseName fully qualified database name.
-     * @return a list of the names of all tables and views in this database
-     * @throws DatabaseNotExistException if the database does not exist
-     * @throws CatalogException in case of any runtime exception
-     */
-    @Override
-    public List<String> listTables(String databaseName)
-            throws DatabaseNotExistException, CatalogException {
-        checkArgument(
-                !StringUtils.isNullOrWhitespaceOnly(databaseName),
-                "Database name cannot be null or empty.");
-        if (!databaseExists(databaseName)) {
-            throw new DatabaseNotExistException(getName(), databaseName);
-        }
-        List<String> tableAndViewList =
-                glueTableOperator.getGlueTableList(
-                        databaseName, CatalogBaseTable.TableKind.TABLE.name());
-        tableAndViewList.addAll(listViews(databaseName));
-        return tableAndViewList;
-    }
-
-    /**
-     * Get names of all views under this database. An empty list is returned if none exists.
-     *
-     * @param databaseName the name of the given database
-     * @return a list of the names of all views in the given database
-     * @throws DatabaseNotExistException if the database does not exist
-     * @throws CatalogException in case of any runtime exception
-     */
-    @Override
-    public List<String> listViews(String databaseName)
-            throws DatabaseNotExistException, CatalogException {
-        checkArgument(
-                !StringUtils.isNullOrWhitespaceOnly(databaseName),
-                "Database name cannot be null or empty");
-
-        if (!databaseExists(databaseName)) {
-            throw new DatabaseNotExistException(getName(), databaseName);
-        }
-        return glueTableOperator.getGlueTableList(
-                databaseName, CatalogBaseTable.TableKind.VIEW.name());
-    }
-
-    /**
-     * Returns a {@link CatalogTable} or {@link CatalogView} identified by the given {@link
-     * ObjectPath}. The framework will resolve the metadata objects when necessary.
-     *
-     * @param tablePath Path of the table or view
-     * @return The requested table or view
-     * @throws TableNotExistException if the target does not exist
-     * @throws CatalogException in case of any runtime exception
-     */
-    @Override
-    public CatalogBaseTable getTable(ObjectPath tablePath)
-            throws TableNotExistException, CatalogException {
-        checkNotNull(tablePath, "TablePath cannot be null");
-        if (!tableExists(tablePath)) {
-            throw new TableNotExistException(getName(), tablePath);
-        }
-        return glueTableOperator.getCatalogBaseTableFromGlueTable(
-                glueTableOperator.getGlueTable(tablePath));
-    }
-
-    /**
-     * Check if a table or view exists in this catalog.
-     *
-     * @param tablePath Path of the table or view
-     * @return true if the given table exists in the catalog false otherwise
-     * @throws CatalogException in case of any runtime exception
-     */
-    @Override
-    public boolean tableExists(ObjectPath tablePath) throws CatalogException {
-        checkNotNull(tablePath, "TablePath cannot be null.");
-        return databaseExists(tablePath.getDatabaseName())
-                && glueTableOperator.glueTableExists(tablePath);
-    }
-
-    // ------ functions ------
-    /**
-     * Create a function. Function name should be handled in a case-insensitive way.
-     *
-     * @param path path of the function
-     * @param function the function to be created
-     * @param ignoreIfExists flag to specify behavior if a function with the given name already
-     *     exists: if set to false, it throws a FunctionAlreadyExistException, if set to true,
-     *     nothing happens.
-     * @throws FunctionAlreadyExistException if the function already exist
-     * @throws DatabaseNotExistException if the given database does not exist
-     * @throws CatalogException in case of any runtime exception
-     */
-    @Override
-    public void createFunction(ObjectPath path, CatalogFunction function, boolean ignoreIfExists)
+    public void createFunction(ObjectPath functionPath, CatalogFunction function, boolean ignoreIfExists)
             throws FunctionAlreadyExistException, DatabaseNotExistException, CatalogException {
-        checkNotNull(path, "Function path cannot be null.");
-        checkNotNull(function, "Catalog Function cannot be null.");
-        ObjectPath functionPath = normalize(path);
-        if (!databaseExists(functionPath.getDatabaseName())) {
-            throw new DatabaseNotExistException(getName(), functionPath.getDatabaseName());
-        }
-        if (!functionExists(functionPath)) {
-            glueFunctionOperator.createGlueFunction(functionPath, function);
-        } else {
-            if (!ignoreIfExists) {
-                throw new FunctionAlreadyExistException(getName(), functionPath);
-            }
-        }
-    }
 
-    public ObjectPath normalize(ObjectPath path) {
-        return new ObjectPath(
-                path.getDatabaseName(), FunctionIdentifier.normalizeName(path.getObjectName()));
+        // Normalize the path for case-insensitive handling
+        ObjectPath normalizedPath = normalize(functionPath);
+
+        if (!databaseExists(normalizedPath.getDatabaseName())) {
+            throw new DatabaseNotExistException(getName(), normalizedPath.getDatabaseName());
+        }
+
+        boolean exists = functionExists(normalizedPath);
+
+        if (exists && !ignoreIfExists) {
+            throw new FunctionAlreadyExistException(getName(), normalizedPath);
+        } else if (exists) {
+            return;
+        }
+
+        try {
+            glueFunctionsOperations.createGlueFunction(normalizedPath, function);
+        } catch (FunctionAlreadyExistException e) {
+            throw e;
+        } catch (CatalogException e) {
+            throw new CatalogException(
+                    String.format("Failed to create function %s", normalizedPath.getFullName()), e);
+        }
     }
 
     /**
-     * Modify an existing function. Function name should be handled in a case-insensitive way.
+     * Alters a function in the catalog.
      *
-     * @param path path of the function
-     * @param newFunction the function to be modified
-     * @param ignoreIfNotExists flag to specify behavior if the function does not exist: if set to
-     *     false, throw an exception if set to true, nothing happens
-     * @throws FunctionNotExistException if the function does not exist
-     * @throws CatalogException in case of any runtime exception
+     * @param functionPath       the object path of the function to alter
+     * @param newFunction        the new function definition
+     * @param ignoreIfNotExists  flag indicating whether to ignore the exception if the function does not exist
+     * @throws FunctionNotExistException if the function does not exist and ignoreIfNotExists is false
+     * @throws CatalogException          if an error occurs while altering the function
      */
     @Override
-    public void alterFunction(
-            ObjectPath path, CatalogFunction newFunction, boolean ignoreIfNotExists)
+    public void alterFunction(ObjectPath functionPath, CatalogFunction newFunction, boolean ignoreIfNotExists)
             throws FunctionNotExistException, CatalogException {
-        checkNotNull(path, "Function path cannot be null.");
-        checkNotNull(newFunction, "Catalog Function cannot be null.");
-        ObjectPath functionPath = normalize(path);
-        CatalogFunction existingFunction = getFunction(functionPath);
-        if (existingFunction != null) {
+
+        // Normalize the path for case-insensitive handling
+        ObjectPath normalizedPath = normalize(functionPath);
+
+        try {
+            // Check if function exists without throwing an exception first
+            boolean functionExists = functionExists(normalizedPath);
+
+            if (!functionExists) {
+                if (ignoreIfNotExists) {
+                    return;
+                } else {
+                    throw new FunctionNotExistException(getName(), normalizedPath);
+                }
+            }
+
+            // Check for type compatibility of function
+            CatalogFunction existingFunction = getFunction(normalizedPath);
             if (existingFunction.getClass() != newFunction.getClass()) {
                 throw new CatalogException(
                         String.format(
@@ -645,484 +661,275 @@ public class GlueCatalog extends AbstractCatalog {
                                 existingFunction.getClass().getName(),
                                 newFunction.getClass().getName()));
             }
-            glueFunctionOperator.alterGlueFunction(functionPath, newFunction);
-        } else if (!ignoreIfNotExists) {
-            throw new FunctionNotExistException(getName(), functionPath);
-        }
-    }
 
-    /**
-     * Drop a function. Function name should be handled in a case-insensitive way.
-     *
-     * @param path path of the function to be dropped
-     * @param ignoreIfNotExists flag to specify behavior if the function does not exist: if set to
-     *     false, throw an exception if set to true, nothing happens
-     * @throws FunctionNotExistException if the function does not exist
-     * @throws CatalogException in case of any runtime exception
-     */
-    @Override
-    public void dropFunction(ObjectPath path, boolean ignoreIfNotExists)
-            throws FunctionNotExistException, CatalogException {
-        checkNotNull(path, "Function path cannot be null.");
-        ObjectPath functionPath = normalize(path);
-        if (functionExists(functionPath)) {
-            glueFunctionOperator.dropGlueFunction(functionPath);
-        } else if (!ignoreIfNotExists) {
-            throw new FunctionNotExistException(getName(), functionPath);
-        }
-    }
-
-    /**
-     * List the names of all functions in the given database. An empty list is returned if none is
-     * registered.
-     *
-     * @param databaseName name of the database.
-     * @return a list of the names of the functions in this database
-     * @throws DatabaseNotExistException if the database does not exist
-     * @throws CatalogException in case of any runtime exception
-     */
-    @Override
-    public List<String> listFunctions(String databaseName)
-            throws DatabaseNotExistException, CatalogException {
-        checkArgument(
-                !StringUtils.isNullOrWhitespaceOnly(databaseName),
-                "Database name cannot be null or empty.");
-        databaseName = GlueUtils.getGlueConventionalName(databaseName);
-        if (!databaseExists(databaseName)) {
-            throw new DatabaseNotExistException(getName(), databaseName);
-        }
-        return glueFunctionOperator.listGlueFunctions(databaseName);
-    }
-
-    /**
-     * Get the function. Function name should be handled in a case-insensitive way.
-     *
-     * @param path path of the function
-     * @return the requested function
-     * @throws FunctionNotExistException if the function does not exist in the catalog
-     * @throws CatalogException in case of any runtime exception
-     */
-    @Override
-    public CatalogFunction getFunction(ObjectPath path)
-            throws FunctionNotExistException, CatalogException {
-        checkNotNull(path, "Function path cannot be null.");
-        ObjectPath functionPath = normalize(path);
-        if (!functionExists(functionPath)) {
-            throw new FunctionNotExistException(getName(), functionPath);
-        } else {
-            return glueFunctionOperator.getGlueFunction(functionPath);
-        }
-    }
-
-    /**
-     * Check whether a function exists or not. Function name should be handled in a case-insensitive
-     * way.
-     *
-     * @param path path of the function
-     * @return true if the function exists in the catalog false otherwise
-     * @throws CatalogException in case of any runtime exception
-     */
-    @Override
-    public boolean functionExists(ObjectPath path) throws CatalogException {
-        checkNotNull(path, "Function path cannot be null.");
-        ObjectPath functionPath = normalize(path);
-        return databaseExists(functionPath.getDatabaseName())
-                && glueFunctionOperator.glueFunctionExists(functionPath);
-    }
-
-    // ------ partitions ------
-    /**
-     * Create a partition.
-     *
-     * @param tablePath path of the table.
-     * @param partitionSpec partition spec of the partition
-     * @param partition the partition to add.
-     * @param ignoreIfExists flag to specify behavior if a table with the given name already exists:
-     *     if set to false, it throws a TableAlreadyExistException, if set to true, nothing happens.
-     * @throws TableNotExistException thrown if the target table does not exist
-     * @throws TableNotPartitionedException thrown if the target table is not partitioned
-     * @throws PartitionSpecInvalidException thrown if the given partition spec is invalid
-     * @throws PartitionAlreadyExistsException thrown if the target partition already exists
-     * @throws CatalogException in case of any runtime exception
-     */
-    @Override
-    public void createPartition(
-            ObjectPath tablePath,
-            CatalogPartitionSpec partitionSpec,
-            CatalogPartition partition,
-            boolean ignoreIfExists)
-            throws TableNotExistException, TableNotPartitionedException,
-                    PartitionSpecInvalidException, PartitionAlreadyExistsException,
-                    CatalogException {
-        checkNotNull(tablePath, "TablePath cannot be null.");
-        checkNotNull(partitionSpec, "PartitionSpec cannot be null.");
-        checkNotNull(partition, "Partition cannot be null.");
-        Table glueTable = glueTableOperator.getGlueTable(tablePath);
-        gluePartitionOperator.ensurePartitionedTable(tablePath, glueTable);
-        if (!partitionExists(tablePath, partitionSpec)) {
-            gluePartitionOperator.createGluePartition(glueTable, partitionSpec, partition);
-        } else {
-            if (!ignoreIfExists) {
-                throw new PartitionAlreadyExistsException(getName(), tablePath, partitionSpec);
+            // Proceed with alteration
+            glueFunctionsOperations.alterGlueFunction(normalizedPath, newFunction);
+        } catch (FunctionNotExistException e) {
+            if (ignoreIfNotExists) {
+            } else {
+                throw e;
             }
-        }
-    }
-
-    /**
-     * Get CatalogPartitionSpec of all partitions of the table.
-     *
-     * @param tablePath path of the table
-     * @return a list of CatalogPartitionSpec of the table
-     * @throws TableNotExistException thrown if the table does not exist in the catalog
-     * @throws TableNotPartitionedException thrown if the table is not partitioned
-     * @throws CatalogException in case of any runtime exception
-     */
-    @Override
-    public List<CatalogPartitionSpec> listPartitions(ObjectPath tablePath)
-            throws TableNotExistException, TableNotPartitionedException, CatalogException {
-        checkNotNull(tablePath, "TablePath cannot be null");
-        if (!tableExists(tablePath)) {
-            throw new TableNotExistException(getName(), tablePath);
-        }
-        if (isPartitionedTable(tablePath)) {
-            return gluePartitionOperator.listPartitions(tablePath);
-        }
-        throw new TableNotPartitionedException(getName(), tablePath);
-    }
-
-    public boolean isPartitionedTable(ObjectPath tablePath) {
-        CatalogBaseTable table;
-        try {
-            table = getTable(tablePath);
-            if (table instanceof CatalogTable) {
-                CatalogTable catalogTable = (CatalogTable) table;
-                return catalogTable.isPartitioned();
-            }
-            return false;
-        } catch (TableNotExistException e) {
-            throw new CatalogException(tablePath.getFullName() + " Table doesn't Exists.", e);
-        }
-    }
-
-    /**
-     * Get CatalogPartitionSpec of all partitions that is under the given CatalogPartitionSpec in
-     * the table.
-     *
-     * @param tablePath path of the table
-     * @param partitionSpec the partition spec to list
-     * @return a list of CatalogPartitionSpec that is under the given CatalogPartitionSpec in the
-     *     table
-     * @throws TableNotExistException thrown if the table does not exist in the catalog
-     * @throws TableNotPartitionedException thrown if the table is not partitioned
-     * @throws CatalogException in case of any runtime exception
-     */
-    @Override
-    public List<CatalogPartitionSpec> listPartitions(
-            ObjectPath tablePath, CatalogPartitionSpec partitionSpec)
-            throws TableNotExistException, TableNotPartitionedException,
-                    PartitionSpecInvalidException, CatalogException {
-        checkNotNull(tablePath, "TablePath cannot be null.");
-        checkNotNull(partitionSpec, "Partition spec cannot be null.");
-        if (!tableExists(tablePath)) {
-            throw new TableNotExistException(getName(), tablePath);
-        }
-        if (!isPartitionedTable(tablePath)) {
-            throw new TableNotPartitionedException(getName(), tablePath);
-        }
-        return gluePartitionOperator.listPartitions(tablePath, partitionSpec);
-    }
-
-    /**
-     * Get CatalogPartitionSpec of partitions by expression filters in the table.
-     *
-     * <p>NOTE: For FieldReferenceExpression, the field index is based on schema of this table
-     * instead of partition columns only.
-     *
-     * <p>The passed in predicates have been translated in conjunctive form.
-     *
-     * <p>If catalog does not support this interface at present, throw an {@link
-     * UnsupportedOperationException} directly. If the catalog does not have a valid filter, throw
-     * the {@link UnsupportedOperationException} directly. Planner will fall back to get all
-     * partitions and filter by itself.
-     *
-     * @param tablePath path of the table
-     * @param filters filters to push down filter to catalog
-     * @return a list of CatalogPartitionSpec that is under the given CatalogPartitionSpec in the
-     *     table
-     * @throws TableNotExistException thrown if the table does not exist in the catalog
-     * @throws TableNotPartitionedException thrown if the table is not partitioned
-     * @throws CatalogException in case of any runtime exception
-     */
-    @Override
-    public List<CatalogPartitionSpec> listPartitionsByFilter(
-            ObjectPath tablePath, List<Expression> filters)
-            throws TableNotExistException, TableNotPartitionedException, CatalogException {
-        checkNotNull(tablePath, "TablePath cannot be null");
-        if (!tableExists(tablePath)) {
-            throw new TableNotExistException(getName(), tablePath);
-        }
-        if (!isPartitionedTable(tablePath)) {
-            throw new TableNotPartitionedException(getName(), tablePath);
-        }
-        return gluePartitionOperator.listGluePartitionsByFilter(tablePath, filters);
-    }
-
-    /**
-     * Get a partition of the given table. The given partition spec keys and values need to be
-     * matched exactly for a result.
-     *
-     * @param tablePath path of the table
-     * @param partitionSpec partition spec of partition to get
-     * @return the requested partition
-     * @throws PartitionNotExistException thrown if the partition doesn't exist
-     * @throws CatalogException in case of any runtime exception
-     */
-    @Override
-    public CatalogPartition getPartition(ObjectPath tablePath, CatalogPartitionSpec partitionSpec)
-            throws PartitionNotExistException, CatalogException {
-        checkNotNull(tablePath, "TablePath cannot be null.");
-        checkNotNull(partitionSpec, "CatalogPartitionSpec cannot be null.");
-        Table glueTable;
-        try {
-            glueTable = glueTableOperator.getGlueTable(tablePath);
-        } catch (TableNotExistException e) {
-            throw new CatalogException("Table doesn't exist in Glue Data Catalog", e);
-        }
-        Partition gluePartition = gluePartitionOperator.getGluePartition(glueTable, partitionSpec);
-        if (gluePartition == null) {
-            throw new PartitionNotExistException(getName(), tablePath, partitionSpec);
-        }
-        Map<String, String> catalogPartitionProperties =
-                new HashMap<>(gluePartition.storageDescriptor().parameters());
-        String comment = catalogPartitionProperties.remove(GlueCatalogConstants.COMMENT);
-        return new CatalogPartitionImpl(catalogPartitionProperties, comment);
-    }
-
-    /**
-     * Check whether a partition exists or not.
-     *
-     * @param tablePath path of the table
-     * @param partitionSpec partition spec of the partition to check
-     * @throws CatalogException in case of any runtime exception
-     */
-    @Override
-    public boolean partitionExists(ObjectPath tablePath, CatalogPartitionSpec partitionSpec)
-            throws CatalogException {
-        checkNotNull(tablePath, "TablePath cannot be null");
-        if (!databaseExists(tablePath.getDatabaseName())) {
-            throw new CatalogException(tablePath.getDatabaseName() + " Database doesn't exists.");
-        }
-        try {
-            Table glueTable = glueTableOperator.getGlueTable(tablePath);
-            return gluePartitionOperator.gluePartitionExists(tablePath, glueTable, partitionSpec);
-        } catch (TableNotExistException e) {
+        } catch (CatalogException e) {
             throw new CatalogException(
-                    tablePath.getFullName() + " Table doesn't Exists in Glue Data Catalog.", e);
+                    String.format("Failed to alter function %s", normalizedPath.getFullName()), e);
         }
     }
 
     /**
-     * Drop a partition.
+     * Drops a function from the catalog.
      *
-     * @param tablePath path of the table.
-     * @param partitionSpec partition spec of the partition to drop
-     * @param ignoreIfNotExists flag to specify behavior if the database does not exist: if set to
-     *     false, throw an exception, if set to true, nothing happens.
-     * @throws PartitionNotExistException thrown if the target partition does not exist
-     * @throws CatalogException in case of any runtime exception
+     * @param functionPath        the object path of the function to drop
+     * @param ignoreIfNotExists   flag indicating whether to ignore the exception if the function does not exist
+     * @throws FunctionNotExistException if the function does not exist and ignoreIfNotExists is false
+     * @throws CatalogException          if an error occurs while dropping the function
      */
     @Override
-    public void dropPartition(
-            ObjectPath tablePath, CatalogPartitionSpec partitionSpec, boolean ignoreIfNotExists)
-            throws PartitionNotExistException, CatalogException {
-        checkNotNull(tablePath, "TablePath cannot be null.");
-        checkNotNull(partitionSpec, "PartitionSpec cannot be null.");
-        if (partitionExists(tablePath, partitionSpec)) {
-            Table glueTable;
-            try {
-                glueTable = glueTableOperator.getGlueTable(tablePath);
-            } catch (TableNotExistException e) {
-                throw new CatalogException(tablePath.getFullName() + " Table doesn't exists.", e);
+    public void dropFunction(ObjectPath functionPath, boolean ignoreIfNotExists)
+            throws FunctionNotExistException, CatalogException {
+
+        // Normalize the path for case-insensitive handling
+        ObjectPath normalizedPath = normalize(functionPath);
+
+        if (!databaseExists(normalizedPath.getDatabaseName())) {
+            if (ignoreIfNotExists) {
+                return;
             }
-            gluePartitionOperator.dropGluePartition(tablePath, partitionSpec, glueTable);
-        } else if (!ignoreIfNotExists) {
-            throw new PartitionNotExistException(getName(), tablePath, partitionSpec);
+            throw new FunctionNotExistException(getName(), normalizedPath);
         }
-    }
 
-    /**
-     * Alter a partition.
-     *
-     * @param tablePath path of the table
-     * @param partitionSpec partition spec of the partition
-     * @param newPartition new partition to replace the old one
-     * @param ignoreIfNotExists flag to specify behavior if the database does not exist: if set to
-     *     false, throw an exception, if set to true, nothing happens.
-     * @throws PartitionNotExistException thrown if the target partition does not exist
-     * @throws CatalogException in case of any runtime exception
-     */
-    @Override
-    public void alterPartition(
-            ObjectPath tablePath,
-            CatalogPartitionSpec partitionSpec,
-            CatalogPartition newPartition,
-            boolean ignoreIfNotExists)
-            throws PartitionNotExistException, CatalogException {
-        checkNotNull(tablePath, "TablePath cannot be null.");
-        checkNotNull(partitionSpec, "CatalogPartitionSpec cannot be null.");
-        checkNotNull(newPartition, "New partition cannot be null.");
-        CatalogPartition existingPartition = getPartition(tablePath, partitionSpec);
-        if (existingPartition != null) {
-            try {
-                Table glueTable = glueTableOperator.getGlueTable(tablePath);
-                gluePartitionOperator.alterGluePartition(
-                        tablePath, glueTable, partitionSpec, newPartition);
-            } catch (TableNotExistException e) {
-                throw new CatalogException("Table Not Found in Glue data catalog", e);
-            } catch (PartitionSpecInvalidException e) {
-                throw new CatalogException("Invalid Partition Spec", e);
+        try {
+            boolean exists = functionExists(normalizedPath);
+            if (!exists) {
+                if (ignoreIfNotExists) {
+                    return;
+                } else {
+                    throw new FunctionNotExistException(getName(), normalizedPath);
+                }
             }
-        } else if (!ignoreIfNotExists) {
-            throw new PartitionNotExistException(getName(), tablePath, partitionSpec);
+
+            // Function exists, proceed with dropping it
+            glueFunctionsOperations.dropGlueFunction(normalizedPath);
+        } catch (FunctionNotExistException e) {
+            if (!ignoreIfNotExists) {
+                throw e;
+            }
+        } catch (CatalogException e) {
+            throw new CatalogException(
+                    String.format("Failed to drop function %s", normalizedPath.getFullName()), e);
+        }
+    }
+
+    @Override
+    public CatalogTableStatistics getTableStatistics(ObjectPath objectPath) throws TableNotExistException, CatalogException {
+        throw new UnsupportedOperationException("Table statistics are not supported by the Glue Catalog.");
+    }
+
+    @Override
+    public CatalogColumnStatistics getTableColumnStatistics(ObjectPath objectPath) throws TableNotExistException, CatalogException {
+        throw new UnsupportedOperationException("Table column statistics are not supported by the Glue Catalog.");
+    }
+
+    @Override
+    public CatalogTableStatistics getPartitionStatistics(ObjectPath objectPath, CatalogPartitionSpec catalogPartitionSpec) throws PartitionNotExistException, CatalogException {
+        throw new UnsupportedOperationException("Partition statistics are not supported by the Glue Catalog.");
+    }
+
+    @Override
+    public CatalogColumnStatistics getPartitionColumnStatistics(ObjectPath objectPath, CatalogPartitionSpec catalogPartitionSpec) throws PartitionNotExistException, CatalogException {
+        throw new UnsupportedOperationException("Partition column statistics are not supported by the Glue Catalog.");
+    }
+
+    @Override
+    public void alterTableStatistics(ObjectPath objectPath, CatalogTableStatistics catalogTableStatistics, boolean b) throws TableNotExistException, CatalogException {
+        throw new UnsupportedOperationException("Altering table statistics is not supported by the Glue Catalog.");
+    }
+
+    @Override
+    public void alterTableColumnStatistics(ObjectPath objectPath, CatalogColumnStatistics catalogColumnStatistics, boolean b) throws TableNotExistException, CatalogException, TablePartitionedException {
+        throw new UnsupportedOperationException("Altering table column statistics is not supported by the Glue Catalog.");
+    }
+
+    @Override
+    public void alterPartitionStatistics(ObjectPath objectPath, CatalogPartitionSpec catalogPartitionSpec, CatalogTableStatistics catalogTableStatistics, boolean b) throws PartitionNotExistException, CatalogException {
+        throw new UnsupportedOperationException("Altering partition statistics is not supported by the Glue Catalog.");
+    }
+
+    @Override
+    public void alterPartitionColumnStatistics(ObjectPath objectPath, CatalogPartitionSpec catalogPartitionSpec, CatalogColumnStatistics catalogColumnStatistics, boolean b) throws PartitionNotExistException, CatalogException {
+        throw new UnsupportedOperationException("Altering partition column statistics is not supported by the Glue Catalog.");
+    }
+
+    // ============================ Private Methods ============================
+    /**
+     * Converts an AWS Glue Table to a Flink CatalogBaseTable, supporting both tables and views.
+     *
+     * @param glueTable the AWS Glue table to convert
+     * @return the corresponding Flink CatalogBaseTable (either CatalogTable or CatalogView)
+     * @throws CatalogException if the table type is unknown or conversion fails
+     */
+    private CatalogBaseTable getCatalogBaseTableFromGlueTable(Table glueTable) {
+
+        try {
+            // Parse schema from Glue table structure
+            Schema schemaInfo = glueTableUtils.getSchemaFromGlueTable(glueTable);
+
+            // Extract partition keys
+            List<String> partitionKeys = glueTable.partitionKeys() != null
+                ? glueTable.partitionKeys().stream()
+                    .map(software.amazon.awssdk.services.glue.model.Column::name)
+                    .collect(Collectors.toList())
+                : Collections.emptyList();
+
+            // Collect all properties
+            Map<String, String> properties = new HashMap<>();
+
+            // Add table parameters
+            if (glueTable.parameters() != null) {
+                properties.putAll(glueTable.parameters());
+            }
+
+            // Add owner if present
+            if (glueTable.owner() != null) {
+                properties.put(GlueCatalogConstants.TABLE_OWNER, glueTable.owner());
+            }
+
+            // Add storage parameters if present
+            if (glueTable.storageDescriptor() != null) {
+                if (glueTable.storageDescriptor().hasParameters()) {
+                    properties.putAll(glueTable.storageDescriptor().parameters());
+                }
+
+                // Add input/output formats if present
+                if (glueTable.storageDescriptor().inputFormat() != null) {
+                    properties.put(
+                            GlueCatalogConstants.TABLE_INPUT_FORMAT,
+                            glueTable.storageDescriptor().inputFormat());
+                }
+
+                if (glueTable.storageDescriptor().outputFormat() != null) {
+                    properties.put(
+                            GlueCatalogConstants.TABLE_OUTPUT_FORMAT,
+                            glueTable.storageDescriptor().outputFormat());
+                }
+            }
+
+            // Check table type and create appropriate catalog object
+            String tableType = glueTable.tableType();
+            if (tableType == null) {
+                LOG.warn("Table type is null for table {}, defaulting to TABLE", glueTable.name());
+                tableType = CatalogBaseTable.TableKind.TABLE.name();
+            }
+
+            if (tableType.equalsIgnoreCase(CatalogBaseTable.TableKind.TABLE.name())) {
+                return CatalogTable.of(
+                        schemaInfo,
+                        glueTable.description(),
+                        partitionKeys,
+                        properties);
+            } else if (tableType.equalsIgnoreCase(CatalogBaseTable.TableKind.VIEW.name())) {
+                String originalQuery = glueTable.viewOriginalText();
+                String expandedQuery = glueTable.viewExpandedText();
+
+                if (originalQuery == null) {
+                    throw new CatalogException(
+                            String.format("View '%s' is missing its original query text", glueTable.name()));
+                }
+
+                // If expanded query is null, use original query
+                if (expandedQuery == null) {
+                    expandedQuery = originalQuery;
+                }
+
+                return CatalogView.of(
+                        schemaInfo,
+                        glueTable.description(),
+                        originalQuery,
+                        expandedQuery,
+                        properties);
+            } else {
+                throw new CatalogException(
+                        String.format("Unknown table type: %s from Glue Catalog.", tableType));
+            }
+        } catch (Exception e) {
+            throw new CatalogException(
+                    String.format("Failed to convert Glue table '%s' to Flink table: %s",
+                            glueTable.name(), e.getMessage()), e);
         }
     }
 
     /**
-     * Get the statistics of a table.
+     * Creates a regular table in the Glue catalog.
      *
-     * @param tablePath path of the table
-     * @return statistics of the given table
-     * @throws TableNotExistException if the table does not exist in the catalog
-     * @throws CatalogException in case of any runtime exception
+     * @param objectPath      the object path of the table
+     * @param catalogTable    the table definition
+     * @param tableProperties the table properties
+     * @throws CatalogException if an error occurs during table creation
      */
-    @Override
-    public CatalogTableStatistics getTableStatistics(ObjectPath tablePath)
-            throws TableNotExistException, CatalogException {
-        return CatalogTableStatistics.UNKNOWN;
+    private void createRegularTable(
+            ObjectPath objectPath,
+            CatalogTable catalogTable,
+            Map<String, String> tableProperties) throws CatalogException {
+
+        String databaseName = objectPath.getDatabaseName();
+        String tableName = objectPath.getObjectName();
+
+        // Extract table location
+        String tableLocation = glueTableUtils.extractTableLocation(tableProperties, objectPath);
+
+        // Resolve the schema and map Flink columns to Glue columns
+        ResolvedCatalogBaseTable<?> resolvedTable = (ResolvedCatalogBaseTable<?>) catalogTable;
+        List<software.amazon.awssdk.services.glue.model.Column> glueColumns = resolvedTable.getResolvedSchema().getColumns()
+                .stream()
+                .map(glueTableUtils::mapFlinkColumnToGlueColumn)
+                .collect(Collectors.toList());
+
+        StorageDescriptor storageDescriptor = glueTableUtils.buildStorageDescriptor(tableProperties, glueColumns, tableLocation);
+
+        TableInput tableInput = glueTableOperations.buildTableInput(tableName, glueColumns, catalogTable, storageDescriptor, tableProperties);
+
+        glueTableOperations.createTable(databaseName, tableInput);
     }
 
     /**
-     * Get the column statistics of a table.
+     * Creates a view in the Glue catalog.
      *
-     * @param tablePath path of the table
-     * @return column statistics of the given table
-     * @throws TableNotExistException if the table does not exist in the catalog
-     * @throws CatalogException in case of any runtime exception
+     * @param objectPath      the object path of the view
+     * @param catalogView     the view definition
+     * @param tableProperties the view properties
+     * @throws CatalogException if an error occurs during view creation
      */
-    @Override
-    public CatalogColumnStatistics getTableColumnStatistics(ObjectPath tablePath)
-            throws TableNotExistException, CatalogException {
-        return CatalogColumnStatistics.UNKNOWN;
-    }
+    private void createView(
+            ObjectPath objectPath,
+            CatalogView catalogView,
+            Map<String, String> tableProperties) throws CatalogException {
 
-    /**
-     * Get the statistics of a partition.
-     *
-     * @param tablePath path of the table
-     * @param partitionSpec partition spec of the partition
-     * @return statistics of the given partition
-     * @throws PartitionNotExistException if the partition does not exist
-     * @throws CatalogException in case of any runtime exception
-     */
-    @Override
-    public CatalogTableStatistics getPartitionStatistics(
-            ObjectPath tablePath, CatalogPartitionSpec partitionSpec)
-            throws PartitionNotExistException, CatalogException {
-        return CatalogTableStatistics.UNKNOWN;
-    }
+        String databaseName = objectPath.getDatabaseName();
+        String tableName = objectPath.getObjectName();
 
-    /**
-     * Get the column statistics of a partition.
-     *
-     * @param tablePath path of the table
-     * @param partitionSpec partition spec of the partition
-     * @return column statistics of the given partition
-     * @throws PartitionNotExistException if the partition does not exist
-     * @throws CatalogException in case of any runtime exception
-     */
-    @Override
-    public CatalogColumnStatistics getPartitionColumnStatistics(
-            ObjectPath tablePath, CatalogPartitionSpec partitionSpec)
-            throws PartitionNotExistException, CatalogException {
-        return CatalogColumnStatistics.UNKNOWN;
-    }
+        // Resolve the schema and map Flink columns to Glue columns
+        ResolvedCatalogBaseTable<?> resolvedView = (ResolvedCatalogBaseTable<?>) catalogView;
+        List<software.amazon.awssdk.services.glue.model.Column> glueColumns = resolvedView.getResolvedSchema().getColumns()
+                .stream()
+                .map(glueTableUtils::mapFlinkColumnToGlueColumn)
+                .collect(Collectors.toList());
 
-    /**
-     * Update the statistics of a table.
-     *
-     * @param tablePath path of the table
-     * @param tableStatistics new statistics to update
-     * @param ignoreIfNotExists flag to specify behavior if the table does not exist: if set to
-     *     false, throw an exception, if set to true, nothing happens.
-     * @throws TableNotExistException if the table does not exist in the catalog
-     * @throws CatalogException in case of any runtime exception
-     */
-    @Override
-    public void alterTableStatistics(
-            ObjectPath tablePath, CatalogTableStatistics tableStatistics, boolean ignoreIfNotExists)
-            throws TableNotExistException, CatalogException {
-        throw new UnsupportedOperationException("Operation with Statistics not supported.");
-    }
+        // Build a minimal storage descriptor for views
+        StorageDescriptor storageDescriptor = StorageDescriptor.builder()
+                .columns(glueColumns)
+                .build();
 
-    /**
-     * Update the column statistics of a table.
-     *
-     * @param tablePath path of the table
-     * @param columnStatistics new column statistics to update
-     * @param ignoreIfNotExists flag to specify behavior if the table does not exist: if set to
-     *     false, throw an exception, if set to true, nothing happens.
-     * @throws TableNotExistException if the table does not exist in the catalog
-     * @throws CatalogException in case of any runtime exception
-     */
-    @Override
-    public void alterTableColumnStatistics(
-            ObjectPath tablePath,
-            CatalogColumnStatistics columnStatistics,
-            boolean ignoreIfNotExists)
-            throws TableNotExistException, CatalogException, TablePartitionedException {
-        throw new UnsupportedOperationException("Operation with Statistics not supported.");
-    }
+        // Create view-specific TableInput
+        TableInput viewInput = TableInput.builder()
+                .name(tableName)
+                .tableType(CatalogBaseTable.TableKind.VIEW.name())
+                .viewOriginalText(catalogView.getOriginalQuery())
+                .viewExpandedText(catalogView.getExpandedQuery())
+                .storageDescriptor(storageDescriptor)
+                .parameters(tableProperties)
+                .description(catalogView.getComment())
+                .build();
 
-    /**
-     * Update the statistics of a table partition.
-     *
-     * @param tablePath path of the table
-     * @param partitionSpec partition spec of the partition
-     * @param partitionStatistics new statistics to update
-     * @param ignoreIfNotExists flag to specify behavior if the partition does not exist: if set to
-     *     false, throw an exception, if set to true, nothing happens.
-     * @throws PartitionNotExistException if the partition does not exist
-     * @throws CatalogException in case of any runtime exception
-     */
-    @Override
-    public void alterPartitionStatistics(
-            ObjectPath tablePath,
-            CatalogPartitionSpec partitionSpec,
-            CatalogTableStatistics partitionStatistics,
-            boolean ignoreIfNotExists)
-            throws PartitionNotExistException, CatalogException {
-        throw new UnsupportedOperationException("Operation with Statistics not supported.");
-    }
-
-    /**
-     * Update the column statistics of a table partition.
-     *
-     * @param tablePath path of the table
-     * @param partitionSpec partition spec of the partition @@param columnStatistics new column
-     *     statistics to update
-     * @param columnStatistics column related statistics
-     * @param ignoreIfNotExists flag to specify behavior if the partition does not exist: if set to
-     *     false, throw an exception, if set to true, nothing happens.
-     * @throws PartitionNotExistException if the partition does not exist
-     * @throws CatalogException in case of any runtime exception
-     */
-    @Override
-    public void alterPartitionColumnStatistics(
-            ObjectPath tablePath,
-            CatalogPartitionSpec partitionSpec,
-            CatalogColumnStatistics columnStatistics,
-            boolean ignoreIfNotExists)
-            throws PartitionNotExistException, CatalogException {
-        throw new UnsupportedOperationException("Operation with Statistics not supported.");
+        // Create the view
+        glueTableOperations.createTable(databaseName, viewInput);
     }
 }

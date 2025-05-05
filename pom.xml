@@ -31,7 +31,7 @@ under the License.
 
     <groupId>org.apache.flink</groupId>
     <artifactId>flink-connector-aws</artifactId>
-    <version>4.4-SNAPSHOT</version>
+    <version>5.1-SNAPSHOT</version>
 
     <name>Flink : Connectors : AWS</name>
     <packaging>pom</packaging>
@@ -80,13 +80,11 @@ under the License.
 
     <modules>
         <module>flink-connector-aws-base</module>
-
         <module>flink-connector-aws</module>
         <module>flink-formats-aws</module>
         <module>flink-python</module>
-        <module>flink-catalog-aws</module>
         <module>flink-connector-aws-e2e-tests</module>
-
+        <module>flink-catalog-aws-glue</module>
     </modules>
 
     <dependencies>
@@ -338,7 +336,7 @@ under the License.
             <dependency>
                 <groupId>com.google.protobuf</groupId>
                 <artifactId>protobuf-java</artifactId>
-                <version>3.21.7</version>
+                <version>3.25.5</version>
             </dependency>
             <dependency>
                 <groupId>com.google.guava</groupId>
@@ -403,7 +401,7 @@ under the License.
             <dependency>
                 <groupId>org.apache.avro</groupId>
                 <artifactId>avro</artifactId>
-                <version>1.11.3</version>
+                <version>1.11.4</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.commons</groupId>

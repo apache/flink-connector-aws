@@ -18,41 +18,28 @@
 
 package org.apache.flink.table.catalog.glue.operator;
 
-import org.apache.flink.annotation.Internal;
-import org.apache.flink.util.StringUtils;
-
 import software.amazon.awssdk.services.glue.GlueClient;
 
-import static org.apache.flink.util.Preconditions.checkArgument;
-import static org.apache.flink.util.Preconditions.checkNotNull;
-
 /**
- * Glue related operation. Important Note : * <a
- * href="https://aws.amazon.com/premiumsupport/knowledge-center/glue-crawler-internal-service-exception/">...</a>
+ * Abstract base class for Glue operations that contains common functionality
+ * for interacting with the AWS Glue service.
  */
-@Internal
 public abstract class GlueOperator {
 
-    public final String glueCatalogId;
-
+    /** The Glue client used for interacting with AWS Glue. */
     protected final GlueClient glueClient;
 
-    public final String catalogName;
+    /** The catalog name associated with the Glue operations. */
+    protected final String catalogName;
 
-    public GlueOperator(String catalogName, GlueClient glueClient, String glueCatalogId) {
-        checkArgument(
-                !StringUtils.isNullOrWhitespaceOnly(catalogName),
-                "catalogName name cannot be null or empty.");
-        checkNotNull(glueClient, "GlueClient Instance cannot be Null.");
-        checkArgument(
-                !StringUtils.isNullOrWhitespaceOnly(glueCatalogId),
-                "glue Catalog Id name cannot be null or empty.");
-        this.catalogName = catalogName;
+    /**
+     * Constructor to initialize the shared fields.
+     *
+     * @param glueClient The Glue client used for interacting with the AWS Glue service.
+     * @param catalogName The catalog name associated with the Glue operations.
+     */
+    protected GlueOperator(GlueClient glueClient, String catalogName) {
         this.glueClient = glueClient;
-        this.glueCatalogId = glueCatalogId;
-    }
-
-    public String getGlueCatalogId() {
-        return glueCatalogId;
+        this.catalogName = catalogName;
     }
 }

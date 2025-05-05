@@ -18,63 +18,66 @@
 
 package org.apache.flink.table.catalog.glue.factory;
 
-import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.configuration.ConfigOption;
+import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.table.catalog.Catalog;
+import org.apache.flink.table.catalog.exceptions.CatalogException;
 import org.apache.flink.table.catalog.glue.GlueCatalog;
-import org.apache.flink.table.catalog.glue.GlueCatalogOptions;
-import org.apache.flink.table.catalog.glue.util.GlueCatalogOptionsUtils;
 import org.apache.flink.table.factories.CatalogFactory;
-import org.apache.flink.table.factories.FactoryUtil;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.Properties;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
-/** Catalog factory for {@link GlueCatalog}. */
-@PublicEvolving
+/**
+ * Factory for creating GlueCatalog instances.
+ */
 public class GlueCatalogFactory implements CatalogFactory {
 
-    private static final Logger LOG = LoggerFactory.getLogger(GlueCatalogFactory.class);
+    // Define configuration options that users must provide
+    public static final ConfigOption<String> REGION =
+            ConfigOptions.key("region")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("AWS region for the Glue catalog");
+
+    public static final ConfigOption<String> DEFAULT_DATABASE =
+            ConfigOptions.key("default-database")
+                    .stringType()
+                    .defaultValue("default")
+                    .withDescription("Default database to use in Glue catalog");
 
     @Override
     public String factoryIdentifier() {
-        return GlueCatalogOptions.IDENTIFIER;
-    }
-
-    @Override
-    public Set<ConfigOption<?>> optionalOptions() {
-        Set<ConfigOption<?>> allConfigs = GlueCatalogOptions.getAllConfigOptions();
-        allConfigs.removeAll(GlueCatalogOptions.getRequiredConfigOptions());
-        return allConfigs;
+        return "glue";
     }
 
     @Override
     public Set<ConfigOption<?>> requiredOptions() {
-        return GlueCatalogOptions.getRequiredConfigOptions();
+        Set<ConfigOption<?>> options = new HashSet<>();
+        options.add(REGION);
+        return options;
+    }
+
+    @Override
+    public Set<ConfigOption<?>> optionalOptions() {
+        Set<ConfigOption<?>> options = new HashSet<>();
+        options.add(DEFAULT_DATABASE);
+        return options;
     }
 
     @Override
     public Catalog createCatalog(Context context) {
-        final FactoryUtil.CatalogFactoryHelper helper =
-                FactoryUtil.createCatalogFactoryHelper(this, context);
-        GlueCatalogOptionsUtils optionsUtils =
-                new GlueCatalogOptionsUtils(context.getOptions(), context.getConfiguration());
-        helper.validateExcept(optionsUtils.getNonValidatedPrefixes().toArray(new String[0]));
-        if (LOG.isDebugEnabled()) {
-            LOG.debug(
-                    context.getOptions().entrySet().stream()
-                            .map(entry -> entry.getKey() + "-> " + entry.getValue())
-                            .collect(Collectors.joining("\n")));
+        Map<String, String> config = context.getOptions();
+        String name = context.getName();
+        String region = config.get(REGION.key());
+        String defaultDatabase = config.getOrDefault(DEFAULT_DATABASE.key(), DEFAULT_DATABASE.defaultValue());
+
+        // Ensure required properties are present
+        if (region == null || region.isEmpty()) {
+            throw new CatalogException("The 'region' property must be specified for the Glue catalog.");
         }
-        Properties glueCatalogValidatedProperties = optionsUtils.getValidatedConfigurations();
-        return new GlueCatalog(
-                context.getName(),
-                helper.getOptions().get(GlueCatalogOptions.DEFAULT_DATABASE),
-                context.getConfiguration(),
-                glueCatalogValidatedProperties);
+
+        return new GlueCatalog(name, defaultDatabase, region);
     }
 }

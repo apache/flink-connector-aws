@@ -24,8 +24,9 @@ import org.apache.flink.table.catalog.CatalogFunctionImpl;
 import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.catalog.exceptions.CatalogException;
 import org.apache.flink.table.catalog.exceptions.FunctionAlreadyExistException;
-import org.apache.flink.table.catalog.glue.constants.GlueCatalogConstants;
-import org.apache.flink.table.catalog.glue.util.GlueUtils;
+import org.apache.flink.table.catalog.exceptions.FunctionNotExistException;
+import org.apache.flink.table.catalog.glue.util.GlueCatalogConstants;
+import org.apache.flink.table.catalog.glue.util.GlueFunctionsUtil;
 import org.apache.flink.table.resource.ResourceUri;
 
 import org.slf4j.Logger;
@@ -60,8 +61,14 @@ public class GlueFunctionOperator extends GlueOperator {
 
     private static final Logger LOG = LoggerFactory.getLogger(GlueFunctionOperator.class);
 
-    public GlueFunctionOperator(String catalogName, GlueClient glueClient, String glueCatalogId) {
-        super(catalogName, glueClient, glueCatalogId);
+    /**
+     * Constructor to initialize the shared fields.
+     *
+     * @param glueClient  The Glue client used for interacting with the AWS Glue service.
+     * @param catalogName The catalog name associated with the Glue operations.
+     */
+    public GlueFunctionOperator(GlueClient glueClient, String catalogName) {
+        super(glueClient, catalogName);
     }
 
     /**
@@ -77,12 +84,13 @@ public class GlueFunctionOperator extends GlueOperator {
         CreateUserDefinedFunctionRequest.Builder createUDFRequest =
                 CreateUserDefinedFunctionRequest.builder()
                         .databaseName(functionPath.getDatabaseName())
-                        .catalogId(getGlueCatalogId())
                         .functionInput(functionInput);
         try {
             CreateUserDefinedFunctionResponse response =
                     glueClient.createUserDefinedFunction(createUDFRequest.build());
-            GlueUtils.validateGlueResponse(response);
+            if (response == null || (response.sdkHttpResponse() != null && !response.sdkHttpResponse().isSuccessful())) {
+                throw new CatalogException("Error creating function: " + functionPath.getFullName());
+            }
             LOG.info("Created Function: {}", functionPath.getFullName());
         } catch (AlreadyExistsException e) {
             LOG.error(
@@ -97,43 +105,85 @@ public class GlueFunctionOperator extends GlueOperator {
     }
 
     /**
+     * Modify an existing function. Function name should be handled in a case-insensitive way.
+     *
+     * @param functionPath path of function.
+     * @param newFunction modified function.
+     * @throws CatalogException on runtime errors.
+     * @throws FunctionNotExistException if the function doesn't exist.
+     */
+    public void alterGlueFunction(ObjectPath functionPath, CatalogFunction newFunction)
+            throws CatalogException, FunctionNotExistException {
+
+        UserDefinedFunctionInput functionInput = createFunctionInput(functionPath, newFunction);
+
+        UpdateUserDefinedFunctionRequest updateUserDefinedFunctionRequest =
+                UpdateUserDefinedFunctionRequest.builder()
+                        .functionName(functionPath.getObjectName())
+                        .databaseName(functionPath.getDatabaseName())
+                        .functionInput(functionInput)
+                        .build();
+        try {
+            UpdateUserDefinedFunctionResponse response =
+                    glueClient.updateUserDefinedFunction(updateUserDefinedFunctionRequest);
+            if (response == null || (response.sdkHttpResponse() != null && !response.sdkHttpResponse().isSuccessful())) {
+                throw new CatalogException("Error altering function: " + functionPath.getFullName());
+            }
+            LOG.info("Altered Function: {}", functionPath.getFullName());
+        } catch (EntityNotFoundException e) {
+            LOG.error("Function not found: {}", functionPath.getFullName());
+            throw new FunctionNotExistException(catalogName, functionPath, e);
+        } catch (GlueException e) {
+            LOG.error("Error altering glue function: {}\n{}", functionPath.getFullName(), e);
+            throw new CatalogException(GlueCatalogConstants.GLUE_EXCEPTION_MSG_IDENTIFIER, e);
+        }
+    }
+
+    /**
      * Get the user defined function from glue Catalog. Function name should be handled in a
      * case-insensitive way.
      *
      * @param functionPath path of the function
      * @return the requested function
      * @throws CatalogException in case of any runtime exception
+     * @throws FunctionNotExistException if the function doesn't exist
      */
-    public CatalogFunction getGlueFunction(ObjectPath functionPath) {
+    public CatalogFunction getGlueFunction(ObjectPath functionPath) throws CatalogException, FunctionNotExistException {
         GetUserDefinedFunctionRequest request =
                 GetUserDefinedFunctionRequest.builder()
                         .databaseName(functionPath.getDatabaseName())
-                        .catalogId(getGlueCatalogId())
                         .functionName(functionPath.getObjectName())
                         .build();
-        GetUserDefinedFunctionResponse response = glueClient.getUserDefinedFunction(request);
-        GlueUtils.validateGlueResponse(response);
-        UserDefinedFunction udf = response.userDefinedFunction();
-        List<ResourceUri> resourceUris =
-                udf.resourceUris().stream()
-                        .map(
-                                resourceUri ->
-                                        new org.apache.flink.table.resource.ResourceUri(
-                                                org.apache.flink.table.resource.ResourceType
-                                                        .valueOf(resourceUri.resourceType().name()),
-                                                resourceUri.uri()))
-                        .collect(Collectors.toList());
-        return new CatalogFunctionImpl(
-                GlueUtils.getCatalogFunctionClassName(udf),
-                GlueUtils.getFunctionalLanguage(udf),
-                resourceUris);
+        try {
+            GetUserDefinedFunctionResponse response = glueClient.getUserDefinedFunction(request);
+            UserDefinedFunction udf = response.userDefinedFunction();
+            List<ResourceUri> resourceUris =
+                    udf.resourceUris().stream()
+                            .map(
+                                    resourceUri ->
+                                            new org.apache.flink.table.resource.ResourceUri(
+                                                    org.apache.flink.table.resource.ResourceType
+                                                            .valueOf(resourceUri.resourceType().name()),
+                                                    resourceUri.uri()))
+                            .collect(Collectors.toList());
+            return new CatalogFunctionImpl(
+                    GlueFunctionsUtil.getCatalogFunctionClassName(udf),
+                    GlueFunctionsUtil.getFunctionalLanguage(udf),
+                    resourceUris);
+        } catch (EntityNotFoundException e) {
+            LOG.error("Function not found: {}", functionPath.getFullName());
+            throw new FunctionNotExistException(catalogName, functionPath, e);
+        } catch (GlueException e) {
+            LOG.error("Error fetching function {}: {}", functionPath.getFullName(), e);
+            throw new CatalogException(
+                String.format("Error getting function %s: %s", functionPath.getFullName(), e.getMessage()), e);
+        }
     }
 
     public List<String> listGlueFunctions(String databaseName) {
         GetUserDefinedFunctionsRequest.Builder functionsRequest =
                 GetUserDefinedFunctionsRequest.builder()
-                        .databaseName(databaseName)
-                        .catalogId(getGlueCatalogId());
+                        .databaseName(databaseName);
         List<String> glueFunctions;
         try {
             GetUserDefinedFunctionsResponse functionsResponse =
@@ -163,12 +213,10 @@ public class GlueFunctionOperator extends GlueOperator {
                 GetUserDefinedFunctionRequest.builder()
                         .functionName(functionPath.getObjectName())
                         .databaseName(functionPath.getDatabaseName())
-                        .catalogId(getGlueCatalogId())
                         .build();
 
         try {
             GetUserDefinedFunctionResponse response = glueClient.getUserDefinedFunction(request);
-            GlueUtils.validateGlueResponse(response);
             return response.userDefinedFunction() != null;
         } catch (EntityNotFoundException e) {
             return false;
@@ -179,46 +227,31 @@ public class GlueFunctionOperator extends GlueOperator {
     }
 
     /**
-     * Modify an existing function. Function name should be handled in a case-insensitive way.
-     *
-     * @param functionPath path of function.
-     * @param newFunction modified function.
-     * @throws CatalogException on runtime errors.
-     */
-    public void alterGlueFunction(ObjectPath functionPath, CatalogFunction newFunction)
-            throws CatalogException {
-
-        UserDefinedFunctionInput functionInput = createFunctionInput(functionPath, newFunction);
-
-        UpdateUserDefinedFunctionRequest updateUserDefinedFunctionRequest =
-                UpdateUserDefinedFunctionRequest.builder()
-                        .functionName(functionPath.getObjectName())
-                        .databaseName(functionPath.getDatabaseName())
-                        .catalogId(getGlueCatalogId())
-                        .functionInput(functionInput)
-                        .build();
-        UpdateUserDefinedFunctionResponse response =
-                glueClient.updateUserDefinedFunction(updateUserDefinedFunctionRequest);
-        GlueUtils.validateGlueResponse(response);
-        LOG.info("Altered Function: {}", functionPath.getFullName());
-    }
-
-    /**
      * Drop / Delete UserDefinedFunction from glue data catalog.
      *
      * @param functionPath fully qualified function path
      * @throws CatalogException In case of Unexpected errors.
+     * @throws FunctionNotExistException if the function does not exist.
      */
-    public void dropGlueFunction(ObjectPath functionPath) throws CatalogException {
+    public void dropGlueFunction(ObjectPath functionPath) throws CatalogException, FunctionNotExistException {
         DeleteUserDefinedFunctionRequest request =
                 DeleteUserDefinedFunctionRequest.builder()
-                        .catalogId(getGlueCatalogId())
                         .functionName(functionPath.getObjectName())
                         .databaseName(functionPath.getDatabaseName())
                         .build();
-        DeleteUserDefinedFunctionResponse response = glueClient.deleteUserDefinedFunction(request);
-        GlueUtils.validateGlueResponse(response);
-        LOG.info("Dropped Function: {}", functionPath.getFullName());
+        try {
+            DeleteUserDefinedFunctionResponse response = glueClient.deleteUserDefinedFunction(request);
+            if (response == null || (response.sdkHttpResponse() != null && !response.sdkHttpResponse().isSuccessful())) {
+                throw new CatalogException("Error dropping function: " + functionPath.getFullName());
+            }
+            LOG.info("Dropped Function: {}", functionPath.getFullName());
+        } catch (EntityNotFoundException e) {
+            throw new FunctionNotExistException(catalogName, functionPath, e);
+        } catch (GlueException e) {
+            LOG.error("Error dropping glue function: {}\n{}", functionPath.getFullName(), e);
+            throw new CatalogException(
+                String.format("Error dropping function %s: %s", functionPath.getFullName(), e.getMessage()), e);
+        }
     }
 
     /**
@@ -253,7 +286,7 @@ public class GlueFunctionOperator extends GlueOperator {
         }
         return UserDefinedFunctionInput.builder()
                 .functionName(functionPath.getObjectName())
-                .className(GlueUtils.getGlueFunctionClassName(function))
+                .className(GlueFunctionsUtil.getGlueFunctionClassName(function))
                 .ownerType(PrincipalType.USER)
                 .ownerName(GlueCatalogConstants.FLINK_CATALOG)
                 .resourceUris(resourceUris)
