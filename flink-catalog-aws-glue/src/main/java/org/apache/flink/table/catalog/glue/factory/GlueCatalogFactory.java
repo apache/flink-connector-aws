@@ -16,12 +16,13 @@
  * limitations under the License.
  */
 
-package org.apache.flink.table.catalog.glue;
+package org.apache.flink.table.catalog.glue.factory;
 
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.table.catalog.Catalog;
 import org.apache.flink.table.catalog.exceptions.CatalogException;
+import org.apache.flink.table.catalog.glue.GlueCatalog;
 import org.apache.flink.table.factories.CatalogFactory;
 
 import java.util.HashSet;

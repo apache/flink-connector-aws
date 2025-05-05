@@ -1,4 +1,4 @@
-package org.apache.flink.table.catalog.glue.operations;
+package org.apache.flink.table.catalog.glue.operator;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;

@@ -40,9 +40,9 @@ import org.apache.flink.table.catalog.exceptions.FunctionAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.FunctionNotExistException;
 import org.apache.flink.table.catalog.exceptions.TableAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
-import org.apache.flink.table.catalog.glue.operations.FakeGlueClient;
-import org.apache.flink.table.catalog.glue.operations.GlueDatabaseOperations;
-import org.apache.flink.table.catalog.glue.operations.GlueTableOperations;
+import org.apache.flink.table.catalog.glue.operator.FakeGlueClient;
+import org.apache.flink.table.catalog.glue.operator.GlueDatabaseOperator;
+import org.apache.flink.table.catalog.glue.operator.GlueTableOperator;
 import org.apache.flink.table.functions.FunctionIdentifier;
 
 import org.junit.jupiter.api.AfterEach;
@@ -64,8 +64,8 @@ public class GlueCatalogTest {
 
     private FakeGlueClient fakeGlueClient;
     private GlueCatalog glueCatalog;
-    private GlueTableOperations glueTableOperations;
-    private GlueDatabaseOperations glueDatabaseOperations;
+    private GlueTableOperator glueTableOperations;
+    private GlueDatabaseOperator glueDatabaseOperations;
 
     @BeforeEach
     void setUp() {
@@ -74,8 +74,8 @@ public class GlueCatalogTest {
         String region = "us-east-1";
         String defaultDB = "default";
         fakeGlueClient = new FakeGlueClient();
-        glueTableOperations = new GlueTableOperations(fakeGlueClient, "testCatalog");
-        glueDatabaseOperations = new GlueDatabaseOperations(fakeGlueClient, "testCatalog");
+        glueTableOperations = new GlueTableOperator(fakeGlueClient, "testCatalog");
+        glueDatabaseOperations = new GlueDatabaseOperator(fakeGlueClient, "testCatalog");
 
         glueCatalog = new GlueCatalog("glueCatalog", defaultDB, region, fakeGlueClient);
     }

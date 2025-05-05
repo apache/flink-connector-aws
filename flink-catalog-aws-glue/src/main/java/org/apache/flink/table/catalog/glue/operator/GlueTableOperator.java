@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.flink.table.catalog.glue.operations;
+package org.apache.flink.table.catalog.glue.operator;
 
 import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.catalog.ObjectPath;
@@ -50,12 +50,12 @@ import java.util.stream.Collectors;
  * Handles all table-related operations for the Glue catalog.
  * Provides functionality for checking existence, listing, creating, getting, and dropping tables in AWS Glue.
  */
-public class GlueTableOperations extends AbstractGlueOperations {
+public class GlueTableOperator extends GlueOperator {
 
     /**
      * Logger for logging table operations.
      */
-    private static final Logger LOG = LoggerFactory.getLogger(GlueTableOperations.class);
+    private static final Logger LOG = LoggerFactory.getLogger(GlueTableOperator.class);
 
     /**
      * Pattern for validating table names.
@@ -70,7 +70,7 @@ public class GlueTableOperations extends AbstractGlueOperations {
      * @param glueClient  The Glue client to interact with AWS Glue.
      * @param catalogName The name of the catalog.
      */
-    public GlueTableOperations(GlueClient glueClient, String catalogName) {
+    public GlueTableOperator(GlueClient glueClient, String catalogName) {
         super(glueClient, catalogName);
     }
 

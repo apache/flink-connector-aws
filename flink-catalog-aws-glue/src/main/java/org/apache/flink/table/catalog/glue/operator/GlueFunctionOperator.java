@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.flink.table.catalog.glue.operations;
+package org.apache.flink.table.catalog.glue.operator;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.table.catalog.CatalogFunction;
@@ -57,9 +57,9 @@ import java.util.stream.Collectors;
 
 /** Utilities for Glue catalog Function related operations. */
 @Internal
-public class GlueFunctionsOperations extends AbstractGlueOperations {
+public class GlueFunctionOperator extends GlueOperator {
 
-    private static final Logger LOG = LoggerFactory.getLogger(GlueFunctionsOperations.class);
+    private static final Logger LOG = LoggerFactory.getLogger(GlueFunctionOperator.class);
 
     /**
      * Constructor to initialize the shared fields.
@@ -67,7 +67,7 @@ public class GlueFunctionsOperations extends AbstractGlueOperations {
      * @param glueClient  The Glue client used for interacting with the AWS Glue service.
      * @param catalogName The catalog name associated with the Glue operations.
      */
-    public GlueFunctionsOperations(GlueClient glueClient, String catalogName) {
+    public GlueFunctionOperator(GlueClient glueClient, String catalogName) {
         super(glueClient, catalogName);
     }
 

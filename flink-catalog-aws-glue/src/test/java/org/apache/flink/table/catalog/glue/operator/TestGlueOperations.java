@@ -1,4 +1,4 @@
-package org.apache.flink.table.catalog.glue.operations;
+package org.apache.flink.table.catalog.glue.operator;
 
 import software.amazon.awssdk.services.glue.GlueClient;
 
@@ -6,7 +6,7 @@ import software.amazon.awssdk.services.glue.GlueClient;
  * Test implementation of AbstractGlueOperations.
  * This class is used for testing the base functionality provided by AbstractGlueOperations.
  */
-public class TestGlueOperations extends AbstractGlueOperations {
+public class TestGlueOperations extends GlueOperator {
 
     /**
      * Constructor for TestGlueOperations.

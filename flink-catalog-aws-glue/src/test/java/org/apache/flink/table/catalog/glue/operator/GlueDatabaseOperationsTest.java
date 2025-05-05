@@ -1,4 +1,4 @@
-package org.apache.flink.table.catalog.glue.operations;
+package org.apache.flink.table.catalog.glue.operator;
 
 import org.apache.flink.table.catalog.CatalogDatabase;
 import org.apache.flink.table.catalog.CatalogDatabaseImpl;
@@ -24,13 +24,13 @@ import java.util.List;
 class GlueDatabaseOperationsTest {
 
     private FakeGlueClient fakeGlueClient;
-    private GlueDatabaseOperations glueDatabaseOperations;
+    private GlueDatabaseOperator glueDatabaseOperations;
 
     @BeforeEach
     void setUp() {
         FakeGlueClient.reset();
         fakeGlueClient = new FakeGlueClient();
-        glueDatabaseOperations = new GlueDatabaseOperations(fakeGlueClient, "testCatalog");
+        glueDatabaseOperations = new GlueDatabaseOperator(fakeGlueClient, "testCatalog");
     }
 
     @Test

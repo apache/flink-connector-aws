@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.flink.table.catalog.glue.operations;
+package org.apache.flink.table.catalog.glue.operator;
 
 import software.amazon.awssdk.services.glue.GlueClient;
 import software.amazon.awssdk.services.glue.model.AlreadyExistsException;

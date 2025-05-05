@@ -1,4 +1,4 @@
-package org.apache.flink.table.catalog.glue.operations;
+package org.apache.flink.table.catalog.glue.operator;
 
 import org.apache.flink.table.catalog.exceptions.CatalogException;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
@@ -27,13 +27,13 @@ public class GlueTableOperationsTest {
     private static final String TABLE_NAME = "testtable";
 
     private FakeGlueClient fakeGlueClient;
-    private GlueTableOperations glueTableOperations;
+    private GlueTableOperator glueTableOperations;
 
     @BeforeEach
     void setUp() {
         FakeGlueClient.reset();
         fakeGlueClient = new FakeGlueClient();
-        glueTableOperations = new GlueTableOperations(fakeGlueClient, CATALOG_NAME);
+        glueTableOperations = new GlueTableOperator(fakeGlueClient, CATALOG_NAME);
     }
 
     @Test

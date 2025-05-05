@@ -42,9 +42,9 @@ import org.apache.flink.table.catalog.exceptions.TableAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.flink.table.catalog.exceptions.TableNotPartitionedException;
 import org.apache.flink.table.catalog.exceptions.TablePartitionedException;
-import org.apache.flink.table.catalog.glue.operations.GlueDatabaseOperations;
-import org.apache.flink.table.catalog.glue.operations.GlueFunctionsOperations;
-import org.apache.flink.table.catalog.glue.operations.GlueTableOperations;
+import org.apache.flink.table.catalog.glue.operator.GlueDatabaseOperator;
+import org.apache.flink.table.catalog.glue.operator.GlueFunctionOperator;
+import org.apache.flink.table.catalog.glue.operator.GlueTableOperator;
 import org.apache.flink.table.catalog.glue.util.GlueCatalogConstants;
 import org.apache.flink.table.catalog.glue.util.GlueTableUtils;
 import org.apache.flink.table.catalog.glue.util.GlueTypeConverter;
@@ -81,9 +81,9 @@ public class GlueCatalog extends AbstractCatalog {
 
     private final GlueClient glueClient;
     private final GlueTypeConverter glueTypeConverter;
-    private final GlueDatabaseOperations glueDatabaseOperations;
-    private final GlueTableOperations glueTableOperations;
-    private final GlueFunctionsOperations glueFunctionsOperations;
+    private final GlueDatabaseOperator glueDatabaseOperations;
+    private final GlueTableOperator glueTableOperations;
+    private final GlueFunctionOperator glueFunctionsOperations;
     private final GlueTableUtils glueTableUtils;
 
     /**
@@ -108,9 +108,9 @@ public class GlueCatalog extends AbstractCatalog {
         }
         this.glueTypeConverter = new GlueTypeConverter();
         this.glueTableUtils = new GlueTableUtils(glueTypeConverter);
-        this.glueDatabaseOperations = new GlueDatabaseOperations(glueClient, getName());
-        this.glueTableOperations = new GlueTableOperations(glueClient, getName());
-        this.glueFunctionsOperations = new GlueFunctionsOperations(glueClient, getName());
+        this.glueDatabaseOperations = new GlueDatabaseOperator(glueClient, getName());
+        this.glueTableOperations = new GlueTableOperator(glueClient, getName());
+        this.glueFunctionsOperations = new GlueFunctionOperator(glueClient, getName());
     }
 
     /**
@@ -130,9 +130,9 @@ public class GlueCatalog extends AbstractCatalog {
                 .build();
         this.glueTypeConverter = new GlueTypeConverter();
         this.glueTableUtils = new GlueTableUtils(glueTypeConverter);
-        this.glueDatabaseOperations = new GlueDatabaseOperations(glueClient, getName());
-        this.glueTableOperations = new GlueTableOperations(glueClient, getName());
-        this.glueFunctionsOperations = new GlueFunctionsOperations(glueClient, getName());
+        this.glueDatabaseOperations = new GlueDatabaseOperator(glueClient, getName());
+        this.glueTableOperations = new GlueTableOperator(glueClient, getName());
+        this.glueFunctionsOperations = new GlueFunctionOperator(glueClient, getName());
     }
 
     /**

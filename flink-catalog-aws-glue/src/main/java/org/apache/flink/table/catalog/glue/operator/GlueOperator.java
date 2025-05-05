@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.flink.table.catalog.glue.operations;
+package org.apache.flink.table.catalog.glue.operator;
 
 import software.amazon.awssdk.services.glue.GlueClient;
 
@@ -24,7 +24,7 @@ import software.amazon.awssdk.services.glue.GlueClient;
  * Abstract base class for Glue operations that contains common functionality
  * for interacting with the AWS Glue service.
  */
-public abstract class AbstractGlueOperations {
+public abstract class GlueOperator {
 
     /** The Glue client used for interacting with AWS Glue. */
     protected final GlueClient glueClient;
@@ -38,7 +38,7 @@ public abstract class AbstractGlueOperations {
      * @param glueClient The Glue client used for interacting with the AWS Glue service.
      * @param catalogName The catalog name associated with the Glue operations.
      */
-    protected AbstractGlueOperations(GlueClient glueClient, String catalogName) {
+    protected GlueOperator(GlueClient glueClient, String catalogName) {
         this.glueClient = glueClient;
         this.catalogName = catalogName;
     }
