@@ -35,6 +35,7 @@ import org.apache.flink.table.types.DataType;
 @Internal
 public class RowDataElementConverter implements ElementConverter<RowData, DynamoDbWriteRequest> {
 
+    private boolean ignoreNulls = false;
     private final DataType physicalDataType;
     private transient RowDataToAttributeValueConverter rowDataToAttributeValueConverter;
 
@@ -44,11 +45,18 @@ public class RowDataElementConverter implements ElementConverter<RowData, Dynamo
                 new RowDataToAttributeValueConverter(physicalDataType);
     }
 
+    public RowDataElementConverter(DataType physicalDataType, boolean ignoreNulls) {
+        this.ignoreNulls = ignoreNulls;
+        this.physicalDataType = physicalDataType;
+        this.rowDataToAttributeValueConverter =
+                new RowDataToAttributeValueConverter(physicalDataType, ignoreNulls);
+    }
+
     @Override
     public DynamoDbWriteRequest apply(RowData element, SinkWriter.Context context) {
         if (rowDataToAttributeValueConverter == null) {
             rowDataToAttributeValueConverter =
-                    new RowDataToAttributeValueConverter(physicalDataType);
+                    new RowDataToAttributeValueConverter(physicalDataType, ignoreNulls);
         }
 
         DynamoDbWriteRequest.Builder builder =

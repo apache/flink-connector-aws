@@ -18,9 +18,11 @@
 
 package org.apache.flink.connector.kinesis.source.reader;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsAddition;
 import org.apache.flink.connector.kinesis.source.metrics.KinesisShardMetrics;
+import org.apache.flink.connector.kinesis.source.reader.polling.PollingKinesisShardSplitReader;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.connector.kinesis.source.util.KinesisStreamProxyProvider.TestKinesisStreamProxy;
 import org.apache.flink.connector.kinesis.source.util.TestUtil;
@@ -41,6 +43,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.SHARD_GET_RECORDS_MAX;
 import static org.apache.flink.connector.kinesis.source.util.KinesisStreamProxyProvider.getTestStreamProxy;
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.STREAM_ARN;
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.generateShardId;
@@ -56,6 +59,10 @@ class PollingKinesisShardSplitReaderTest {
     private Map<String, KinesisShardMetrics> shardMetricGroupMap;
     private static final String TEST_SHARD_ID = TestUtil.generateShardId(1);
 
+    private Configuration newConfigurationForTest() {
+        return new Configuration().set(SHARD_GET_RECORDS_MAX, 50);
+    }
+
     @BeforeEach
     public void init() {
         testStreamProxy = getTestStreamProxy();
@@ -66,7 +73,9 @@ class PollingKinesisShardSplitReaderTest {
                 TEST_SHARD_ID,
                 new KinesisShardMetrics(
                         TestUtil.getTestSplit(TEST_SHARD_ID), metricListener.getMetricGroup()));
-        splitReader = new PollingKinesisShardSplitReader(testStreamProxy, shardMetricGroupMap);
+        splitReader =
+                new PollingKinesisShardSplitReader(
+                        testStreamProxy, shardMetricGroupMap, newConfigurationForTest());
     }
 
     @Test
@@ -360,6 +369,31 @@ class PollingKinesisShardSplitReaderTest {
         splitReader.fetch();
         TestUtil.assertMillisBehindLatest(
                 split, TestUtil.MILLIS_BEHIND_LATEST_TEST_VALUE, metricListener);
+    }
+
+    @Test
+    void testMaxRecordsToGetParameterPassed() throws IOException {
+        int maxRecordsToGet = 2;
+        Configuration configuration = newConfigurationForTest();
+        configuration.set(SHARD_GET_RECORDS_MAX, maxRecordsToGet);
+        splitReader =
+                new PollingKinesisShardSplitReader(
+                        testStreamProxy, shardMetricGroupMap, configuration);
+        testStreamProxy.addShards(TEST_SHARD_ID);
+        List<Record> sentRecords =
+                Stream.of(getTestRecord("data-1"), getTestRecord("data-2"), getTestRecord("data-3"))
+                        .collect(Collectors.toList());
+
+        testStreamProxy.addRecords(TestUtil.STREAM_ARN, TEST_SHARD_ID, sentRecords);
+
+        splitReader.handleSplitsChanges(
+                new SplitsAddition<>(Collections.singletonList(getTestSplit(TEST_SHARD_ID))));
+
+        RecordsWithSplitIds<Record> retrievedRecords = splitReader.fetch();
+        List<Record> records = new ArrayList<>(readAllRecords(retrievedRecords));
+
+        assertThat(sentRecords.size() > maxRecordsToGet).isTrue();
+        assertThat(records.size()).isEqualTo(maxRecordsToGet);
     }
 
     private List<Record> readAllRecords(RecordsWithSplitIds<Record> recordsWithSplitIds) {

@@ -20,6 +20,7 @@ package org.apache.flink.connector.dynamodb.source.proxy;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.connector.dynamodb.source.split.StartingPosition;
+import org.apache.flink.connector.dynamodb.source.util.ListShardsResult;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,17 +32,16 @@ import software.amazon.awssdk.services.dynamodb.model.GetRecordsRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetRecordsResponse;
 import software.amazon.awssdk.services.dynamodb.model.GetShardIteratorRequest;
 import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
-import software.amazon.awssdk.services.dynamodb.model.Shard;
 import software.amazon.awssdk.services.dynamodb.model.StreamStatus;
+import software.amazon.awssdk.services.dynamodb.model.TrimmedDataAccessException;
 import software.amazon.awssdk.services.dynamodb.streams.DynamoDbStreamsClient;
 
 import javax.annotation.Nullable;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 /** Implementation of the {@link StreamProxy} for DynamoDB streams. */
@@ -51,6 +51,11 @@ public class DynamoDbStreamsProxy implements StreamProxy {
     private final DynamoDbStreamsClient dynamoDbStreamsClient;
     private final SdkHttpClient httpClient;
     private final Map<String, String> shardIdToIteratorStore;
+    private static final GetRecordsResponse EMPTY_GET_RECORDS_RESPONSE =
+            GetRecordsResponse.builder()
+                    .records(Collections.emptyList())
+                    .nextShardIterator(null)
+                    .build();
 
     private static final Logger LOG = LoggerFactory.getLogger(DynamoDbStreamsProxy.class);
 
@@ -62,8 +67,25 @@ public class DynamoDbStreamsProxy implements StreamProxy {
     }
 
     @Override
-    public List<Shard> listShards(String streamArn, @Nullable String lastSeenShardId) {
-        return this.getShardsOfStream(streamArn, lastSeenShardId);
+    public ListShardsResult listShards(String streamArn, @Nullable String lastSeenShardId) {
+        ListShardsResult listShardsResult = new ListShardsResult();
+
+        String lastEvaluatedShardId = lastSeenShardId;
+        DescribeStreamResponse describeStreamResponse;
+        do {
+            describeStreamResponse = this.describeStream(streamArn, lastEvaluatedShardId);
+            listShardsResult.addShards(describeStreamResponse.streamDescription().shards());
+            listShardsResult.setStreamStatus(
+                    describeStreamResponse.streamDescription().streamStatus());
+            lastEvaluatedShardId =
+                    describeStreamResponse.streamDescription().lastEvaluatedShardId();
+            LOG.debug(
+                    "DescribeStream lastEvaluatedShardId: {}, returned shards: {}",
+                    lastEvaluatedShardId,
+                    describeStreamResponse.streamDescription().shards());
+        } while (describeStreamResponse.streamDescription().lastEvaluatedShardId() != null);
+
+        return listShardsResult;
     }
 
     @Override
@@ -74,10 +96,7 @@ public class DynamoDbStreamsProxy implements StreamProxy {
                         shardId, (s) -> getShardIterator(streamArn, s, startingPosition));
 
         if (shardIterator == null) {
-            return GetRecordsResponse.builder()
-                    .records(Collections.emptyList())
-                    .nextShardIterator(null)
-                    .build();
+            return EMPTY_GET_RECORDS_RESPONSE;
         }
         try {
             GetRecordsResponse getRecordsResponse = getRecords(shardIterator);
@@ -86,6 +105,11 @@ public class DynamoDbStreamsProxy implements StreamProxy {
             }
             return getRecordsResponse;
         } catch (ExpiredIteratorException e) {
+            LOG.info(
+                    "Received ExpiredIteratorException from GetRecords. "
+                            + "Calling GetShardIterator for shard: {} with position: {}",
+                    startingPosition,
+                    shardId);
             // Eagerly retry getRecords() if the iterator is expired
             shardIterator = getShardIterator(streamArn, shardId, startingPosition);
             GetRecordsResponse getRecordsResponse = getRecords(shardIterator);
@@ -93,6 +117,26 @@ public class DynamoDbStreamsProxy implements StreamProxy {
                 shardIdToIteratorStore.put(shardId, getRecordsResponse.nextShardIterator());
             }
             return getRecordsResponse;
+        } catch (TrimmedDataAccessException e) {
+            // TrimmedDataAccessException means that the record pointed by shard iterator has
+            // expired.
+            // We should read the shard back from TRIM_HORIZON
+            LOG.warn(
+                    "Received TrimmedDataAccessException from GetRecords. "
+                            + "Calling GetShardIterator for shard: {} with TRIM_HORIZON",
+                    shardId);
+            shardIterator = getShardIterator(streamArn, shardId, StartingPosition.fromStart());
+            GetRecordsResponse getRecordsResponse = getRecords(shardIterator);
+            if (getRecordsResponse.nextShardIterator() != null) {
+                shardIdToIteratorStore.put(shardId, getRecordsResponse.nextShardIterator());
+            }
+            return getRecordsResponse;
+        } catch (ResourceNotFoundException e) {
+            LOG.warn(
+                    "Received ResourceNotFoundException from GetRecords for shard: {}. "
+                            + "This might indicate that there is restore happening from stale snapshot or data loss from backpressure",
+                    shardId);
+            return EMPTY_GET_RECORDS_RESPONSE;
         }
     }
 
@@ -100,20 +144,6 @@ public class DynamoDbStreamsProxy implements StreamProxy {
     public void close() throws IOException {
         dynamoDbStreamsClient.close();
         httpClient.close();
-    }
-
-    private List<Shard> getShardsOfStream(String streamName, @Nullable String lastSeenShardId) {
-        List<Shard> shardsOfStream = new ArrayList<>();
-
-        DescribeStreamResponse describeStreamResponse;
-        do {
-            describeStreamResponse = this.describeStream(streamName, lastSeenShardId);
-            List<Shard> shards = describeStreamResponse.streamDescription().shards();
-            shardsOfStream.addAll(shards);
-
-        } while (describeStreamResponse.streamDescription().lastEvaluatedShardId() != null);
-
-        return shardsOfStream;
     }
 
     private DescribeStreamResponse describeStream(String streamArn, @Nullable String startShardId) {
@@ -127,8 +157,7 @@ public class DynamoDbStreamsProxy implements StreamProxy {
                 dynamoDbStreamsClient.describeStream(describeStreamRequest);
 
         StreamStatus streamStatus = describeStreamResponse.streamDescription().streamStatus();
-        if (!(streamStatus.equals(StreamStatus.DISABLED)
-                || streamStatus.equals(StreamStatus.ENABLING.toString()))) {
+        if (streamStatus.equals(StreamStatus.ENABLING)) {
             if (LOG.isWarnEnabled()) {
                 LOG.warn(
                         String.format(
@@ -168,9 +197,18 @@ public class DynamoDbStreamsProxy implements StreamProxy {
         try {
             return dynamoDbStreamsClient.getShardIterator(requestBuilder.build()).shardIterator();
         } catch (ResourceNotFoundException e) {
-            LOG.info(
-                    "Received ResourceNotFoundException. "
-                            + "Shard {} of stream {} is no longer valid, marking it as complete.",
+            LOG.warn(
+                    "Received ResourceNotFoundException from GetShardIterator. "
+                            + "Shard {} of stream {} is no longer valid, marking it as complete."
+                            + "This might indicate that there is restore happening from stale snapshot or data loss from backpressure",
+                    shardId,
+                    streamArn);
+            return null;
+        } catch (TrimmedDataAccessException e) {
+            LOG.warn(
+                    "Received TrimmedDataAccessException from GetShardIterator. "
+                            + "Shard {} of stream {} is no longer valid, marking it as complete."
+                            + "This might indicate that there is restore happening from stale snapshot or data loss from backpressure",
                     shardId,
                     streamArn);
             return null;
@@ -178,6 +216,9 @@ public class DynamoDbStreamsProxy implements StreamProxy {
     }
 
     private GetRecordsResponse getRecords(String shardIterator) {
+        if (Objects.isNull(shardIterator)) {
+            return EMPTY_GET_RECORDS_RESPONSE;
+        }
         return dynamoDbStreamsClient.getRecords(
                 GetRecordsRequest.builder().shardIterator(shardIterator).build());
     }

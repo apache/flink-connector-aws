@@ -22,10 +22,11 @@ import org.apache.flink.api.connector.source.SourceEvent;
 import org.apache.flink.api.connector.source.SplitsAssignment;
 import org.apache.flink.api.connector.source.mocks.MockSplitEnumeratorContext;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.InitialPosition;
+import org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.InitialPosition;
 import org.apache.flink.connector.kinesis.source.enumerator.assigner.ShardAssignerFactory;
 import org.apache.flink.connector.kinesis.source.proxy.ListShardsStartingPosition;
 import org.apache.flink.connector.kinesis.source.proxy.StreamProxy;
+import org.apache.flink.connector.kinesis.source.reader.fanout.StreamConsumerRegistrar;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.connector.kinesis.source.util.TestUtil;
 import org.apache.flink.util.FlinkRuntimeException;
@@ -35,19 +36,22 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
+import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Stream;
 
-import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.STREAM_INITIAL_POSITION;
-import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.STREAM_INITIAL_TIMESTAMP;
+import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.STREAM_INITIAL_POSITION;
+import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.STREAM_INITIAL_TIMESTAMP;
 import static org.apache.flink.connector.kinesis.source.util.KinesisStreamProxyProvider.TestKinesisStreamProxy;
 import static org.apache.flink.connector.kinesis.source.util.KinesisStreamProxyProvider.getTestStreamProxy;
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.generateShardId;
+import static org.apache.flink.connector.kinesis.source.util.TestUtil.generateShardsWithEqualHashKeyRange;
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.getTestSplit;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatExceptionOfType;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatNoException;
@@ -82,7 +86,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             null,
-                            true);
+                            true,
+                            new StreamConsumerRegistrar(sourceConfig, STREAM_ARN, streamProxy));
             // When enumerator starts
             enumerator.start();
             // Then initial discovery scheduled, with periodic discovery after
@@ -179,7 +184,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             state,
-                            true);
+                            true,
+                            new StreamConsumerRegistrar(sourceConfig, STREAM_ARN, streamProxy));
             // When enumerator starts
             enumerator.start();
             // Then no initial discovery is scheduled, but a periodic discovery is scheduled
@@ -240,7 +246,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             null,
-                            true);
+                            true,
+                            new StreamConsumerRegistrar(sourceConfig, STREAM_ARN, streamProxy));
 
             assertThat(
                             enumerator.getInitialPositionForShardDiscovery(
@@ -294,7 +301,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             null,
-                            true);
+                            true,
+                            new StreamConsumerRegistrar(sourceConfig, STREAM_ARN, streamProxy));
             enumerator.start();
 
             // Given List Shard request throws an Exception
@@ -324,7 +332,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             null,
-                            true);
+                            true,
+                            new StreamConsumerRegistrar(sourceConfig, STREAM_ARN, streamProxy));
             enumerator.start();
 
             // Given enumerator is initialised with one registered reader, with 4 shards in stream
@@ -378,7 +387,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             null,
-                            true);
+                            true,
+                            new StreamConsumerRegistrar(sourceConfig, STREAM_ARN, streamProxy));
             enumerator.start();
 
             // Given enumerator is initialised without a reader
@@ -437,21 +447,16 @@ class KinesisStreamsSourceEnumeratorTest {
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             null,
-                            true);
+                            true,
+                            new StreamConsumerRegistrar(sourceConfig, STREAM_ARN, streamProxy));
             enumerator.start();
 
-            // Given enumerator is initialised without only one reader
+            // Given enumerator is initialised with only one reader
             final int subtaskId = 1;
             context.registerReader(TestUtil.getTestReaderInfo(subtaskId));
             enumerator.addReader(subtaskId);
-            String[] shardIds =
-                    new String[] {
-                        generateShardId(0),
-                        generateShardId(1),
-                        generateShardId(2),
-                        generateShardId(3)
-                    };
-            streamProxy.addShards(shardIds);
+            Shard[] shards = generateShardsWithEqualHashKeyRange(4);
+            streamProxy.addShards(shards);
 
             // When first discovery runs
             context.runNextOneTimeCallable();
@@ -476,7 +481,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             initialSplitAssignment.assignment().values().stream()
                                     .flatMap(Collection::stream)
                                     .map(KinesisShardSplit::getShardId))
-                    .containsExactlyInAnyOrder(shardIds);
+                    .containsExactlyInAnyOrder(
+                            Arrays.stream(shards).map(Shard::shardId).toArray(String[]::new));
             assertThat(
                             initialSplitAssignment.assignment().values().stream()
                                     .flatMap(Collection::stream)
@@ -504,7 +510,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             null,
-                            true);
+                            true,
+                            new StreamConsumerRegistrar(sourceConfig, STREAM_ARN, streamProxy));
             enumerator.start();
 
             // Given enumerator is initialised with one registered reader, with 4 shards in stream
@@ -532,7 +539,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             snapshottedState,
-                            true);
+                            true,
+                            new StreamConsumerRegistrar(sourceConfig, STREAM_ARN, streamProxy));
             restoredEnumerator.start();
             // Given enumerator is initialised with one registered reader, with 4 shards in stream
             restoredContext.registerReader(TestUtil.getTestReaderInfo(subtaskId));
@@ -563,7 +571,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             null,
-                            true);
+                            true,
+                            new StreamConsumerRegistrar(sourceConfig, STREAM_ARN, streamProxy));
 
             assertThatNoException()
                     .isThrownBy(() -> enumerator.handleSourceEvent(1, new SourceEvent() {}));
@@ -584,7 +593,8 @@ class KinesisStreamsSourceEnumeratorTest {
                             streamProxy,
                             ShardAssignerFactory.uniformShardAssigner(),
                             null,
-                            true);
+                            true,
+                            new StreamConsumerRegistrar(sourceConfig, STREAM_ARN, streamProxy));
             enumerator.start();
 
             assertThatNoException().isThrownBy(enumerator::close);
@@ -603,7 +613,8 @@ class KinesisStreamsSourceEnumeratorTest {
                         streamProxy,
                         ShardAssignerFactory.uniformShardAssigner(),
                         null,
-                        true);
+                        true,
+                        new StreamConsumerRegistrar(sourceConfig, STREAM_ARN, streamProxy));
         enumerator.start();
         assertThat(context.getOneTimeCallables()).hasSize(1);
         assertThat(context.getPeriodicCallables()).hasSize(1);

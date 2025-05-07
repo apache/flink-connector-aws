@@ -30,14 +30,13 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.aws.config.AWSConfigConstants;
 import org.apache.flink.connector.aws.util.AWSClientUtil;
 import org.apache.flink.connector.aws.util.AWSGeneralUtil;
-import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.fetcher.SingleThreadFetcherManager;
-import org.apache.flink.connector.base.source.reader.synchronization.FutureCompletingBlockingQueue;
 import org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants;
 import org.apache.flink.connector.dynamodb.source.enumerator.DynamoDbStreamsShardAssigner;
 import org.apache.flink.connector.dynamodb.source.enumerator.DynamoDbStreamsSourceEnumerator;
 import org.apache.flink.connector.dynamodb.source.enumerator.DynamoDbStreamsSourceEnumeratorState;
 import org.apache.flink.connector.dynamodb.source.enumerator.DynamoDbStreamsSourceEnumeratorStateSerializer;
+import org.apache.flink.connector.dynamodb.source.metrics.DynamoDbStreamsShardMetrics;
 import org.apache.flink.connector.dynamodb.source.proxy.DynamoDbStreamsProxy;
 import org.apache.flink.connector.dynamodb.source.reader.DynamoDbStreamsRecordEmitter;
 import org.apache.flink.connector.dynamodb.source.reader.DynamoDbStreamsSourceReader;
@@ -50,14 +49,26 @@ import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.UserCodeClassLoader;
 
+import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
+import software.amazon.awssdk.core.internal.retry.SdkDefaultRetryStrategy;
 import software.amazon.awssdk.http.SdkHttpClient;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
-import software.amazon.awssdk.services.dynamodb.model.Record;
+import software.amazon.awssdk.retries.AdaptiveRetryStrategy;
+import software.amazon.awssdk.retries.api.BackoffStrategy;
 import software.amazon.awssdk.services.dynamodb.streams.DynamoDbStreamsClient;
 import software.amazon.awssdk.utils.AttributeMap;
 
+import java.time.Duration;
+import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
+
+import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.DYNAMODB_STREAMS_EXPONENTIAL_BACKOFF_MAX_DELAY;
+import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.DYNAMODB_STREAMS_EXPONENTIAL_BACKOFF_MIN_DELAY;
+import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.DYNAMODB_STREAMS_GET_RECORDS_IDLE_TIME_BETWEEN_EMPTY_POLLS;
+import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.DYNAMODB_STREAMS_GET_RECORDS_IDLE_TIME_BETWEEN_NON_EMPTY_POLLS;
+import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.DYNAMODB_STREAMS_RETRY_COUNT;
 
 /**
  * The {@link DynamoDbStreamsSource} is an exactly-once parallel streaming data source that
@@ -123,23 +134,35 @@ public class DynamoDbStreamsSource<T>
             SourceReaderContext readerContext) throws Exception {
         setUpDeserializationSchema(readerContext);
 
-        FutureCompletingBlockingQueue<RecordsWithSplitIds<Record>> elementsQueue =
-                new FutureCompletingBlockingQueue<>();
+        Map<String, DynamoDbStreamsShardMetrics> shardMetricGroupMap = new ConcurrentHashMap<>();
+        // Delay between calling GetRecords API when last poll returned some records. Default - 250
+        // millis
+        final Duration getRecordsIdlePollingTimeBetweenNonEmptyPolls =
+                sourceConfig.get(DYNAMODB_STREAMS_GET_RECORDS_IDLE_TIME_BETWEEN_NON_EMPTY_POLLS);
+
+        // Delay between calling GetRecords API when last poll returned no records. Default - 1
+        // second
+        final Duration getRecordsIdlePollingTimeBetweenEmptyPolls =
+                sourceConfig.get(DYNAMODB_STREAMS_GET_RECORDS_IDLE_TIME_BETWEEN_EMPTY_POLLS);
+
         // We create a new stream proxy for each split reader since they have their own independent
         // lifecycle.
         Supplier<PollingDynamoDbStreamsShardSplitReader> splitReaderSupplier =
                 () ->
                         new PollingDynamoDbStreamsShardSplitReader(
-                                createDynamoDbStreamsProxy(sourceConfig));
+                                createDynamoDbStreamsProxy(sourceConfig),
+                                getRecordsIdlePollingTimeBetweenNonEmptyPolls,
+                                getRecordsIdlePollingTimeBetweenEmptyPolls,
+                                shardMetricGroupMap);
         DynamoDbStreamsRecordEmitter<T> recordEmitter =
                 new DynamoDbStreamsRecordEmitter<>(deserializationSchema);
 
         return new DynamoDbStreamsSourceReader<>(
-                elementsQueue,
-                new SingleThreadFetcherManager<>(elementsQueue, splitReaderSupplier::get),
+                new SingleThreadFetcherManager<>(splitReaderSupplier::get),
                 recordEmitter,
                 sourceConfig,
-                readerContext);
+                readerContext,
+                shardMetricGroupMap);
     }
 
     @Override
@@ -192,11 +215,26 @@ public class DynamoDbStreamsSource<T>
         consumerConfig.addAllToProperties(dynamoDbStreamsClientProperties);
 
         AWSGeneralUtil.validateAwsCredentials(dynamoDbStreamsClientProperties);
+        int maxApiCallAttempts = sourceConfig.get(DYNAMODB_STREAMS_RETRY_COUNT);
+        Duration minDescribeStreamDelay =
+                sourceConfig.get(DYNAMODB_STREAMS_EXPONENTIAL_BACKOFF_MIN_DELAY);
+        Duration maxDescribeStreamDelay =
+                sourceConfig.get(DYNAMODB_STREAMS_EXPONENTIAL_BACKOFF_MAX_DELAY);
+        BackoffStrategy backoffStrategy =
+                BackoffStrategy.exponentialDelay(minDescribeStreamDelay, maxDescribeStreamDelay);
+        AdaptiveRetryStrategy adaptiveRetryStrategy =
+                SdkDefaultRetryStrategy.adaptiveRetryStrategy()
+                        .toBuilder()
+                        .maxAttempts(maxApiCallAttempts)
+                        .backoffStrategy(backoffStrategy)
+                        .throttlingBackoffStrategy(backoffStrategy)
+                        .build();
         DynamoDbStreamsClient dynamoDbStreamsClient =
                 AWSClientUtil.createAwsSyncClient(
                         dynamoDbStreamsClientProperties,
                         httpClient,
                         DynamoDbStreamsClient.builder(),
+                        ClientOverrideConfiguration.builder().retryStrategy(adaptiveRetryStrategy),
                         DynamodbStreamsSourceConfigConstants
                                 .BASE_DDB_STREAMS_USER_AGENT_PREFIX_FORMAT,
                         DynamodbStreamsSourceConfigConstants.DDB_STREAMS_CLIENT_USER_AGENT_PREFIX);

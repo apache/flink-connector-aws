@@ -29,6 +29,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Serializes and deserializes the {@link DynamoDbStreamsShardSplit}. This class needs to handle
@@ -38,7 +41,8 @@ import java.io.IOException;
 public class DynamoDbStreamsShardSplitSerializer
         implements SimpleVersionedSerializer<DynamoDbStreamsShardSplit> {
 
-    private static final int CURRENT_VERSION = 0;
+    private static final Set<Integer> COMPATIBLE_VERSIONS = new HashSet<>(Arrays.asList(0, 1));
+    private static final int CURRENT_VERSION = 1;
 
     @Override
     public int getVersion() {
@@ -63,6 +67,14 @@ public class DynamoDbStreamsShardSplitSerializer
                     out.writeUTF((String) startingMarker);
                 }
             }
+            if (split.getParentShardId() == null) {
+                out.writeBoolean(false);
+            } else {
+                out.writeBoolean(true);
+                out.writeUTF(split.getParentShardId());
+            }
+            out.writeBoolean(split.isFinished());
+
             out.flush();
             return baos.toByteArray();
         }
@@ -73,7 +85,7 @@ public class DynamoDbStreamsShardSplitSerializer
             throws IOException {
         try (ByteArrayInputStream bais = new ByteArrayInputStream(serialized);
                 DataInputStream in = new DataInputStream(bais)) {
-            if (version != getVersion()) {
+            if (!COMPATIBLE_VERSIONS.contains(version)) {
                 throw new VersionMismatchException(
                         "Trying to deserialize DynamoDbStreamsShardSplit serialized with unsupported version "
                                 + version
@@ -93,8 +105,23 @@ public class DynamoDbStreamsShardSplitSerializer
                 }
             }
 
+            final boolean hasParentShardId = in.readBoolean();
+            String parentShardId = null;
+            if (hasParentShardId) {
+                parentShardId = in.readUTF();
+            }
+
+            boolean isFinished = false;
+            if (version > 0) {
+                isFinished = in.readBoolean();
+            }
+
             return new DynamoDbStreamsShardSplit(
-                    streamArn, shardId, new StartingPosition(shardIteratorType, startingMarker));
+                    streamArn,
+                    shardId,
+                    new StartingPosition(shardIteratorType, startingMarker),
+                    parentShardId,
+                    isFinished);
         }
     }
 }

@@ -236,6 +236,13 @@ Connector Options
       <td>Boolean</td>
       <td>Flag used for retrying failed requests. If set any request failure will not be retried and will fail the job.</td>
     </tr>
+    <tr>
+      <td><h5>sink.ignore-nulls</h5></td>
+      <td>optional</td>
+      <td style="word-wrap: break-word;">false</td>
+      <td>Boolean</td>
+      <td>Determines whether null values should be ignored in the sink. If set to true, null values are excluded from processing.</td>
+    </tr>
     </tbody>
     <thead>
     <tr>

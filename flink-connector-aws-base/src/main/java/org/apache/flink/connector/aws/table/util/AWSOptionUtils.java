@@ -76,7 +76,6 @@ public class AWSOptionUtils implements TableOptionsUtils, ConfigurationValidator
         return awsConfigurations;
     }
 
-    /** Map {@code scan.foo.bar} to {@code flink.foo.bar}. */
     private static String translateAwsKey(String key) {
         if (!key.endsWith("credentials.provider")) {
             return key.replace("credentials.", "credentials.provider.");

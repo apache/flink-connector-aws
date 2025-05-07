@@ -76,6 +76,8 @@ public class KinesisShardSplitSerializer implements SimpleVersionedSerializer<Ki
             for (String parentShardId : split.getParentShardIds()) {
                 out.writeUTF(parentShardId);
             }
+            out.writeUTF(split.getStartingHashKey());
+            out.writeUTF(split.getEndingHashKey());
 
             out.flush();
             return baos.toByteArray();
@@ -145,11 +147,23 @@ public class KinesisShardSplitSerializer implements SimpleVersionedSerializer<Ki
                 }
             }
 
+            String startingHashKey;
+            String endingHashKey;
+            if (version == CURRENT_VERSION) {
+                startingHashKey = in.readUTF();
+                endingHashKey = in.readUTF();
+            } else {
+                startingHashKey = "-1";
+                endingHashKey = "0";
+            }
+
             return new KinesisShardSplit(
                     streamArn,
                     shardId,
                     new StartingPosition(shardIteratorType, startingMarker),
-                    parentShardIds);
+                    parentShardIds,
+                    startingHashKey,
+                    endingHashKey);
         }
     }
 }

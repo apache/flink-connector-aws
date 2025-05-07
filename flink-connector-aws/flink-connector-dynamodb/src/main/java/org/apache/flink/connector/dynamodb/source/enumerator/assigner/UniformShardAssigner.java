@@ -54,7 +54,8 @@ public class UniformShardAssigner implements DynamoDbStreamsShardAssigner {
 
         Preconditions.checkArgument(
                 selectedSubtask != -1,
-                "Expected at least one registered reader. Unable to assign split.");
+                "Expected at least one registered reader. Unable to assign split with id: %s.",
+                split.splitId());
         return selectedSubtask;
     }
 }

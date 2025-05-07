@@ -43,14 +43,21 @@ public class RowDataToAttributeValueConverter {
 
     private final DataType physicalDataType;
     private final TableSchema<RowData> tableSchema;
+    private boolean ignoreNulls = false;
 
     public RowDataToAttributeValueConverter(DataType physicalDataType) {
         this.physicalDataType = physicalDataType;
         this.tableSchema = createTableSchema();
     }
 
+    public RowDataToAttributeValueConverter(DataType physicalDataType, boolean ignoreNulls) {
+        this.physicalDataType = physicalDataType;
+        this.tableSchema = createTableSchema();
+        this.ignoreNulls = ignoreNulls;
+    }
+
     public Map<String, AttributeValue> convertRowData(RowData row) {
-        return tableSchema.itemToMap(row, false);
+        return tableSchema.itemToMap(row, ignoreNulls);
     }
 
     private StaticTableSchema<RowData> createTableSchema() {
@@ -85,7 +92,7 @@ public class RowDataToAttributeValueConverter {
                                         rowData ->
                                                 DataStructureConverters.getConverter(
                                                                 field.getDataType())
-                                                        .toExternal(
+                                                        .toExternalOrNull(
                                                                 fieldGetter.getFieldOrNull(
                                                                         rowData)))
                                 .setter(((rowData, t) -> {})));

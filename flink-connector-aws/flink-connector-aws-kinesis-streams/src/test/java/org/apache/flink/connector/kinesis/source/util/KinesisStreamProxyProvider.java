@@ -22,10 +22,21 @@ import org.apache.flink.connector.kinesis.source.proxy.ListShardsStartingPositio
 import org.apache.flink.connector.kinesis.source.proxy.StreamProxy;
 import org.apache.flink.connector.kinesis.source.split.StartingPosition;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
+import software.amazon.awssdk.arns.Arn;
+import software.amazon.awssdk.services.kinesis.model.Consumer;
+import software.amazon.awssdk.services.kinesis.model.ConsumerDescription;
+import software.amazon.awssdk.services.kinesis.model.ConsumerStatus;
+import software.amazon.awssdk.services.kinesis.model.DeregisterStreamConsumerResponse;
+import software.amazon.awssdk.services.kinesis.model.DescribeStreamConsumerResponse;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
+import software.amazon.awssdk.services.kinesis.model.HashKeyRange;
 import software.amazon.awssdk.services.kinesis.model.Record;
+import software.amazon.awssdk.services.kinesis.model.RegisterStreamConsumerResponse;
+import software.amazon.awssdk.services.kinesis.model.ResourceInUseException;
+import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.awssdk.services.kinesis.model.ShardFilter;
 import software.amazon.awssdk.services.kinesis.model.ShardFilterType;
@@ -36,13 +47,20 @@ import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.flink.connector.kinesis.source.util.TestUtil.ENDING_HASH_KEY_TEST_VALUE;
+import static org.apache.flink.connector.kinesis.source.util.TestUtil.STARTING_HASH_KEY_TEST_VALUE;
+import static org.apache.flink.connector.kinesis.source.util.TestUtil.STREAM_ARN;
 
 /** Provides {@link StreamProxy} with mocked Kinesis Streams behavior. */
 public class KinesisStreamProxyProvider {
@@ -71,6 +89,12 @@ public class KinesisStreamProxyProvider {
         private final Map<ShardHandle, Deque<List<Record>>> storedRecords = new HashMap<>();
         private boolean shouldCompleteNextShard = false;
         private boolean closed = false;
+
+        // RegisterStreamConsumer configuration
+        private final Map<String, Set<String>> efoConsumerRegistration = new HashMap<>();
+        private final Set<String> consumersCurrentlyDeleting = new HashSet<>();
+
+        private int totalGetRecordsCall = 0;
 
         @Override
         public StreamDescriptionSummary getStreamDescriptionSummary(String streamArn) {
@@ -111,7 +135,11 @@ public class KinesisStreamProxyProvider {
 
         @Override
         public GetRecordsResponse getRecords(
-                String streamArn, String shardId, StartingPosition startingPosition) {
+                String streamArn,
+                String shardId,
+                StartingPosition startingPosition,
+                int maxRecordsToGet) {
+            totalGetRecordsCall++;
             ShardHandle shardHandle = new ShardHandle(streamArn, shardId);
 
             if (getRecordsExceptionSupplier != null) {
@@ -121,6 +149,10 @@ public class KinesisStreamProxyProvider {
             List<Record> records = null;
             if (storedRecords.containsKey(shardHandle)) {
                 records = storedRecords.get(shardHandle).poll();
+
+                if (records != null) {
+                    records = records.stream().limit(maxRecordsToGet).collect(Collectors.toList());
+                }
             }
 
             return GetRecordsResponse.builder()
@@ -128,6 +160,131 @@ public class KinesisStreamProxyProvider {
                     .nextShardIterator(shouldCompleteNextShard ? null : "some-shard-iterator")
                     .millisBehindLatest(TestUtil.MILLIS_BEHIND_LATEST_TEST_VALUE)
                     .build();
+        }
+
+        @Override
+        public RegisterStreamConsumerResponse registerStreamConsumer(
+                String streamArn, String consumerName) {
+            Set<String> registeredConsumers =
+                    efoConsumerRegistration.computeIfAbsent(streamArn, ignore -> new HashSet<>());
+            String streamName = Arn.fromString(streamArn).resourceAsString();
+            if (registeredConsumers.contains(consumerName)) {
+                throw ResourceInUseException.builder()
+                        .message(
+                                "Consumer "
+                                        + consumerName
+                                        + " under stream "
+                                        + streamName
+                                        + " already exists for account ")
+                        .build();
+            }
+            registeredConsumers.add(consumerName);
+            return RegisterStreamConsumerResponse.builder()
+                    .consumer(
+                            Consumer.builder()
+                                    .consumerName(consumerName)
+                                    .consumerARN(getConsumerArnFromName(consumerName))
+                                    .build())
+                    .build();
+        }
+
+        @Override
+        public DeregisterStreamConsumerResponse deregisterStreamConsumer(String consumerArn) {
+            String streamArn = convertConsumerArnToStreamArn(consumerArn);
+            String consumerName = getConsumerNameFromArn(consumerArn);
+            Set<String> registeredConsumers =
+                    efoConsumerRegistration.computeIfAbsent(streamArn, ignore -> new HashSet<>());
+
+            if (!registeredConsumers.contains(consumerName)) {
+                throw ResourceNotFoundException.builder()
+                        .message(
+                                "Consumer "
+                                        + consumerName
+                                        + " under stream: "
+                                        + streamArn
+                                        + " not found.")
+                        .build();
+            }
+
+            registeredConsumers.remove(consumerName);
+
+            return DeregisterStreamConsumerResponse.builder().build();
+        }
+
+        @Override
+        public DescribeStreamConsumerResponse describeStreamConsumer(
+                String streamArn, String consumerName) {
+            if (consumersCurrentlyDeleting.contains(consumerName)) {
+                return DescribeStreamConsumerResponse.builder()
+                        .consumerDescription(
+                                ConsumerDescription.builder()
+                                        .consumerName(consumerName)
+                                        .consumerStatus(ConsumerStatus.DELETING)
+                                        .build())
+                        .build();
+            }
+            Set<String> registeredConsumers =
+                    efoConsumerRegistration.computeIfAbsent(streamArn, ignore -> new HashSet<>());
+            if (!registeredConsumers.contains(consumerName)) {
+                throw ResourceNotFoundException.builder()
+                        .message(
+                                "Consumer "
+                                        + consumerName
+                                        + " under stream: "
+                                        + streamArn
+                                        + " not found.")
+                        .build();
+            } else {
+                return DescribeStreamConsumerResponse.builder()
+                        .consumerDescription(
+                                ConsumerDescription.builder()
+                                        .consumerName(consumerName)
+                                        .consumerStatus(ConsumerStatus.ACTIVE)
+                                        .build())
+                        .build();
+            }
+        }
+
+        public Set<String> getRegisteredConsumers(String streamArn) {
+            return efoConsumerRegistration.computeIfAbsent(streamArn, ignore -> new HashSet<>());
+        }
+
+        public void setConsumersCurrentlyDeleting(String consumerName) {
+            consumersCurrentlyDeleting.add(consumerName);
+        }
+
+        private String convertConsumerArnToStreamArn(String consumerArn) {
+            Arn arn = Arn.fromString(consumerArn);
+            return arn.toBuilder()
+                    .resource("stream/" + arn.resource().resource())
+                    .build()
+                    .toString();
+        }
+
+        private String getConsumerNameFromArn(String consumerArn) {
+            String consumerQualifier =
+                    Arn.fromString(consumerArn)
+                            .resource()
+                            .qualifier()
+                            .orElseThrow(
+                                    () ->
+                                            new IllegalArgumentException(
+                                                    "Unable to parse consumer name from consumer ARN"));
+            return StringUtils.substringBetween(consumerQualifier, "/", ":");
+        }
+
+        private String getConsumerArnFromName(String consumerName) {
+            Arn streamArn = Arn.fromString(STREAM_ARN);
+            return streamArn
+                    .toBuilder()
+                    .resource(
+                            streamArn.resourceAsString()
+                                    + "/consumer/"
+                                    + consumerName
+                                    + ":"
+                                    + Instant.now().getEpochSecond())
+                    .build()
+                    .toString();
         }
 
         public void setStreamSummary(Instant creationTimestamp, int retentionPeriodHours) {
@@ -146,8 +303,20 @@ public class KinesisStreamProxyProvider {
 
         public void addShards(String... shardIds) {
             for (String shardId : shardIds) {
-                shards.add(Shard.builder().shardId(shardId).build());
+                shards.add(
+                        Shard.builder()
+                                .shardId(shardId)
+                                .hashKeyRange(
+                                        HashKeyRange.builder()
+                                                .startingHashKey(STARTING_HASH_KEY_TEST_VALUE)
+                                                .endingHashKey(ENDING_HASH_KEY_TEST_VALUE)
+                                                .build())
+                                .build());
             }
+        }
+
+        public void addShards(Shard... shards) {
+            Collections.addAll(this.shards, shards);
         }
 
         public void setListShardsExceptionSupplier(Supplier<Exception> exceptionSupplier) {
@@ -182,6 +351,10 @@ public class KinesisStreamProxyProvider {
 
         public boolean isClosed() {
             return closed;
+        }
+
+        public int getTotalGetRecordsCall() {
+            return totalGetRecordsCall;
         }
 
         private static class ShardHandle {

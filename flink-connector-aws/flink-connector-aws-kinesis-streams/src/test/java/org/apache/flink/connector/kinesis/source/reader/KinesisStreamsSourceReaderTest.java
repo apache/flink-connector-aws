@@ -20,13 +20,12 @@ package org.apache.flink.connector.kinesis.source.reader;
 
 import org.apache.flink.api.connector.source.SourceEvent;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.fetcher.SingleThreadFetcherManager;
-import org.apache.flink.connector.base.source.reader.synchronization.FutureCompletingBlockingQueue;
 import org.apache.flink.connector.kinesis.source.event.SplitsFinishedEvent;
 import org.apache.flink.connector.kinesis.source.metrics.KinesisShardMetrics;
 import org.apache.flink.connector.kinesis.source.model.TestData;
 import org.apache.flink.connector.kinesis.source.proxy.StreamProxy;
+import org.apache.flink.connector.kinesis.source.reader.polling.PollingKinesisShardSplitReader;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplitState;
 import org.apache.flink.connector.kinesis.source.util.KinesisContextProvider;
@@ -36,7 +35,6 @@ import org.apache.flink.metrics.testutils.MetricListener;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import software.amazon.awssdk.services.kinesis.model.Record;
 
 import java.util.Collections;
 import java.util.List;
@@ -55,26 +53,26 @@ class KinesisStreamsSourceReaderTest {
     private KinesisStreamsSourceReader<TestData> sourceReader;
     private MetricListener metricListener;
     private Map<String, KinesisShardMetrics> shardMetricGroupMap;
+    private Configuration sourceConfig;
 
     @BeforeEach
     public void init() {
         metricListener = new MetricListener();
         shardMetricGroupMap = new ConcurrentHashMap<>();
+        sourceConfig = new Configuration();
         StreamProxy testStreamProxy = getTestStreamProxy();
         Supplier<PollingKinesisShardSplitReader> splitReaderSupplier =
-                () -> new PollingKinesisShardSplitReader(testStreamProxy, shardMetricGroupMap);
-
-        FutureCompletingBlockingQueue<RecordsWithSplitIds<Record>> elementsQueue =
-                new FutureCompletingBlockingQueue<>();
+                () ->
+                        new PollingKinesisShardSplitReader(
+                                testStreamProxy, shardMetricGroupMap, sourceConfig);
 
         testingReaderContext =
                 KinesisContextProvider.KinesisTestingContext.getKinesisTestingContext(
                         metricListener);
         sourceReader =
                 new KinesisStreamsSourceReader<>(
-                        elementsQueue,
                         new SingleThreadFetcherManager<>(
-                                elementsQueue, splitReaderSupplier::get, new Configuration()),
+                                splitReaderSupplier::get, new Configuration()),
                         new KinesisStreamsRecordEmitter<>(null),
                         new Configuration(),
                         testingReaderContext,

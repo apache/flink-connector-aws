@@ -21,7 +21,10 @@ package org.apache.flink.connector.kinesis.source.proxy;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.connector.kinesis.source.split.StartingPosition;
 
+import software.amazon.awssdk.services.kinesis.model.DeregisterStreamConsumerResponse;
+import software.amazon.awssdk.services.kinesis.model.DescribeStreamConsumerResponse;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
+import software.amazon.awssdk.services.kinesis.model.RegisterStreamConsumerResponse;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.awssdk.services.kinesis.model.StreamDescriptionSummary;
 
@@ -55,9 +58,42 @@ public interface StreamProxy extends Closeable {
      * @param streamArn the ARN of the stream
      * @param shardId the shard to subscribe from
      * @param startingPosition the starting position to read from
+     * @param maxRecordsToGet the maximum amount of records to retrieve for this batch
      * @return the response with records. Includes both the returned records and the subsequent
      *     shard iterator to use.
      */
     GetRecordsResponse getRecords(
-            String streamArn, String shardId, StartingPosition startingPosition);
+            String streamArn,
+            String shardId,
+            StartingPosition startingPosition,
+            int maxRecordsToGet);
+
+    // Enhanced Fan-Out Consumer related methods
+    /**
+     * Registers an enhanced fan-out consumer against the stream.
+     *
+     * @param streamArn the ARN of the stream
+     * @param consumerName the consumerName
+     * @return the register stream consumer response
+     */
+    RegisterStreamConsumerResponse registerStreamConsumer(
+            final String streamArn, final String consumerName);
+
+    /**
+     * De-registers an enhanced fan-out consumer against the stream.
+     *
+     * @param consumerArn the ARN of the consumer to deregister
+     * @return the de-register stream consumer response
+     */
+    DeregisterStreamConsumerResponse deregisterStreamConsumer(final String consumerArn);
+
+    /**
+     * Describe stream consumer.
+     *
+     * @param streamArn the ARN of the Kinesis stream
+     * @param consumerName the name of the Kinesis consumer
+     * @return the describe stream consumer response
+     */
+    DescribeStreamConsumerResponse describeStreamConsumer(
+            final String streamArn, final String consumerName);
 }

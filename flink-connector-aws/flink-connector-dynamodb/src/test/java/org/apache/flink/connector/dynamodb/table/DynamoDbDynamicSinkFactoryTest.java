@@ -47,6 +47,7 @@ import static org.apache.flink.connector.base.table.AsyncSinkConnectorOptions.MA
 import static org.apache.flink.connector.base.table.AsyncSinkConnectorOptions.MAX_IN_FLIGHT_REQUESTS;
 import static org.apache.flink.connector.dynamodb.table.DynamoDbConnectorOptions.AWS_REGION;
 import static org.apache.flink.connector.dynamodb.table.DynamoDbConnectorOptions.FAIL_ON_ERROR;
+import static org.apache.flink.connector.dynamodb.table.DynamoDbConnectorOptions.IGNORE_NULLS;
 import static org.apache.flink.connector.dynamodb.table.DynamoDbConnectorOptions.TABLE_NAME;
 import static org.apache.flink.table.factories.utils.FactoryMocks.createTableSink;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -137,7 +138,10 @@ public class DynamoDbDynamicSinkFactoryTest {
     void testGoodTableSinkWithOptionalOptions() {
         ResolvedSchema sinkSchema = defaultSinkSchema();
         Map<String, String> sinkOptions =
-                defaultSinkOptions().withTableOption(FAIL_ON_ERROR, "true").build();
+                defaultSinkOptions()
+                        .withTableOption(FAIL_ON_ERROR, "true")
+                        .withTableOption(IGNORE_NULLS, "true")
+                        .build();
         List<String> partitionKeys = Collections.singletonList("partition_key");
 
         // Construct actual sink
@@ -153,6 +157,7 @@ public class DynamoDbDynamicSinkFactoryTest {
                                 .setDynamoDbClientProperties(defaultSinkProperties())
                                 .setPhysicalDataType(sinkSchema.toPhysicalRowDataType())
                                 .setFailOnError(true)
+                                .setIgnoreNulls(true)
                                 .build();
 
         assertThat(actualSink).usingRecursiveComparison().isEqualTo(expectedSink);

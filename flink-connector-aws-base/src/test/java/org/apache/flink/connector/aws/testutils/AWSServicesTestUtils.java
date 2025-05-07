@@ -115,7 +115,11 @@ public class AWSServicesTestUtils {
     }
 
     public static void createIAMRole(IamClient iam, String roleName) {
-        CreateRoleRequest request = CreateRoleRequest.builder().roleName(roleName).build();
+        CreateRoleRequest request =
+                CreateRoleRequest.builder()
+                        .roleName(roleName)
+                        .assumeRolePolicyDocument("{}")
+                        .build();
 
         iam.createRole(request);
     }

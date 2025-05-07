@@ -20,7 +20,7 @@ CREATE TABLE orders (
   `code` STRING,
   `quantity` BIGINT
 ) WITH (
-  'connector' = 'kinesis',
+  'connector' = 'kinesis-legacy',
   'stream' = 'orders',
   'aws.endpoint' = 'https://kinesalite:4567',
   'aws.credentials.provider'='BASIC',
@@ -37,7 +37,7 @@ CREATE TABLE large_orders (
   `quantity` BIGINT
 ) WITH (
   'connector' = 'kinesis',
-  'stream' = 'large_orders',
+  'stream.arn' = 'arn:aws:kinesis:ap-southeast-1:000000000000:stream/large_orders',
   'aws.region' = 'us-east-1',
   'aws.endpoint' = 'https://kinesalite:4567',
   'aws.credentials.provider' = 'BASIC',

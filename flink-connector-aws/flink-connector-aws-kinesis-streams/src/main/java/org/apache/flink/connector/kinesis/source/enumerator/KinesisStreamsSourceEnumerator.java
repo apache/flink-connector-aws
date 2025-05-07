@@ -26,12 +26,13 @@ import org.apache.flink.api.connector.source.SplitEnumerator;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.api.connector.source.SplitsAssignment;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.InitialPosition;
+import org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.InitialPosition;
 import org.apache.flink.connector.kinesis.source.enumerator.tracker.SplitTracker;
 import org.apache.flink.connector.kinesis.source.event.SplitsFinishedEvent;
 import org.apache.flink.connector.kinesis.source.exception.KinesisStreamsSourceException;
 import org.apache.flink.connector.kinesis.source.proxy.ListShardsStartingPosition;
 import org.apache.flink.connector.kinesis.source.proxy.StreamProxy;
+import org.apache.flink.connector.kinesis.source.reader.fanout.StreamConsumerRegistrar;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.connector.kinesis.source.split.StartingPosition;
 
@@ -56,8 +57,8 @@ import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.SHARD_DISCOVERY_INTERVAL_MILLIS;
-import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigConstants.STREAM_INITIAL_POSITION;
+import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.SHARD_DISCOVERY_INTERVAL;
+import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.STREAM_INITIAL_POSITION;
 import static org.apache.flink.connector.kinesis.source.config.KinesisStreamsSourceConfigUtil.parseStreamTimestampStartingPosition;
 
 /**
@@ -81,6 +82,7 @@ public class KinesisStreamsSourceEnumerator
     private final Map<Integer, Set<KinesisShardSplit>> splitAssignment = new HashMap<>();
 
     private String lastSeenShardId;
+    private final StreamConsumerRegistrar streamConsumerRegistrar;
 
     public KinesisStreamsSourceEnumerator(
             SplitEnumeratorContext<KinesisShardSplit> context,
@@ -89,13 +91,15 @@ public class KinesisStreamsSourceEnumerator
             StreamProxy streamProxy,
             KinesisShardAssigner shardAssigner,
             KinesisStreamsSourceEnumeratorState state,
-            boolean preserveShardOrder) {
+            boolean preserveShardOrder,
+            StreamConsumerRegistrar streamConsumerRegistrar) {
         this.context = context;
         this.streamArn = streamArn;
         this.sourceConfig = sourceConfig;
         this.streamProxy = streamProxy;
         this.shardAssigner = shardAssigner;
         this.shardAssignerContext = new ShardAssignerContext(splitAssignment, context);
+        this.streamConsumerRegistrar = streamConsumerRegistrar;
         if (state == null) {
             this.lastSeenShardId = null;
             this.splitTracker = new SplitTracker(preserveShardOrder);
@@ -107,11 +111,13 @@ public class KinesisStreamsSourceEnumerator
 
     @Override
     public void start() {
+        streamConsumerRegistrar.registerStreamConsumer();
+
         if (lastSeenShardId == null) {
             context.callAsync(this::initialDiscoverSplits, this::processDiscoveredSplits);
         }
 
-        final long shardDiscoveryInterval = sourceConfig.get(SHARD_DISCOVERY_INTERVAL_MILLIS);
+        final long shardDiscoveryInterval = sourceConfig.get(SHARD_DISCOVERY_INTERVAL).toMillis();
         context.callAsync(
                 this::periodicallyDiscoverSplits,
                 this::processDiscoveredSplits,
@@ -163,6 +169,7 @@ public class KinesisStreamsSourceEnumerator
 
     @Override
     public void close() throws IOException {
+        streamConsumerRegistrar.deregisterStreamConsumer();
         streamProxy.close();
     }
 
@@ -210,6 +217,10 @@ public class KinesisStreamsSourceEnumerator
             InitialPosition initialPosition, Instant currentTime) {
         switch (initialPosition) {
             case LATEST:
+                LOG.info(
+                        "Starting consumption from stream {} from LATEST. This translates into AT_TIMESTAMP from {}",
+                        streamArn,
+                        currentTime.toString());
                 return ListShardsStartingPosition.fromTimestamp(currentTime);
             case AT_TIMESTAMP:
                 Instant timestamp =
@@ -218,8 +229,13 @@ public class KinesisStreamsSourceEnumerator
                                         () ->
                                                 new IllegalArgumentException(
                                                         "Stream initial timestamp must be specified when initial position set to AT_TIMESTAMP"));
+                LOG.info(
+                        "Starting consumption from stream {} from AT_TIMESTAMP, starting from {}",
+                        streamArn,
+                        timestamp.toString());
                 return ListShardsStartingPosition.fromTimestamp(timestamp);
             case TRIM_HORIZON:
+                LOG.info("Starting consumption from stream {} from TRIM_HORIZON.", streamArn);
                 return ListShardsStartingPosition.fromStart();
         }
 
@@ -282,7 +298,12 @@ public class KinesisStreamsSourceEnumerator
             }
             splits.add(
                     new KinesisShardSplit(
-                            streamArn, shard.shardId(), startingPosition, parentShardIds));
+                            streamArn,
+                            shard.shardId(),
+                            startingPosition,
+                            parentShardIds,
+                            shard.hashKeyRange().startingHashKey(),
+                            shard.hashKeyRange().endingHashKey()));
         }
 
         return splits;
