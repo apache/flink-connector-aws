@@ -16,7 +16,7 @@
 # limitations under the License.
 ################################################################################
 
-version: 5.1-SNAPSHOT
+version: 5.1.0
 variants:
   - maven: flink-connector-aws-kinesis-firehose
     sql_url: https://repo.maven.apache.org/maven2/org/apache/flink/flink-sql-connector-aws-kinesis-firehose/$full_version/flink-sql-connector-aws-kinesis-firehose-$full_version.jar
