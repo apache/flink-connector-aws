@@ -1,5 +1,0 @@
-<parent>
-    <artifactId>flink-connector-aws</artifactId>
-    <groupId>org.apache.flink</groupId>
-    <version>5.1-SNAPSHOT</version>
-</parent> 
