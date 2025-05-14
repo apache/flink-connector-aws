@@ -29,9 +29,24 @@ under the License.
 The AWS Glue Catalog provides a way to use [AWS Glue](https://aws.amazon.com/glue) as a catalog for Apache Flink. 
 This allows users to access Glue's metadata store directly from Flink SQL and Table API.
 
+## Features
+
+- Register AWS Glue as a catalog in Flink applications
+- Access Glue databases and tables through Flink SQL
+- Support for various AWS data sources (S3, Kinesis, MSK)
+- Mapping between Flink and AWS Glue data types
+- Compatibility with Flink's Table API and SQL interface
+
 ## Dependencies
 
 {{< sql_download_table "glue" >}}
+
+## Prerequisites
+
+Before getting started, ensure you have the following:
+
+- **AWS account** with appropriate permissions for AWS Glue and other required services
+- **AWS credentials** properly configured
 
 ## How to create a Glue Catalog
 
@@ -39,63 +54,46 @@ This allows users to access Glue's metadata store directly from Flink SQL and Ta
 
 ```sql
 CREATE CATALOG glue_catalog WITH (
-    'type' = 'glue'
-    [, 'catalog-name' = '...']
-    [, 'default-database' = '...']
-    [, 'region' = '...']
-    [, 'access-key' = '...']
-    [, 'secret-key' = '...'] 
-    [, 'session-token' = '...']
-    [, 'role-arn' = '...']
-    [, 'role-session-name' = '...']
-    [, 'endpoint-url' = '...']
-    [, 'parameters' = '...'] 
+    'type' = 'glue',
+    'catalog-name' = 'glue_catalog',
+    'default-database' = 'default',
+    'region' = 'us-east-1'
 );
 ```
 
 ### Java/Scala
 
 ```java
-TableEnvironment tableEnv = TableEnvironment.create(...);
+// Java/Scala
+import org.apache.flink.table.catalog.glue.GlueCatalog;
+import org.apache.flink.table.catalog.Catalog;
 
-String name = "glue_catalog";
-String defaultDatabase = "default";
-String region = "us-east-1";
+// Create Glue catalog instance
+Catalog glueCatalog = new GlueCatalog(
+    "glue_catalog",      // Catalog name
+    "default",           // Default database
+    "us-east-1");         // AWS region
 
-Map<String, String> options = new HashMap<>();
-options.put("type", "glue");
-options.put("default-database", defaultDatabase);
-options.put("region", region);
 
-Catalog catalog = CatalogUtils.createCatalog(name, options);
-tableEnv.registerCatalog(name, catalog);
-
-// Set the catalog as current catalog
-tableEnv.useCatalog(name);
+// Register with table environment
+tableEnv.registerCatalog("glue_catalog", glueCatalog);
+tableEnv.useCatalog("glue_catalog");
 ```
 
 ### Python
 
 ```python
-from pyflink.table import *
+# Python
+from pyflink.table.catalog import GlueCatalog
 
-settings = EnvironmentSettings.in_streaming_mode()
-t_env = TableEnvironment.create(settings)
+# Create and register Glue catalog
+glue_catalog = GlueCatalog(
+    "glue_catalog",      // Catalog name
+    "default",           // Default database
+    "us-east-1")         // AWS region
 
-name = "glue_catalog"
-default_database = "default"
-region = "us-east-1"
-
-options = {
-    "type": "glue",
-    "default-database": default_database,
-    "region": region
-}
-
-t_env.register_catalog(name, options)
-
-# Set the GlueCatalog as the current catalog
-t_env.use_catalog(name)
+t_env.register_catalog("glue_catalog", glue_catalog)
+t_env.use_catalog("glue_catalog")
 ```
 
 ## Catalog Configuration Options
@@ -134,171 +132,302 @@ t_env.use_catalog(name)
       <td style="word-wrap: break-word;">(none)</td>
       <td>AWS region of the Glue service. If not specified, it will be determined through the default AWS region provider chain.</td>
     </tr>
-    <tr>
-      <td><h5>access-key</h5></td>
-      <td>No</td>
-      <td style="word-wrap: break-word;">(none)</td>
-      <td>AWS access key. If not specified, it will be determined through the default AWS credentials provider chain.</td>
-    </tr>
-    <tr>
-      <td><h5>secret-key</h5></td>
-      <td>No</td>
-      <td style="word-wrap: break-word;">(none)</td>
-      <td>AWS secret key. If not specified, it will be determined through the default AWS credentials provider chain.</td>
-    </tr>
-    <tr>
-      <td><h5>session-token</h5></td>
-      <td>No</td>
-      <td style="word-wrap: break-word;">(none)</td>
-      <td>AWS session token. Only required if using temporary credentials.</td>
-    </tr>
-    <tr>
-      <td><h5>role-arn</h5></td>
-      <td>No</td>
-      <td style="word-wrap: break-word;">(none)</td>
-      <td>ARN of the IAM role to assume. Use this for cross-account access or when using temporary credentials.</td>
-    </tr>
-    <tr>
-      <td><h5>role-session-name</h5></td>
-      <td>No</td>
-      <td style="word-wrap: break-word;">flink-glue-catalog</td>
-      <td>Session name for the assumed role.</td>
-    </tr>
-    <tr>
-      <td><h5>endpoint-url</h5></td>
-      <td>No</td>
-      <td style="word-wrap: break-word;">(none)</td>
-      <td>Custom endpoint URL for the AWS Glue service (e.g., for testing with localstack).</td>
-    </tr>
-    <tr>
-      <td><h5>parameters</h5></td>
-      <td>No</td>
-      <td style="word-wrap: break-word;">(none)</td>
-      <td>Additional parameters to pass to the catalog implementation.</td>
-    </tr>
     </tbody>
 </table>
 
 ## Data Type Mapping
 
-AWS Glue data types are mapped to corresponding Flink SQL data types. The following table lists the type mapping:
+The connector handles mapping between Flink data types and AWS Glue data types automatically. The following table shows the basic type mappings:
 
 <table class="table table-bordered">
     <thead>
       <tr>
-        <th class="text-left">AWS Glue Data Type</th>
-        <th class="text-left">Flink SQL Data Type</th>
+        <th class="text-left">Flink Type</th>
+        <th class="text-left">AWS Glue Type</th>
       </tr>
     </thead>
     <tbody>
     <tr>
-      <td>char, varchar, string</td>
-      <td>STRING</td>
+      <td>CHAR</td>
+      <td>string</td>
     </tr>
     <tr>
-      <td>boolean</td>
+      <td>VARCHAR</td>
+      <td>string</td>
+    </tr>
+    <tr>
       <td>BOOLEAN</td>
+      <td>boolean</td>
     </tr>
     <tr>
-      <td>smallint, int, tinyint</td>
-      <td>INT</td>
-    </tr>
-    <tr>
-      <td>bigint</td>
-      <td>BIGINT</td>
-    </tr>
-    <tr>
-      <td>float, real</td>
-      <td>FLOAT</td>
-    </tr>
-    <tr>
-      <td>double</td>
-      <td>DOUBLE</td>
-    </tr>
-    <tr>
-      <td>numeric, decimal</td>
-      <td>DECIMAL</td>
-    </tr>
-    <tr>
-      <td>date</td>
-      <td>DATE</td>
-    </tr>
-    <tr>
-      <td>timestamp</td>
-      <td>TIMESTAMP</td>
-    </tr>
-    <tr>
+      <td>BINARY</td>
       <td>binary</td>
-      <td>BYTES</td>
     </tr>
     <tr>
-      <td>array</td>
-      <td>ARRAY</td>
+      <td>VARBINARY</td>
+      <td>binary</td>
     </tr>
     <tr>
-      <td>map</td>
-      <td>MAP</td>
+      <td>DECIMAL</td>
+      <td>decimal</td>
     </tr>
     <tr>
-      <td>struct</td>
+      <td>TINYINT</td>
+      <td>byte</td>
+    </tr>
+    <tr>
+      <td>SMALLINT</td>
+      <td>short</td>
+    </tr>
+    <tr>
+      <td>INTEGER</td>
+      <td>int</td>
+    </tr>
+    <tr>
+      <td>BIGINT</td>
+      <td>long</td>
+    </tr>
+    <tr>
+      <td>FLOAT</td>
+      <td>float</td>
+    </tr>
+    <tr>
+      <td>DOUBLE</td>
+      <td>double</td>
+    </tr>
+    <tr>
+      <td>DATE</td>
+      <td>date</td>
+    </tr>
+    <tr>
+      <td>TIME</td>
+      <td>string</td>
+    </tr>
+    <tr>
+      <td>TIMESTAMP</td>
+      <td>timestamp</td>
+    </tr>
+    <tr>
       <td>ROW</td>
+      <td>struct</td>
+    </tr>
+    <tr>
+      <td>ARRAY</td>
+      <td>array</td>
+    </tr>
+    <tr>
+      <td>MAP</td>
+      <td>map</td>
     </tr>
     </tbody>
 </table>
 
-## Features
+## Catalog Operations
 
-Currently, the following features are supported:
+The AWS Glue Catalog connector supports several catalog operations through SQL. Here's a list of the operations that are currently implemented:
 
-* Databases: create, drop, alter, use, list
-* Tables: create, drop, alter, list, describe
-* Views: create, drop, alter, list, describe
-* User-defined functions: list
-
-## Examples
+### Database Operations
 
 ```sql
--- Create a Glue catalog
-CREATE CATALOG glue WITH (
-  'type' = 'glue',
-  'region' = 'us-east-1'
-);
+-- Create a new database
+CREATE DATABASE sales_db;
 
--- Use the Glue catalog
-USE CATALOG glue;
+-- Create a database with comment
+CREATE DATABASE sales_db COMMENT 'Database for sales data';
 
--- Create a database in Glue
-CREATE DATABASE IF NOT EXISTS mydb
-COMMENT 'A new database in AWS Glue';
+-- Create a database if it doesn't exist
+CREATE DATABASE IF NOT EXISTS sales_db;
 
--- Use the "mydb" database
-USE mydb;
+-- Drop a database
+DROP DATABASE sales_db;
 
--- Create a table
-CREATE TABLE mytable (
-  user_id BIGINT,
-  name STRING,
-  date_joined TIMESTAMP(3)
-) WITH (
-  'connector' = 'filesystem',
-  'path' = 's3://mybucket/path/to/data',
-  'format' = 'parquet'
-);
+-- Drop a database if it exists
+DROP DATABASE IF EXISTS sales_db;
 
--- Query the table
-SELECT * FROM mytable;
-
--- Drop the table
-DROP TABLE mytable;
-
--- Drop the database
-DROP DATABASE mydb;
+-- Use a specific database
+USE sales_db;
 ```
 
-## Limitations
+### Table Operations
 
-* AWS Glue schema evolution is not fully supported.
-* Some complex AWS Glue features like encryption options are not exposed.
-* Functions created in Glue are visible in the catalog but not automatically registered for use in Flink SQL.
+```sql
+-- Create a table
+CREATE TABLE orders (
+  order_id BIGINT,
+  customer_id BIGINT,
+  order_date TIMESTAMP,
+  amount DECIMAL(10, 2)
+);
+
+-- Create a table with comment and properties
+CREATE TABLE orders (
+  order_id BIGINT,
+  customer_id BIGINT,
+  order_date TIMESTAMP,
+  amount DECIMAL(10, 2),
+  PRIMARY KEY (order_id) NOT ENFORCED
+) COMMENT 'Table storing order information'
+WITH (
+  'connector' = 'kinesis',
+  'stream.arn' = 'customer-stream',
+  'aws.region' = 'us-east-1',
+  'format' = 'json'
+);
+
+-- Create table if not exists
+CREATE TABLE IF NOT EXISTS orders (
+  order_id BIGINT,
+  customer_id BIGINT
+);
+
+-- Drop a table
+DROP TABLE orders;
+
+-- Drop a table if it exists
+DROP TABLE IF EXISTS orders;
+
+-- Show table details
+DESCRIBE orders;
+```
+
+### View Operations
+
+```sql
+-- Create a view
+CREATE VIEW order_summary AS
+SELECT customer_id, COUNT(*) as order_count, SUM(amount) as total_amount
+FROM orders
+GROUP BY customer_id;
+
+-- Create a temporary view (only available in current session)
+CREATE TEMPORARY VIEW temp_view AS
+SELECT * FROM orders WHERE amount > 100;
+
+-- Drop a view
+DROP VIEW order_summary;
+
+-- Drop a view if it exists
+DROP VIEW IF EXISTS order_summary;
+```
+
+### Function Operations
+
+```sql
+-- Register a function
+CREATE FUNCTION multiply_func AS 'com.example.functions.MultiplyFunction';
+
+-- Register a temporary function
+CREATE TEMPORARY FUNCTION temp_function AS 'com.example.functions.TempFunction';
+
+-- Drop a function
+DROP FUNCTION multiply_func;
+
+-- Drop a temporary function
+DROP TEMPORARY FUNCTION temp_function;
+```
+
+### Listing Resources
+
+Query available catalogs, databases, and tables:
+
+```sql
+-- List all catalogs
+SHOW CATALOGS;
+
+-- List databases in the current catalog
+SHOW DATABASES;
+
+-- List tables in the current database
+SHOW TABLES;
+
+-- List tables in a specific database
+SHOW TABLES FROM sales_db;
+
+-- List views in the current database
+SHOW VIEWS;
+
+-- List functions
+SHOW FUNCTIONS;
+```
+
+## Case Sensitivity in AWS Glue
+
+### Understanding Case Handling
+
+AWS Glue handles case sensitivity in a specific way:
+
+1. **Top-level column names** are automatically lowercased in Glue (e.g., `UserProfile` becomes `userprofile`)
+2. **Nested struct field names** preserve their original case in Glue (e.g., inside a struct, `FirstName` stays as `FirstName`)
+
+However, when writing queries in Flink SQL, you should use the **original column names** as defined in your `CREATE TABLE` statement, not how they are stored in Glue.
+
+### Example with Nested Fields
+
+Consider this table definition:
+
+```sql
+CREATE TABLE nested_json_test (
+  `Id` INT,
+  `UserProfile` ROW<
+     `FirstName` VARCHAR(255), 
+     `lastName` VARCHAR(255)
+  >,
+  `event_data` ROW<
+     `EventType` VARCHAR(50),
+     `eventTimestamp` TIMESTAMP(3)
+  >,
+  `metadata` MAP<VARCHAR(100), VARCHAR(255)>
+)
+```
+
+When stored in Glue, the schema looks like:
+
+```json
+{
+  "userprofile": {  // Note: lowercased
+    "FirstName": "string",  // Note: original case preserved
+    "lastName": "string"    // Note: original case preserved
+  }
+}
+```
+
+### Querying Nested Fields
+
+When querying, always use the original column names as defined in your `CREATE TABLE` statement:
+
+```sql
+-- CORRECT: Use the original column names from CREATE TABLE
+SELECT UserProfile.FirstName FROM nested_json_test;
+
+-- INCORRECT: This doesn't match your schema definition
+SELECT `userprofile`.`FirstName` FROM nested_json_test;
+
+-- For nested fields within nested fields, also use original case
+SELECT event_data.EventType, event_data.eventTimestamp FROM nested_json_test;
+
+-- Accessing map fields
+SELECT metadata['source_system'] FROM nested_json_test;
+```
+
+## Limitations and Considerations
+
+1. **Case Sensitivity**: As detailed above, always use the original column names from your schema definition when querying.
+2. **AWS Service Limits**: Be aware of AWS Glue service limits that may affect your application.
+3. **Authentication**: Ensure proper AWS credentials with appropriate permissions are available.
+4. **Region Selection**: The Glue catalog must be registered with the correct AWS region where your Glue resources exist.
+5. **Unsupported Operations**: The following operations are not currently supported:
+   - ALTER DATABASE (modifying database properties)
+   - ALTER TABLE (modifying table properties or schema)
+   - RENAME TABLE
+   - Partition management operations (ADD/DROP PARTITION)
+
+## Troubleshooting
+
+### Common Issues
+
+1. **"Table not found"**: Verify the table exists in the specified Glue database and catalog.
+2. **Authentication errors**: Check AWS credentials and permissions.
+3. **Case sensitivity errors**: Ensure you're using the original column names as defined in your schema.
+4. **Type conversion errors**: Verify that data types are compatible between Flink and Glue.
 
 {{< top >}} 
