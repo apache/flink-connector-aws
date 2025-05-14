@@ -46,6 +46,7 @@ import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -77,6 +78,21 @@ public class FanOutKinesisShardSubscription {
 
     private final Duration subscriptionTimeout;
 
+    /** Executor service to run subscription event processing tasks. */
+    private final ExecutorService subscriptionEventProcessingExecutor;
+
+    /**
+     * Lock to ensure sequential processing of subscription events for this shard.
+     * This lock guarantees that for each shard:
+     * 1. Only one event is processed at a time
+     * 2. Events are processed in the order they are received
+     * 3. The critical operations (queue.put, startingPosition update, requestRecords) are executed atomically
+     *
+     * <p>This is essential to prevent race conditions that could lead to data loss or incorrect
+     * continuation sequence numbers being used after failover.
+     */
+    private final Object subscriptionEventProcessingLock = new Object();
+
     // Queue is meant for eager retrieval of records from the Kinesis stream. We will always have 2
     // record batches available on next read.
     private final BlockingQueue<SubscribeToShardEvent> eventQueue = new LinkedBlockingQueue<>(2);
@@ -86,19 +102,50 @@ public class FanOutKinesisShardSubscription {
     // Store the current starting position for this subscription. Will be updated each time new
     // batch of records is consumed
     private StartingPosition startingPosition;
+
+    /**
+     * Gets the current starting position for this subscription.
+     *
+     * @return The current starting position
+     */
+    public StartingPosition getStartingPosition() {
+        return startingPosition;
+    }
+
+    /**
+     * Checks if the subscription is active.
+     *
+     * @return true if the subscription is active, false otherwise
+     */
+    public boolean isActive() {
+        return subscriptionActive.get();
+    }
+
     private FanOutShardSubscriber shardSubscriber;
 
+    /**
+     * Creates a new FanOutKinesisShardSubscription with the specified parameters.
+     *
+     * @param kinesis The AsyncStreamProxy to use for Kinesis operations
+     * @param consumerArn The ARN of the consumer
+     * @param shardId The ID of the shard to subscribe to
+     * @param startingPosition The starting position for the subscription
+     * @param subscriptionTimeout The timeout for the subscription
+     * @param subscriptionEventProcessingExecutor The executor service to use for processing subscription events
+     */
     public FanOutKinesisShardSubscription(
             AsyncStreamProxy kinesis,
             String consumerArn,
             String shardId,
             StartingPosition startingPosition,
-            Duration subscriptionTimeout) {
+            Duration subscriptionTimeout,
+            ExecutorService subscriptionEventProcessingExecutor) {
         this.kinesis = kinesis;
         this.consumerArn = consumerArn;
         this.shardId = shardId;
         this.startingPosition = startingPosition;
         this.subscriptionTimeout = subscriptionTimeout;
+        this.subscriptionEventProcessingExecutor = subscriptionEventProcessingExecutor;
     }
 
     /** Method to allow eager activation of the subscription. */
@@ -293,27 +340,14 @@ public class FanOutKinesisShardSubscription {
                     new SubscribeToShardResponseHandler.Visitor() {
                         @Override
                         public void visit(SubscribeToShardEvent event) {
-                            try {
-                                LOG.debug(
-                                        "Received event: {}, {}",
-                                        event.getClass().getSimpleName(),
-                                        event);
-                                eventQueue.put(event);
+                            // For critical path operations like processing subscription events, we need to ensure:
+                            // 1. Events are processed in order (sequential processing)
+                            // 2. No events are dropped (reliable processing)
+                            // 3. The Netty event loop thread is not blocked (async processing)
+                            // 4. The starting position is correctly updated for checkpointing
 
-                                // Update the starting position in case we have to recreate the
-                                // subscription
-                                startingPosition =
-                                        StartingPosition.continueFromSequenceNumber(
-                                                event.continuationSequenceNumber());
-
-                                // Replace the record just consumed in the Queue
-                                requestRecords();
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                                throw new KinesisStreamsSourceException(
-                                        "Interrupted while adding Kinesis record to internal buffer.",
-                                        e);
-                            }
+                            // Submit the event processing to the executor service
+                            submitEventProcessingTask(event);
                         }
                     });
         }
@@ -333,5 +367,88 @@ public class FanOutKinesisShardSubscription {
             cancel();
             activateSubscription();
         }
+    }
+
+    /**
+     * Submits an event processing task to the executor service.
+     * This method encapsulates the task submission logic and error handling.
+     *
+     * @param event The subscription event to process
+     */
+    private void submitEventProcessingTask(SubscribeToShardEvent event) {
+        try {
+            subscriptionEventProcessingExecutor.execute(() -> {
+                synchronized (subscriptionEventProcessingLock) {
+                    try {
+                        processSubscriptionEvent(event);
+                    } catch (Exception e) {
+                        // For critical path operations, propagate exceptions to cause a Flink job restart
+                        LOG.error("Error processing subscription event", e);
+                        // Propagate the exception to the subscription exception handler
+                        terminateSubscription(new KinesisStreamsSourceException(
+                            "Error processing subscription event", e));
+                    }
+                }
+            });
+        } catch (Exception e) {
+            // This should never happen with an unbounded queue, but if it does,
+            // we need to propagate the exception to cause a Flink job restart
+            LOG.error("Error submitting subscription event task", e);
+            throw new KinesisStreamsSourceException(
+                "Error submitting subscription event task", e);
+        }
+    }
+
+    /**
+     * Processes a subscription event in a separate thread from the shared executor pool.
+     * This method encapsulates the critical path operations:
+     * 1. Putting the event in the blocking queue (which has a capacity of 2)
+     * 2. Updating the starting position for recovery after failover
+     * 3. Requesting more records
+     *
+     * <p>These operations are executed sequentially for each shard to ensure thread safety
+     * and prevent race conditions. The bounded nature of the event queue (capacity 2) combined
+     * with only requesting more records after processing an event provides natural flow control,
+     * effectively limiting the number of tasks in the executor's queue.
+     *
+     * <p>This method is made public for testing purposes.
+     *
+     * @param event The subscription event to process
+     */
+    public void processSubscriptionEvent(SubscribeToShardEvent event) {
+        try {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug(
+                        "Processing event for shard {}: {}, {}",
+                        shardId,
+                        event.getClass().getSimpleName(),
+                        event);
+            }
+
+            // Put event in queue - this is a blocking operation
+            eventQueue.put(event);
+
+            // Update the starting position to ensure we can recover after failover
+            // Note: We don't need additional synchronization here because this method is already
+            // called within a synchronized block on subscriptionEventProcessingLock
+            startingPosition = StartingPosition.continueFromSequenceNumber(
+                    event.continuationSequenceNumber());
+
+            // Request more records
+            shardSubscriber.requestRecords();
+
+            if (LOG.isDebugEnabled()) {
+                LOG.debug(
+                        "Successfully processed event for shard {}, updated position to {}",
+                        shardId,
+                        startingPosition);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            // Consistent with current implementation - throw KinesisStreamsSourceException
+            throw new KinesisStreamsSourceException(
+                    "Interrupted while adding Kinesis record to internal buffer.", e);
+        }
+        // No catch for other exceptions - let them propagate to be handled by the AWS SDK
     }
 }
