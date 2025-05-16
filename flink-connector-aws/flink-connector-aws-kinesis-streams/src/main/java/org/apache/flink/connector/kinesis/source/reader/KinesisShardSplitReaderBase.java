@@ -190,7 +190,7 @@ public abstract class KinesisShardSplitReaderBase
      * @param recordBatch recordBatch returned by fetchRecords()
      */
     private void scheduleNextFetchTime(KinesisShardSplitState splitState, RecordBatch recordBatch) {
-        if (recordBatch == null || recordBatch.getRecords().isEmpty()) {
+        if (recordBatch == null || recordBatch.getDeaggregatedRecords().isEmpty()) {
             long scheduledGetRecordTimeMillis =
                     System.currentTimeMillis() + emptyRecordsIntervalMillis;
             this.scheduledFetchTimes.put(splitState, scheduledGetRecordTimeMillis);
