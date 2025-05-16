@@ -26,7 +26,9 @@ import org.apache.flink.connector.kinesis.source.split.KinesisShardSplitState;
 import org.apache.flink.connector.kinesis.source.split.StartingPosition;
 import org.apache.flink.util.Collector;
 
+import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.kinesis.model.Record;
+import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
 /**
  * Emits record from the source into the Flink job graph. This serves as the interface between the
@@ -36,7 +38,7 @@ import software.amazon.awssdk.services.kinesis.model.Record;
  */
 @Internal
 public class KinesisStreamsRecordEmitter<T>
-        implements RecordEmitter<Record, T, KinesisShardSplitState> {
+        implements RecordEmitter<KinesisClientRecord, T, KinesisShardSplitState> {
 
     private final KinesisDeserializationSchema<T> deserializationSchema;
     private final SourceOutputWrapper<T> sourceOutputWrapper = new SourceOutputWrapper<>();
@@ -47,14 +49,27 @@ public class KinesisStreamsRecordEmitter<T>
 
     @Override
     public void emitRecord(
-            Record element, SourceOutput<T> output, KinesisShardSplitState splitState)
+            KinesisClientRecord element, SourceOutput<T> output, KinesisShardSplitState splitState)
             throws Exception {
         sourceOutputWrapper.setSourceOutput(output);
         sourceOutputWrapper.setTimestamp(element.approximateArrivalTimestamp().toEpochMilli());
         deserializationSchema.deserialize(
-                element, splitState.getStreamArn(), splitState.getShardId(), sourceOutputWrapper);
+                convertKinesisClientRecordToRecord(element),
+                splitState.getStreamArn(),
+                splitState.getShardId(),
+                sourceOutputWrapper);
         splitState.setNextStartingPosition(
                 StartingPosition.continueFromSequenceNumber(element.sequenceNumber()));
+    }
+
+    private Record convertKinesisClientRecordToRecord(KinesisClientRecord record) {
+        return Record.builder()
+                .sequenceNumber(record.sequenceNumber())
+                .approximateArrivalTimestamp(record.approximateArrivalTimestamp())
+                .data(SdkBytes.fromByteBuffer(record.data()))
+                .partitionKey(record.partitionKey())
+                .encryptionType(record.encryptionType())
+                .build();
     }
 
     private static class SourceOutputWrapper<T> implements Collector<T> {
