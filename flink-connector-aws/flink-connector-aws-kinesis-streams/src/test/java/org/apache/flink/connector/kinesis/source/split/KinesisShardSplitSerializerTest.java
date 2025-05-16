@@ -150,8 +150,7 @@ class KinesisShardSplitSerializerTest {
                         StartingPosition.continueFromSequenceNumber("some-sequence-number"),
                         new HashSet<>(Arrays.asList(generateShardId(2), generateShardId(5))),
                         STARTING_HASH_KEY_TEST_VALUE,
-                        ENDING_HASH_KEY_TEST_VALUE,
-                        true);
+                        ENDING_HASH_KEY_TEST_VALUE);
 
         byte[] oldSerializedState = serializer.serializeV1(initialSplit);
         KinesisShardSplit deserializedSplit = serializer.deserialize(1, oldSerializedState);

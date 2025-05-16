@@ -54,7 +54,7 @@ public class KinesisStreamsSourceReader<T>
 
     private static final Logger LOG = LoggerFactory.getLogger(KinesisStreamsSourceReader.class);
     private final Map<String, KinesisShardMetrics> shardMetricGroupMap;
-    private final NavigableMap<Long, Set<KinesisShardSplit>> splitFinishedEvents;
+    private final NavigableMap<Long, Set<KinesisShardSplit>> finishedSplits;
     private long currentCheckpointId;
 
     public KinesisStreamsSourceReader(
@@ -65,7 +65,7 @@ public class KinesisStreamsSourceReader<T>
             Map<String, KinesisShardMetrics> shardMetricGroupMap) {
         super(splitFetcherManager, recordEmitter, config, context);
         this.shardMetricGroupMap = shardMetricGroupMap;
-        this.splitFinishedEvents = new TreeMap<>();
+        this.finishedSplits = new TreeMap<>();
         this.currentCheckpointId = Long.MIN_VALUE;
     }
 
@@ -74,7 +74,7 @@ public class KinesisStreamsSourceReader<T>
         if (finishedSplitIds.isEmpty()) {
             return;
         }
-        splitFinishedEvents.computeIfAbsent(currentCheckpointId, k -> new HashSet<>());
+        finishedSplits.computeIfAbsent(currentCheckpointId, k -> new HashSet<>());
         finishedSplitIds.values().stream()
                 .map(
                         finishedSplit ->
@@ -86,7 +86,7 @@ public class KinesisStreamsSourceReader<T>
                                         finishedSplit.getKinesisShardSplit().getStartingHashKey(),
                                         finishedSplit.getKinesisShardSplit().getEndingHashKey(),
                                         true))
-                .forEach(split -> splitFinishedEvents.get(currentCheckpointId).add(split));
+                .forEach(split -> finishedSplits.get(currentCheckpointId).add(split));
 
         context.sendSourceEventToCoordinator(
                 new SplitsFinishedEvent(new HashSet<>(finishedSplitIds.keySet())));
@@ -107,9 +107,9 @@ public class KinesisStreamsSourceReader<T>
         this.currentCheckpointId = checkpointId;
         List<KinesisShardSplit> splits = new ArrayList<>(super.snapshotState(checkpointId));
 
-        if (!splitFinishedEvents.isEmpty()) {
+        if (!finishedSplits.isEmpty()) {
             // Add all finished splits to the snapshot
-            splitFinishedEvents.values().forEach(splits::addAll);
+            finishedSplits.values().forEach(splits::addAll);
         }
 
         return splits;
@@ -123,7 +123,7 @@ public class KinesisStreamsSourceReader<T>
      */
     @Override
     public void notifyCheckpointComplete(long checkpointId) {
-        splitFinishedEvents.headMap(checkpointId, true).clear();
+        finishedSplits.headMap(checkpointId, true).clear();
     }
 
     @Override
@@ -138,17 +138,17 @@ public class KinesisStreamsSourceReader<T>
 
     @Override
     public void addSplits(List<KinesisShardSplit> splits) {
-        List<KinesisShardSplit> kinesisShardSplits = new ArrayList<>();
+        List<KinesisShardSplit> unfinishedSplits = new ArrayList<>();
         for (KinesisShardSplit split : splits) {
             if (split.isFinished()) {
                 context.sendSourceEventToCoordinator(
                         new SplitsFinishedEvent(Collections.singleton(split.splitId())));
             } else {
-                kinesisShardSplits.add(split);
+                unfinishedSplits.add(split);
             }
         }
-        kinesisShardSplits.forEach(this::registerShardMetricGroup);
-        super.addSplits(kinesisShardSplits);
+        unfinishedSplits.forEach(this::registerShardMetricGroup);
+        super.addSplits(unfinishedSplits);
     }
 
     @Override
