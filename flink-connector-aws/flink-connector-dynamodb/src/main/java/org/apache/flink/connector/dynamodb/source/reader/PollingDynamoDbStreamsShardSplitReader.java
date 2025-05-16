@@ -28,12 +28,15 @@ import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSpli
 import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplitState;
 import org.apache.flink.connector.dynamodb.source.split.StartingPosition;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.dynamodb.model.GetRecordsResponse;
 import software.amazon.awssdk.services.dynamodb.model.Record;
 
 import javax.annotation.Nullable;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Collections;
@@ -57,48 +60,90 @@ public class PollingDynamoDbStreamsShardSplitReader
             new DynamoDbStreamRecordsWithSplitIds(Collections.emptyIterator(), null, false);
 
     private final StreamProxy dynamodbStreams;
+    private final Duration getRecordsIdlePollingTimeBetweenNonEmptyPolls;
+    private final Duration getRecordsIdlePollingTimeBetweenEmptyPolls;
 
-    private final Deque<DynamoDbStreamsShardSplitState> assignedSplits = new ArrayDeque<>();
+    private final Deque<DynamoDbStreamsShardSplitWithContext> assignedSplits;
     private final Map<String, DynamoDbStreamsShardMetrics> shardMetricGroupMap;
-    private final Set<String> pausedSplitIds = new HashSet<>();
+    private final Set<String> pausedSplitIds;
+    private static final Logger LOG =
+            LoggerFactory.getLogger(PollingDynamoDbStreamsShardSplitReader.class);
 
     public PollingDynamoDbStreamsShardSplitReader(
             StreamProxy dynamodbStreamsProxy,
+            Duration getRecordsIdlePollingTimeBetweenNonEmptyPolls,
+            Duration getRecordsIdlePollingTimeBetweenEmptyPolls,
             Map<String, DynamoDbStreamsShardMetrics> shardMetricGroupMap) {
         this.dynamodbStreams = dynamodbStreamsProxy;
+        this.getRecordsIdlePollingTimeBetweenNonEmptyPolls =
+                getRecordsIdlePollingTimeBetweenNonEmptyPolls;
+        this.getRecordsIdlePollingTimeBetweenEmptyPolls =
+                getRecordsIdlePollingTimeBetweenEmptyPolls;
         this.shardMetricGroupMap = shardMetricGroupMap;
+        this.assignedSplits = new ArrayDeque<>();
+        this.pausedSplitIds = new HashSet<>();
+    }
+
+    private long getNextEligibleTime(DynamoDbStreamsShardSplitWithContext splitContext) {
+        long requiredDelay =
+                splitContext.wasLastPollEmpty
+                        ? getRecordsIdlePollingTimeBetweenEmptyPolls.toMillis()
+                        : getRecordsIdlePollingTimeBetweenNonEmptyPolls.toMillis();
+
+        return splitContext.lastPollTimeMillis + requiredDelay;
     }
 
     @Override
     public RecordsWithSplitIds<Record> fetch() throws IOException {
-        DynamoDbStreamsShardSplitState splitState = assignedSplits.poll();
-        if (splitState == null) {
+        if (assignedSplits.isEmpty()) {
+            return INCOMPLETE_SHARD_EMPTY_RECORDS;
+        }
+        DynamoDbStreamsShardSplitWithContext splitContext = assignedSplits.poll();
+
+        if (pausedSplitIds.contains(splitContext.splitState.getSplitId())) {
+            assignedSplits.add(splitContext);
             return INCOMPLETE_SHARD_EMPTY_RECORDS;
         }
 
-        if (pausedSplitIds.contains(splitState.getSplitId())) {
-            assignedSplits.add(splitState);
+        long currentTime = System.currentTimeMillis();
+        long nextEligibleTime = getNextEligibleTime(splitContext);
+
+        LOG.debug(
+                "Polling split: {}, currentTime: {}, eligibleTime: {}, wasEmptyPoll: {}",
+                splitContext.splitState.getSplitId(),
+                currentTime,
+                nextEligibleTime,
+                splitContext.wasLastPollEmpty);
+
+        // Check if split is not ready due to empty poll and non-empty poll delay
+        if (nextEligibleTime > currentTime) {
+            assignedSplits.add(splitContext);
+            sleep(1);
             return INCOMPLETE_SHARD_EMPTY_RECORDS;
         }
 
         GetRecordsResponse getRecordsResponse =
                 dynamodbStreams.getRecords(
-                        splitState.getStreamArn(),
-                        splitState.getShardId(),
-                        splitState.getNextStartingPosition());
+                        splitContext.splitState.getStreamArn(),
+                        splitContext.splitState.getShardId(),
+                        splitContext.splitState.getNextStartingPosition());
         boolean isComplete = getRecordsResponse.nextShardIterator() == null;
+        boolean isEmptyPoll = hasNoRecords(getRecordsResponse);
 
-        if (hasNoRecords(getRecordsResponse)) {
+        splitContext.lastPollTimeMillis = currentTime;
+        splitContext.wasLastPollEmpty = isEmptyPoll;
+
+        if (isEmptyPoll) {
             if (isComplete) {
                 return new DynamoDbStreamRecordsWithSplitIds(
-                        Collections.emptyIterator(), splitState.getSplitId(), true);
+                        Collections.emptyIterator(), splitContext.splitState.getSplitId(), true);
             } else {
-                assignedSplits.add(splitState);
+                assignedSplits.add(splitContext);
                 return INCOMPLETE_SHARD_EMPTY_RECORDS;
             }
         } else {
             DynamoDbStreamsShardMetrics shardMetrics =
-                    shardMetricGroupMap.get(splitState.getShardId());
+                    shardMetricGroupMap.get(splitContext.splitState.getShardId());
             Record lastRecord =
                     getRecordsResponse.records().get(getRecordsResponse.records().size() - 1);
             shardMetrics.setMillisBehindLatest(
@@ -111,7 +156,7 @@ public class PollingDynamoDbStreamsShardSplitReader
                             0));
         }
 
-        splitState.setNextStartingPosition(
+        splitContext.splitState.setNextStartingPosition(
                 StartingPosition.continueFromSequenceNumber(
                         getRecordsResponse
                                 .records()
@@ -120,10 +165,20 @@ public class PollingDynamoDbStreamsShardSplitReader
                                 .sequenceNumber()));
 
         if (!isComplete) {
-            assignedSplits.add(splitState);
+            assignedSplits.add(splitContext);
         }
         return new DynamoDbStreamRecordsWithSplitIds(
-                getRecordsResponse.records().iterator(), splitState.getSplitId(), isComplete);
+                getRecordsResponse.records().iterator(),
+                splitContext.splitState.getSplitId(),
+                isComplete);
+    }
+
+    private void sleep(long milliseconds) throws IOException {
+        try {
+            Thread.sleep(milliseconds);
+        } catch (InterruptedException e) {
+            throw new IOException("Split reader was interrupted while sleeping", e);
+        }
     }
 
     private boolean hasNoRecords(GetRecordsResponse getRecordsResponse) {
@@ -133,7 +188,9 @@ public class PollingDynamoDbStreamsShardSplitReader
     @Override
     public void handleSplitsChanges(SplitsChange<DynamoDbStreamsShardSplit> splitsChanges) {
         for (DynamoDbStreamsShardSplit split : splitsChanges.splits()) {
-            assignedSplits.add(new DynamoDbStreamsShardSplitState(split));
+            assignedSplits.add(
+                    new DynamoDbStreamsShardSplitWithContext(
+                            new DynamoDbStreamsShardSplitState(split)));
         }
     }
 
@@ -189,6 +246,19 @@ public class PollingDynamoDbStreamsShardSplitReader
                 return Collections.emptySet();
             }
             return isComplete ? singleton(splitId) : Collections.emptySet();
+        }
+    }
+
+    @Internal
+    private static class DynamoDbStreamsShardSplitWithContext {
+        final DynamoDbStreamsShardSplitState splitState;
+        long lastPollTimeMillis;
+        boolean wasLastPollEmpty;
+
+        DynamoDbStreamsShardSplitWithContext(DynamoDbStreamsShardSplitState splitState) {
+            this.splitState = splitState;
+            this.lastPollTimeMillis = System.currentTimeMillis();
+            this.wasLastPollEmpty = false;
         }
     }
 }

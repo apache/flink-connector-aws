@@ -60,8 +60,11 @@ class PollingKinesisShardSplitReaderTest {
     private TestKinesisStreamProxy testStreamProxy;
     private MetricListener metricListener;
     private Map<String, KinesisShardMetrics> shardMetricGroupMap;
-    private Configuration sourceConfig;
     private static final String TEST_SHARD_ID = TestUtil.generateShardId(1);
+
+    private Configuration newConfigurationForTest() {
+        return new Configuration().set(SHARD_GET_RECORDS_MAX, 50);
+    }
 
     @BeforeEach
     public void init() {
@@ -69,16 +72,13 @@ class PollingKinesisShardSplitReaderTest {
         metricListener = new MetricListener();
         shardMetricGroupMap = new ConcurrentHashMap<>();
 
-        sourceConfig = new Configuration();
-        sourceConfig.set(SHARD_GET_RECORDS_MAX, 50);
-
         shardMetricGroupMap.put(
                 TEST_SHARD_ID,
                 new KinesisShardMetrics(
                         TestUtil.getTestSplit(TEST_SHARD_ID), metricListener.getMetricGroup()));
         splitReader =
                 new PollingKinesisShardSplitReader(
-                        testStreamProxy, shardMetricGroupMap, sourceConfig);
+                        testStreamProxy, shardMetricGroupMap, newConfigurationForTest());
     }
 
     @Test
@@ -410,10 +410,11 @@ class PollingKinesisShardSplitReaderTest {
     @Test
     void testMaxRecordsToGetParameterPassed() throws IOException {
         int maxRecordsToGet = 2;
-        sourceConfig.set(SHARD_GET_RECORDS_MAX, maxRecordsToGet);
+        Configuration configuration = newConfigurationForTest();
+        configuration.set(SHARD_GET_RECORDS_MAX, maxRecordsToGet);
         splitReader =
                 new PollingKinesisShardSplitReader(
-                        testStreamProxy, shardMetricGroupMap, sourceConfig);
+                        testStreamProxy, shardMetricGroupMap, configuration);
         testStreamProxy.addShards(TEST_SHARD_ID);
         List<Record> sentRecords =
                 Stream.of(getTestRecord("data-1"), getTestRecord("data-2"), getTestRecord("data-3"))

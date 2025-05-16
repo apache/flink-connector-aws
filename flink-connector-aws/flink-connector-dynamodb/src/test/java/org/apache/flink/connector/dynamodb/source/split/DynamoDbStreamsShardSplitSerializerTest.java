@@ -26,6 +26,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.stream.Stream;
 
+import static org.apache.flink.connector.dynamodb.source.util.TestUtil.SHARD_ID;
+import static org.apache.flink.connector.dynamodb.source.util.TestUtil.STREAM_ARN;
 import static org.apache.flink.connector.dynamodb.source.util.TestUtil.getTestSplit;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatExceptionOfType;
@@ -78,12 +80,67 @@ class DynamoDbStreamsShardSplitSerializerTest {
         assertThatExceptionOfType(VersionMismatchException.class)
                 .isThrownBy(
                         () ->
-                                wrongVersionSerializer.deserialize(
-                                        serializer.getVersion(), serialized))
+                                serializer.deserialize(
+                                        wrongVersionSerializer.getVersion(), serialized))
                 .withMessageContaining(
                         "Trying to deserialize DynamoDbStreamsShardSplit serialized with unsupported version ")
                 .withMessageContaining(String.valueOf(wrongVersionSerializer.getVersion()))
                 .withMessageContaining(String.valueOf(serializer.getVersion()));
+    }
+
+    @Test
+    void testSerializeAndDeserializeWithFinishedSplits() throws Exception {
+        final DynamoDbStreamsShardSplit initialSplit =
+                new DynamoDbStreamsShardSplit(
+                        STREAM_ARN,
+                        SHARD_ID,
+                        StartingPosition.fromStart(),
+                        null,
+                        true // finished after checkpoint 2
+                        );
+
+        DynamoDbStreamsShardSplitSerializer serializer = new DynamoDbStreamsShardSplitSerializer();
+
+        byte[] serialized = serializer.serialize(initialSplit);
+        DynamoDbStreamsShardSplit deserializedSplit =
+                serializer.deserialize(serializer.getVersion(), serialized);
+
+        assertThat(deserializedSplit).usingRecursiveComparison().isEqualTo(initialSplit);
+        assertThat(deserializedSplit.isFinished()).isTrue();
+    }
+
+    @Test
+    void testDeserializeVersion0Split() throws Exception {
+        // Create a version 0 split (without finishedDuringCheckpoint)
+        final DynamoDbStreamsShardSplit initialSplit =
+                new DynamoDbStreamsShardSplit(
+                        STREAM_ARN, SHARD_ID, StartingPosition.fromStart(), null);
+
+        DynamoDbStreamsShardSplitSerializer serializer =
+                new DynamoDbStreamsShardSplitSerializer() {
+                    @Override
+                    public int getVersion() {
+                        return 0;
+                    }
+                };
+
+        // Serialize with version 0
+        byte[] serialized = serializer.serialize(initialSplit);
+
+        // Deserialize with current version
+        DynamoDbStreamsShardSplitSerializer currentSerializer =
+                new DynamoDbStreamsShardSplitSerializer();
+        DynamoDbStreamsShardSplit deserializedSplit = currentSerializer.deserialize(0, serialized);
+
+        // Verify the split was properly deserialized with default unfinished state
+        assertThat(deserializedSplit.isFinished()).isFalse();
+        assertThat(deserializedSplit)
+                .extracting("streamArn", "shardId", "startingPosition", "parentShardId")
+                .containsExactly(
+                        initialSplit.getStreamArn(),
+                        initialSplit.getShardId(),
+                        initialSplit.getStartingPosition(),
+                        initialSplit.getParentShardId());
     }
 
     private static class WrongVersionSerializer extends DynamoDbStreamsShardSplitSerializer {

@@ -45,7 +45,7 @@ public class PollingKinesisShardSplitReader extends KinesisShardSplitReaderBase 
             StreamProxy kinesisProxy,
             Map<String, KinesisShardMetrics> shardMetricGroupMap,
             Configuration configuration) {
-        super(shardMetricGroupMap);
+        super(shardMetricGroupMap, configuration);
         this.kinesis = kinesisProxy;
         this.configuration = configuration;
         this.maxRecordsToGet = configuration.get(KinesisSourceConfigOptions.SHARD_GET_RECORDS_MAX);

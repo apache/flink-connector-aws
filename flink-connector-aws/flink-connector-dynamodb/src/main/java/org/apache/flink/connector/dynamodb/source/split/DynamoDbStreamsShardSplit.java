@@ -40,12 +40,22 @@ public final class DynamoDbStreamsShardSplit implements SourceSplit {
     private final String shardId;
     private final StartingPosition startingPosition;
     private final String parentShardId;
+    private final boolean isFinished;
 
     public DynamoDbStreamsShardSplit(
             String streamArn,
             String shardId,
             StartingPosition startingPosition,
             String parentShardId) {
+        this(streamArn, shardId, startingPosition, parentShardId, false);
+    }
+
+    public DynamoDbStreamsShardSplit(
+            String streamArn,
+            String shardId,
+            StartingPosition startingPosition,
+            String parentShardId,
+            boolean isFinished) {
         checkNotNull(streamArn, "streamArn cannot be null");
         checkNotNull(shardId, "shardId cannot be null");
         checkNotNull(startingPosition, "startingPosition cannot be null");
@@ -54,6 +64,7 @@ public final class DynamoDbStreamsShardSplit implements SourceSplit {
         this.shardId = shardId;
         this.startingPosition = startingPosition;
         this.parentShardId = parentShardId;
+        this.isFinished = isFinished;
     }
 
     @Override
@@ -77,6 +88,10 @@ public final class DynamoDbStreamsShardSplit implements SourceSplit {
         return parentShardId;
     }
 
+    public boolean isFinished() {
+        return isFinished;
+    }
+
     @Override
     public String toString() {
         return "DynamoDbStreamsShardSplit{"
@@ -90,7 +105,10 @@ public final class DynamoDbStreamsShardSplit implements SourceSplit {
                 + startingPosition
                 + ", parentShardId=["
                 + parentShardId
-                + '}';
+                + "]"
+                + ", isFinished="
+                + isFinished
+                + "}";
     }
 
     @Override
@@ -105,11 +123,12 @@ public final class DynamoDbStreamsShardSplit implements SourceSplit {
         return Objects.equals(streamArn, that.streamArn)
                 && Objects.equals(shardId, that.shardId)
                 && Objects.equals(startingPosition, that.startingPosition)
-                && Objects.equals(parentShardId, that.parentShardId);
+                && Objects.equals(parentShardId, that.parentShardId)
+                && Objects.equals(isFinished, that.isFinished);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(streamArn, shardId, startingPosition, parentShardId);
+        return Objects.hash(streamArn, shardId, startingPosition, parentShardId, isFinished);
     }
 }

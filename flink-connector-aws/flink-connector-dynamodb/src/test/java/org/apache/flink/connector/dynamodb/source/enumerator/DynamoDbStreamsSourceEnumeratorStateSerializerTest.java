@@ -127,8 +127,8 @@ class DynamoDbStreamsSourceEnumeratorStateSerializerTest {
                 .isThrownBy(() -> serializer.deserialize(serializer.getVersion(), serialized))
                 .withMessageContaining(
                         "Trying to deserialize DynamoDbStreamsShardSplit serialized with unsupported version")
-                .withMessageContaining(String.valueOf(serializer.getVersion()))
-                .withMessageContaining(String.valueOf(wrongVersionStateSerializer.getVersion()));
+                .withMessageContaining(String.valueOf(splitSerializer.getVersion()))
+                .withMessageContaining(String.valueOf(wrongVersionSplitSerializer.getVersion()));
     }
 
     @Test
