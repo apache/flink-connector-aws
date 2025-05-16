@@ -26,6 +26,8 @@ import org.apache.flink.connector.kinesis.source.split.KinesisShardSplitState;
 import org.apache.flink.connector.kinesis.source.split.StartingPosition;
 import org.apache.flink.util.Collector;
 
+import software.amazon.awssdk.core.SdkBytes;
+import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
 /**
@@ -52,9 +54,22 @@ public class KinesisStreamsRecordEmitter<T>
         sourceOutputWrapper.setSourceOutput(output);
         sourceOutputWrapper.setTimestamp(element.approximateArrivalTimestamp().toEpochMilli());
         deserializationSchema.deserialize(
-                element, splitState.getStreamArn(), splitState.getShardId(), sourceOutputWrapper);
+                convertKinesisClientRecordToRecord(element),
+                splitState.getStreamArn(),
+                splitState.getShardId(),
+                sourceOutputWrapper);
         splitState.setNextStartingPosition(
                 StartingPosition.continueFromSequenceNumber(element.sequenceNumber()));
+    }
+
+    private Record convertKinesisClientRecordToRecord(KinesisClientRecord record) {
+        return Record.builder()
+                .sequenceNumber(record.sequenceNumber())
+                .approximateArrivalTimestamp(record.approximateArrivalTimestamp())
+                .data(SdkBytes.fromByteBuffer(record.data()))
+                .partitionKey(record.partitionKey())
+                .encryptionType(record.encryptionType())
+                .build();
     }
 
     private static class SourceOutputWrapper<T> implements Collector<T> {

@@ -29,6 +29,7 @@ import org.apache.flink.connector.kinesis.source.split.StartingPosition;
 import org.apache.flink.util.Collector;
 
 import org.junit.jupiter.api.Test;
+import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
 import java.io.IOException;
@@ -207,13 +208,10 @@ class KinesisStreamsRecordEmitterTest {
 
         @Override
         public void deserialize(
-                KinesisClientRecord record, String stream, String shardId, Collector<String> output)
+                Record record, String stream, String shardId, Collector<String> output)
                 throws IOException {
             if (Objects.equals(record.sequenceNumber(), "emit")) {
-                ByteBuffer recordData = record.data();
-                byte[] dataBytes = new byte[recordData.remaining()];
-                recordData.get(dataBytes);
-                STRING_SCHEMA.deserialize(dataBytes, output);
+                STRING_SCHEMA.deserialize(record.data().asByteArray(), output);
             }
         }
 
@@ -236,15 +234,11 @@ class KinesisStreamsRecordEmitterTest {
 
         @Override
         public void deserialize(
-                KinesisClientRecord record, String stream, String shardId, Collector<String> output)
+                Record record, String stream, String shardId, Collector<String> output)
                 throws IOException {
             assertThat(stream).isEqualTo(expectedStreamArn);
             assertThat(shardId).isEqualTo(expectedShardId);
-
-            ByteBuffer recordData = record.data();
-            byte[] dataBytes = new byte[recordData.remaining()];
-            recordData.get(dataBytes);
-            STRING_SCHEMA.deserialize(dataBytes, output);
+            STRING_SCHEMA.deserialize(record.data().asByteArray(), output);
         }
 
         @Override

@@ -22,10 +22,9 @@ import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.util.Collector;
 
-import software.amazon.kinesis.retrieval.KinesisClientRecord;
+import software.amazon.awssdk.services.kinesis.model.Record;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 
 /**
  * A simple wrapper for using the {@link DeserializationSchema} with the {@link
@@ -49,15 +48,9 @@ class KinesisDeserializationSchemaWrapper<T> implements KinesisDeserializationSc
     }
 
     @Override
-    public void deserialize(
-            KinesisClientRecord record, String stream, String shardId, Collector<T> output)
+    public void deserialize(Record record, String stream, String shardId, Collector<T> output)
             throws IOException {
-        ByteBuffer recordData = record.data();
-
-        byte[] dataBytes = new byte[recordData.remaining()];
-        recordData.get(dataBytes);
-
-        deserializationSchema.deserialize(dataBytes, output);
+        deserializationSchema.deserialize(record.data().asByteArray(), output);
     }
 
     @Override
