@@ -20,28 +20,27 @@ package org.apache.flink.connector.dynamodb.testutils;
 
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 
-/** Container for DynamoDB items. */
-public class Items {
+/** DynamoDB item container. */
+public class Item {
 
-    public static ItemsBuilder builder() {
-        return new Items.ItemsBuilder();
+    public static ItemBuilder builder() {
+        return new ItemBuilder();
     }
 
-    /** Builder to constrict DynamoDB items. */
-    public static final class ItemsBuilder {
-        private final List<Map<String, AttributeValue>> items = new ArrayList<>();
+    /** Builder to constrict DynamoDB item. */
+    public static final class ItemBuilder {
+        Map<String, AttributeValue> item = new HashMap<>();
 
-        public ItemsBuilder item(Map<String, AttributeValue> attributes) {
-            items.add(attributes);
+        public ItemBuilder attr(String name, String value) {
+            item.put(name, AttributeValue.builder().s(value).build());
             return this;
         }
 
-        public List<Map<String, AttributeValue>> build() {
-            return items;
+        public Map<String, AttributeValue> build() {
+            return item;
         }
     }
 }
