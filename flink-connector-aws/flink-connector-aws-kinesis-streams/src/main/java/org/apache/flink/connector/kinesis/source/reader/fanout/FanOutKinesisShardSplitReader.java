@@ -30,15 +30,21 @@ import org.apache.flink.connector.kinesis.source.split.KinesisShardSplitState;
 import org.apache.flink.connector.kinesis.source.split.StartingPosition;
 import org.apache.flink.util.concurrent.ExecutorThreadFactory;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.EFO_CONSUMER_SUBSCRIPTION_TIMEOUT;
 
@@ -48,6 +54,8 @@ import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConf
  */
 @Internal
 public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
+
+    private static final Logger LOG = LoggerFactory.getLogger(FanOutKinesisShardSplitReader.class);
     private final AsyncStreamProxy asyncStreamProxy;
     private final String consumerArn;
     private final Duration subscriptionTimeout;
@@ -55,18 +63,29 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
     /**
      * Shared executor service for all shard subscriptions.
      *
-     * <p>This executor uses an unbounded queue ({@link LinkedBlockingQueue}) to ensure no tasks are ever rejected.
-     * Although the queue is technically unbounded, the system has natural flow control mechanisms that effectively
-     * bound the queue size:
+     * <p>This executor uses an unbounded queue ({@link LinkedBlockingQueue}) but this does not pose
+     * a risk of out-of-memory errors due to the natural flow control mechanisms in the system:
      *
      * <ol>
      *   <li>Each {@link FanOutKinesisShardSubscription} has a bounded event queue with capacity of 2</li>
      *   <li>New records are only requested after processing an event (via {@code requestRecords()})</li>
-     *   <li>The maximum number of queued tasks is effectively bounded by {@code 2 * number_of_shards}</li>
+     *   <li>When a shard's queue is full, the processing thread blocks at the {@code put()} operation</li>
+     *   <li>The AWS SDK implements the Reactive Streams protocol with built-in backpressure</li>
      * </ol>
      *
-     * <p>This design provides natural backpressure while ensuring no records are dropped, making it safe
-     * to use an unbounded executor queue.
+     * <p>In the worst-case scenario during backpressure, the maximum number of events in memory is:
+     * <pre>
+     * Max Events = (2 * Number_of_Shards) + min(Number_of_Shards, Number_of_Threads)
+     * </pre>
+     *
+     * <p>Where:
+     * <ul>
+     *   <li>2 * Number_of_Shards: Total capacity of all shard event queues</li>
+     *   <li>min(Number_of_Shards, Number_of_Threads): Maximum events being actively processed</li>
+     * </ul>
+     *
+     * <p>This ensures that memory usage scales linearly with the number of shards, not exponentially,
+     * making it safe to use an unbounded executor queue even with a large number of shards.
      */
     private final ExecutorService sharedShardSubscriptionExecutor;
 
@@ -212,7 +231,7 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
 
     @Override
     public void close() throws Exception {
-        // Shutdown the executor service
+        // Shutdown the executor service first
         if (sharedShardSubscriptionExecutor != null) {
             sharedShardSubscriptionExecutor.shutdown();
             try {
@@ -225,6 +244,34 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
             }
         }
 
-        asyncStreamProxy.close();
+        // Create a separate single-threaded executor for closing the asyncStreamProxy
+        ExecutorService closeExecutor = new ThreadPoolExecutor(
+            1, 1,
+            0L, TimeUnit.MILLISECONDS,
+            new LinkedBlockingQueue<>(),
+            new ExecutorThreadFactory("kinesis-client-close"));
+
+        try {
+            // Submit the close task to the executor and wait with a timeout
+            Future<?> closeFuture = closeExecutor.submit(() -> {
+                try {
+                    asyncStreamProxy.close();
+                } catch (IOException e) {
+                    LOG.warn("Error closing async stream proxy", e);
+                }
+            });
+
+            // Wait for the close operation to complete with a timeout
+            try {
+                closeFuture.get(30, TimeUnit.SECONDS);
+            } catch (TimeoutException e) {
+                LOG.warn("Timed out while closing async stream proxy", e);
+            } catch (ExecutionException e) {
+                LOG.warn("Error while closing async stream proxy", e.getCause());
+            }
+        } finally {
+            // Ensure the close executor is shut down
+            closeExecutor.shutdownNow();
+        }
     }
 }

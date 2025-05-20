@@ -19,6 +19,7 @@
 package org.apache.flink.connector.kinesis.source.reader.fanout;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.connector.kinesis.source.exception.KinesisStreamsSourceException;
 import org.apache.flink.connector.kinesis.source.proxy.AsyncStreamProxy;
 import org.apache.flink.connector.kinesis.source.split.StartingPosition;
@@ -81,17 +82,7 @@ public class FanOutKinesisShardSubscription {
     /** Executor service to run subscription event processing tasks. */
     private final ExecutorService subscriptionEventProcessingExecutor;
 
-    /**
-     * Lock to ensure sequential processing of subscription events for this shard.
-     * This lock guarantees that for each shard:
-     * 1. Only one event is processed at a time
-     * 2. Events are processed in the order they are received
-     * 3. The critical operations (queue.put, startingPosition update, requestRecords) are executed atomically
-     *
-     * <p>This is essential to prevent race conditions that could lead to data loss or incorrect
-     * continuation sequence numbers being used after failover.
-     */
-    private final Object subscriptionEventProcessingLock = new Object();
+    // Lock removed as we're using method-level synchronization instead
 
     // Queue is meant for eager retrieval of records from the Kinesis stream. We will always have 2
     // record batches available on next read.
@@ -163,10 +154,21 @@ public class FanOutKinesisShardSubscription {
         // We have to use our own CountDownLatch to wait for subscription to be acquired because
         // subscription event is tracked via the handler.
         CountDownLatch waitForSubscriptionLatch = new CountDownLatch(1);
-        shardSubscriber = new FanOutShardSubscriber(waitForSubscriptionLatch);
+
+        // Create a local variable for the new subscriber to prevent a potential race condition
+        // where the shardSubscriber field might be modified by another thread between when we
+        // create the lambda and when it's executed. By using a local variable that is captured
+        // by the lambda, we ensure that the lambda always uses the subscriber instance that was
+        // created in this method call, regardless of any concurrent modifications to the
+        // shardSubscriber field.
+        FanOutShardSubscriber newSubscriber = new FanOutShardSubscriber(waitForSubscriptionLatch);
+        shardSubscriber = newSubscriber;
+
         SubscribeToShardResponseHandler responseHandler =
                 SubscribeToShardResponseHandler.builder()
-                        .subscriber(() -> shardSubscriber)
+                        // Use the local variable in the lambda to ensure we're always using the
+                        // subscriber instance created in this method call
+                        .subscriber(() -> newSubscriber)
                         .onError(
                                 throwable -> {
                                     // Errors that occur when obtaining a subscription are thrown
@@ -239,10 +241,16 @@ public class FanOutKinesisShardSubscription {
     private void terminateSubscription(Throwable t) {
         if (!subscriptionException.compareAndSet(null, t)) {
             LOG.warn(
-                    "Another subscription exception has been queued, ignoring subsequent exceptions",
+                    "Another subscription exception has been queued for shard {}, ignoring subsequent exceptions",
+                    shardId,
                     t);
         }
-        shardSubscriber.cancel();
+
+        if (shardSubscriber != null) {
+            shardSubscriber.cancel();
+        } else {
+            LOG.warn("Cannot terminate subscription - shardSubscriber is null for shard {}", shardId);
+        }
     }
 
     /**
@@ -273,15 +281,22 @@ public class FanOutKinesisShardSubscription {
                             .findFirst();
             if (recoverableException.isPresent()) {
                 LOG.warn(
-                        "Recoverable exception encountered while subscribing to shard. Ignoring.",
+                        "Recoverable exception encountered while subscribing to shard {}. Ignoring.",
+                        shardId,
                         recoverableException.get());
-                shardSubscriber.cancel();
+
+                if (shardSubscriber != null) {
+                    shardSubscriber.cancel();
+                } else {
+                    LOG.warn("Cannot cancel subscription - shardSubscriber is null for shard {}", shardId);
+                }
+
                 activateSubscription();
                 return null;
             }
-            LOG.error("Subscription encountered unrecoverable exception.", throwable);
+            LOG.error("Subscription encountered unrecoverable exception for shard {}.", shardId, throwable);
             throw new KinesisStreamsSourceException(
-                    "Subscription encountered unrecoverable exception.", throwable);
+                    String.format("Subscription encountered unrecoverable exception for shard %s.", shardId), throwable);
         }
 
         if (!subscriptionActive.get()) {
@@ -309,17 +324,23 @@ public class FanOutKinesisShardSubscription {
         }
 
         public void requestRecords() {
-            subscription.request(1);
+            if (subscription != null) {
+                subscription.request(1);
+            } else {
+                LOG.warn("Cannot request records - subscription is null for shard {}", shardId);
+            }
         }
 
         public void cancel() {
             if (!subscriptionActive.get()) {
-                LOG.warn("Trying to cancel inactive subscription. Ignoring.");
+                LOG.warn("Trying to cancel inactive subscription for shard {}. Ignoring.", shardId);
                 return;
             }
             subscriptionActive.set(false);
             if (subscription != null) {
                 subscription.cancel();
+            } else {
+                LOG.debug("Subscription already null during cancellation for shard {}", shardId);
             }
         }
 
@@ -378,16 +399,15 @@ public class FanOutKinesisShardSubscription {
     private void submitEventProcessingTask(SubscribeToShardEvent event) {
         try {
             subscriptionEventProcessingExecutor.execute(() -> {
-                synchronized (subscriptionEventProcessingLock) {
-                    try {
-                        processSubscriptionEvent(event);
-                    } catch (Exception e) {
-                        // For critical path operations, propagate exceptions to cause a Flink job restart
-                        LOG.error("Error processing subscription event", e);
-                        // Propagate the exception to the subscription exception handler
-                        terminateSubscription(new KinesisStreamsSourceException(
-                            "Error processing subscription event", e));
-                    }
+                try {
+                    // No synchronized block here, rely on the method-level synchronization
+                    processSubscriptionEvent(event);
+                } catch (Exception e) {
+                    // For critical path operations, propagate exceptions to cause a Flink job restart
+                    LOG.error("Error processing subscription event", e);
+                    // Propagate the exception to the subscription exception handler
+                    terminateSubscription(new KinesisStreamsSourceException(
+                        "Error processing subscription event", e));
                 }
             });
         } catch (Exception e) {
@@ -411,11 +431,10 @@ public class FanOutKinesisShardSubscription {
      * with only requesting more records after processing an event provides natural flow control,
      * effectively limiting the number of tasks in the executor's queue.
      *
-     * <p>This method is made public for testing purposes.
-     *
      * @param event The subscription event to process
      */
-    public void processSubscriptionEvent(SubscribeToShardEvent event) {
+    @VisibleForTesting
+    synchronized void processSubscriptionEvent(SubscribeToShardEvent event) {
         try {
             if (LOG.isDebugEnabled()) {
                 LOG.debug(
@@ -429,13 +448,19 @@ public class FanOutKinesisShardSubscription {
             eventQueue.put(event);
 
             // Update the starting position to ensure we can recover after failover
-            // Note: We don't need additional synchronization here because this method is already
-            // called within a synchronized block on subscriptionEventProcessingLock
-            startingPosition = StartingPosition.continueFromSequenceNumber(
-                    event.continuationSequenceNumber());
+            if (event.continuationSequenceNumber() != null) {
+                startingPosition = StartingPosition.continueFromSequenceNumber(
+                        event.continuationSequenceNumber());
+            } else {
+                LOG.warn("Received null continuation sequence number for shard {}", shardId);
+            }
 
             // Request more records
-            shardSubscriber.requestRecords();
+            if (shardSubscriber != null) {
+                shardSubscriber.requestRecords();
+            } else {
+                LOG.warn("Cannot request more records - shardSubscriber is null for shard {}", shardId);
+            }
 
             if (LOG.isDebugEnabled()) {
                 LOG.debug(
