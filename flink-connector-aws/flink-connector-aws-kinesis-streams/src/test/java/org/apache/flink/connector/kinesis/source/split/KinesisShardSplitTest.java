@@ -22,10 +22,14 @@ import nl.jqno.equalsverifier.EqualsVerifier;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.NavigableMap;
 import java.util.Set;
+import java.util.TreeMap;
 
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.ENDING_HASH_KEY_TEST_VALUE;
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.STARTING_HASH_KEY_TEST_VALUE;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatExceptionOfType;
 
 class KinesisShardSplitTest {
@@ -129,5 +133,40 @@ class KinesisShardSplitTest {
     @Test
     void testEquals() {
         EqualsVerifier.forClass(KinesisShardSplit.class).verify();
+    }
+
+    @Test
+    void testFinishedSplitsMapConstructor() {
+        NavigableMap<Long, Set<String>> finishedSplitsMap = new TreeMap<>();
+        Set<String> splits = new HashSet<>();
+        splits.add("split1");
+        splits.add("split2");
+        finishedSplitsMap.put(1L, splits);
+
+        KinesisShardSplit split =
+                new KinesisShardSplit(
+                        STREAM_ARN,
+                        SHARD_ID,
+                        STARTING_POSITION,
+                        PARENT_SHARD_IDS,
+                        STARTING_HASH_KEY_TEST_VALUE,
+                        ENDING_HASH_KEY_TEST_VALUE,
+                        true);
+
+        assertThat(split.isFinished()).isTrue();
+    }
+
+    @Test
+    void testFinishedSplitsMapDefaultEmpty() {
+        KinesisShardSplit split =
+                new KinesisShardSplit(
+                        STREAM_ARN,
+                        SHARD_ID,
+                        STARTING_POSITION,
+                        PARENT_SHARD_IDS,
+                        STARTING_HASH_KEY_TEST_VALUE,
+                        ENDING_HASH_KEY_TEST_VALUE);
+
+        assertThat(split.isFinished()).isFalse();
     }
 }
