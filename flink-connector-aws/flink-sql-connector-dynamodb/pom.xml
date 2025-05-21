@@ -72,7 +72,6 @@ under the License.
                                     <include>org.apache.flink:flink-connector-dynamodb</include>
                                     <include>software.amazon.awssdk:*</include>
                                     <include>org.reactivestreams:*</include>
-                                    <include>com.typesafe.netty:*</include>
                                     <include>org.apache.httpcomponents:*</include>
                                     <include>io.netty:*</include>
                                     <include>commons-logging:commons-logging</include>
@@ -89,8 +88,8 @@ under the License.
                                     <shadedPattern>org.apache.flink.connector.dynamodb.shaded.org.reactivestreams</shadedPattern>
                                 </relocation>
                                 <relocation>
-                                    <pattern>com.typesafe.netty</pattern>
-                                    <shadedPattern>org.apache.flink.connector.dynamodb.shaded.com.typesafe.netty</shadedPattern>
+                                    <pattern>org.apache.commons</pattern>
+                                    <shadedPattern>org.apache.flink.connector.dynamodb.shaded.org.apache.commons</shadedPattern>
                                 </relocation>
                                 <relocation>
                                     <pattern>org.apache.http</pattern>
