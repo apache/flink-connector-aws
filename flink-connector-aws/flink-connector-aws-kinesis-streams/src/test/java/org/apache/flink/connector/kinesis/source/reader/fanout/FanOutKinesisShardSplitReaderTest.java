@@ -32,7 +32,7 @@ import org.apache.flink.metrics.testutils.MetricListener;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import software.amazon.awssdk.services.kinesis.model.Record;
+import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -83,7 +83,7 @@ public class FanOutKinesisShardSplitReaderTest {
                         CONSUMER_ARN,
                         shardMetricGroupMap,
                         newConfigurationForTest());
-        RecordsWithSplitIds<Record> retrievedRecords = splitReader.fetch();
+        RecordsWithSplitIds<KinesisClientRecord> retrievedRecords = splitReader.fetch();
 
         assertThat(retrievedRecords.nextRecordFromSplit()).isNull();
         assertThat(retrievedRecords.nextSplit()).isNull();
@@ -104,7 +104,7 @@ public class FanOutKinesisShardSplitReaderTest {
                 new SplitsAddition<>(Collections.singletonList(getTestSplit(TEST_SHARD_ID))));
 
         // When fetching records
-        RecordsWithSplitIds<Record> retrievedRecords = splitReader.fetch();
+        RecordsWithSplitIds<KinesisClientRecord> retrievedRecords = splitReader.fetch();
 
         // Then retrieve no records
         assertThat(retrievedRecords.nextRecordFromSplit()).isNull();
@@ -127,7 +127,7 @@ public class FanOutKinesisShardSplitReaderTest {
                 new SplitsAddition<>(Collections.singletonList(getTestSplit(TEST_SHARD_ID))));
 
         // When fetching records
-        RecordsWithSplitIds<Record> retrievedRecords = splitReader.fetch();
+        RecordsWithSplitIds<KinesisClientRecord> retrievedRecords = splitReader.fetch();
 
         // Then shard is marked as completed
         // Then retrieve no records and mark split as complete
@@ -174,17 +174,17 @@ public class FanOutKinesisShardSplitReaderTest {
     }
 
     private void consumeAllRecordsFromKinesis(
-            SplitReader<Record, KinesisShardSplit> splitReader, int numRecords) {
+            SplitReader<KinesisClientRecord, KinesisShardSplit> splitReader, int numRecords) {
         consumeRecordsFromKinesis(splitReader, numRecords, true);
     }
 
     private void consumeSomeRecordsFromKinesis(
-            SplitReader<Record, KinesisShardSplit> splitReader, int numRecords) {
+            SplitReader<KinesisClientRecord, KinesisShardSplit> splitReader, int numRecords) {
         consumeRecordsFromKinesis(splitReader, numRecords, false);
     }
 
     private void consumeRecordsFromKinesis(
-            SplitReader<Record, KinesisShardSplit> splitReader,
+            SplitReader<KinesisClientRecord, KinesisShardSplit> splitReader,
             int numRecords,
             boolean checkForShardCompletion) {
         // Set timeout to prevent infinite loop on failure
@@ -192,10 +192,10 @@ public class FanOutKinesisShardSplitReaderTest {
                 Duration.ofSeconds(60),
                 () -> {
                     int numRetrievedRecords = 0;
-                    RecordsWithSplitIds<Record> retrievedRecords = null;
+                    RecordsWithSplitIds<KinesisClientRecord> retrievedRecords = null;
                     while (numRetrievedRecords < numRecords) {
                         retrievedRecords = splitReader.fetch();
-                        List<Record> records = readAllRecords(retrievedRecords);
+                        List<KinesisClientRecord> records = readAllRecords(retrievedRecords);
                         numRetrievedRecords += records.size();
                     }
                     assertThat(numRetrievedRecords).isEqualTo(numRecords);
@@ -211,9 +211,10 @@ public class FanOutKinesisShardSplitReaderTest {
                 "did not receive expected " + numRecords + " records within 10 seconds.");
     }
 
-    private List<Record> readAllRecords(RecordsWithSplitIds<Record> recordsWithSplitIds) {
-        List<Record> outputRecords = new ArrayList<>();
-        Record record;
+    private List<KinesisClientRecord> readAllRecords(
+            RecordsWithSplitIds<KinesisClientRecord> recordsWithSplitIds) {
+        List<KinesisClientRecord> outputRecords = new ArrayList<>();
+        KinesisClientRecord record;
         do {
             record = recordsWithSplitIds.nextRecordFromSplit();
             if (record != null) {
