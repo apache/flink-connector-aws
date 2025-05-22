@@ -49,7 +49,7 @@ import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 /** Test for {@link FanOutKinesisShardSplitReader}. */
-public class FanOutKinesisShardSplitReaderTest {
+public class FanOutKinesisShardSplitReaderTest extends FanOutKinesisShardTestBase {
     private static final String TEST_SHARD_ID = TestUtil.generateShardId(1);
 
     FanOutKinesisShardSplitReader splitReader;
@@ -82,7 +82,9 @@ public class FanOutKinesisShardSplitReaderTest {
                         testAsyncStreamProxy,
                         CONSUMER_ARN,
                         shardMetricGroupMap,
-                        newConfigurationForTest());
+                        newConfigurationForTest(),
+                        createTestSubscriptionFactory(),
+                        testExecutor);
         RecordsWithSplitIds<Record> retrievedRecords = splitReader.fetch();
 
         assertThat(retrievedRecords.nextRecordFromSplit()).isNull();
@@ -99,7 +101,9 @@ public class FanOutKinesisShardSplitReaderTest {
                         testAsyncStreamProxy,
                         CONSUMER_ARN,
                         shardMetricGroupMap,
-                        newConfigurationForTest());
+                        newConfigurationForTest(),
+                        createTestSubscriptionFactory(),
+                        testExecutor);
         splitReader.handleSplitsChanges(
                 new SplitsAddition<>(Collections.singletonList(getTestSplit(TEST_SHARD_ID))));
 
@@ -122,7 +126,9 @@ public class FanOutKinesisShardSplitReaderTest {
                         testAsyncStreamProxy,
                         CONSUMER_ARN,
                         shardMetricGroupMap,
-                        newConfigurationForTest());
+                        newConfigurationForTest(),
+                        createTestSubscriptionFactory(),
+                        testExecutor);
         splitReader.handleSplitsChanges(
                 new SplitsAddition<>(Collections.singletonList(getTestSplit(TEST_SHARD_ID))));
 
@@ -143,7 +149,9 @@ public class FanOutKinesisShardSplitReaderTest {
                         testAsyncStreamProxy,
                         CONSUMER_ARN,
                         shardMetricGroupMap,
-                        newConfigurationForTest());
+                        newConfigurationForTest(),
+                        createTestSubscriptionFactory(),
+                        testExecutor);
 
         // When wakeup is called
         // Then no exception is thrown and no-op
@@ -160,7 +168,9 @@ public class FanOutKinesisShardSplitReaderTest {
                         trackCloseStreamProxy,
                         CONSUMER_ARN,
                         shardMetricGroupMap,
-                        newConfigurationForTest());
+                        newConfigurationForTest(),
+                        createTestSubscriptionFactory(),
+                        testExecutor);
 
         // When split reader is not closed
         // Then stream proxy is still open
