@@ -112,6 +112,36 @@ public class FanOutKinesisShardSubscription {
         return subscriptionActive.get();
     }
 
+    /**
+     * Gets the shard ID for this subscription.
+     *
+     * @return The shard ID
+     */
+    public String getShardId() {
+        return shardId;
+    }
+
+    /**
+     * Cancels this subscription.
+     * This is primarily used during shutdown to cancel active subscriptions.
+     *
+     * @return true if the subscription was active and was cancelled, false otherwise
+     */
+    public boolean cancelSubscription() {
+        if (!subscriptionActive.get()) {
+            LOG.debug("Skipping cancellation of inactive subscription for shard {}.", shardId);
+            return false;
+        }
+        subscriptionActive.set(false);
+        if (shardSubscriber != null) {
+            shardSubscriber.cancel();
+            return true;
+        } else {
+            LOG.warn("Cannot cancel subscription - shardSubscriber is null for shard {}", shardId);
+            return false;
+        }
+    }
+
     private FanOutShardSubscriber shardSubscriber;
 
     /**
@@ -246,11 +276,7 @@ public class FanOutKinesisShardSubscription {
                     t);
         }
 
-        if (shardSubscriber != null) {
-            shardSubscriber.cancel();
-        } else {
-            LOG.warn("Cannot terminate subscription - shardSubscriber is null for shard {}", shardId);
-        }
+        cancelSubscription();
     }
 
     /**
@@ -285,12 +311,7 @@ public class FanOutKinesisShardSubscription {
                         shardId,
                         recoverableException.get());
 
-                if (shardSubscriber != null) {
-                    shardSubscriber.cancel();
-                } else {
-                    LOG.warn("Cannot cancel subscription - shardSubscriber is null for shard {}", shardId);
-                }
-
+                cancelSubscription();
                 activateSubscription();
                 return null;
             }
@@ -332,10 +353,8 @@ public class FanOutKinesisShardSubscription {
         }
 
         public void cancel() {
-            if (!subscriptionActive.get()) {
-                LOG.warn("Trying to cancel inactive subscription for shard {}. Ignoring.", shardId);
-                return;
-            }
+            // Set subscription inactive - this is now handled in cancelSubscription()
+            // but we keep it here as well for safety
             subscriptionActive.set(false);
             if (subscription != null) {
                 subscription.cancel();
@@ -391,6 +410,18 @@ public class FanOutKinesisShardSubscription {
     }
 
     /**
+     * Helper method to determine if shutdown is in progress.
+     *
+     * @return true if shutdown is in progress, false otherwise
+     */
+    private boolean isShutdownInProgress() {
+        // Check if the executor service is shutting down or terminated
+        // This is the most reliable way to detect if shutdown has been initiated
+        return subscriptionEventProcessingExecutor.isShutdown() ||
+               subscriptionEventProcessingExecutor.isTerminated();
+    }
+
+    /**
      * Submits an event processing task to the executor service.
      * This method encapsulates the task submission logic and error handling.
      *
@@ -398,16 +429,27 @@ public class FanOutKinesisShardSubscription {
      */
     private void submitEventProcessingTask(SubscribeToShardEvent event) {
         try {
+            // Check if shutdown is in progress before submitting new tasks
+            // This prevents tasks from being submitted to a shutting down executor
+            if (isShutdownInProgress()) {
+                LOG.info("Shutdown in progress, not submitting new event processing task for shard {}", shardId);
+                return;
+            }
+
             subscriptionEventProcessingExecutor.execute(() -> {
                 try {
-                    // No synchronized block here, rely on the method-level synchronization
+                    // Process the event
                     processSubscriptionEvent(event);
                 } catch (Exception e) {
-                    // For critical path operations, propagate exceptions to cause a Flink job restart
-                    LOG.error("Error processing subscription event", e);
-                    // Propagate the exception to the subscription exception handler
-                    terminateSubscription(new KinesisStreamsSourceException(
-                        "Error processing subscription event", e));
+                    // Only log as error if we're not in shutdown mode
+                    if (!isShutdownInProgress()) {
+                        LOG.error("Error processing subscription event", e);
+                        // Propagate the exception to the subscription exception handler
+                        terminateSubscription(new KinesisStreamsSourceException(
+                            "Error processing subscription event", e));
+                    } else {
+                        LOG.info("Error during shutdown while processing event for shard {} - ignoring", shardId, e);
+                    }
                 }
             });
         } catch (Exception e) {
@@ -427,21 +469,35 @@ public class FanOutKinesisShardSubscription {
      * 3. Requesting more records
      *
      * <p>These operations are executed sequentially for each shard to ensure thread safety
-     * and prevent race conditions. The bounded nature of the event queue (capacity 2) combined
-     * with only requesting more records after processing an event provides natural flow control,
-     * effectively limiting the number of tasks in the executor's queue.
+     * and prevent race conditions.
      *
      * @param event The subscription event to process
      */
     @VisibleForTesting
     synchronized void processSubscriptionEvent(SubscribeToShardEvent event) {
+        // Check if the thread is interrupted before doing any work
+        // This prevents unnecessary processing during shutdown
+        if (Thread.currentThread().isInterrupted()) {
+            // During normal operation, an interruption is unexpected and should be treated as an error
+            // During shutdown, it's expected and can be handled gracefully
+            if (!isShutdownInProgress()) {
+                LOG.error("Thread interrupted unexpectedly before processing event for shard {}", shardId);
+                throw new KinesisStreamsSourceException(
+                    "Thread interrupted unexpectedly before processing event for shard " + shardId,
+                    new InterruptedException());
+            } else {
+                LOG.info("Thread interrupted during shutdown before processing event for shard {} - skipping processing", shardId);
+                return;
+            }
+        }
+
         try {
             if (LOG.isDebugEnabled()) {
                 LOG.debug(
-                        "Processing event for shard {}: {}, {}",
-                        shardId,
-                        event.getClass().getSimpleName(),
-                        event);
+                    "Processing event for shard {}: {}, {}",
+                    shardId,
+                    event.getClass().getSimpleName(),
+                    event);
             }
 
             // Put event in queue - this is a blocking operation
@@ -450,7 +506,7 @@ public class FanOutKinesisShardSubscription {
             // Update the starting position to ensure we can recover after failover
             if (event.continuationSequenceNumber() != null) {
                 startingPosition = StartingPosition.continueFromSequenceNumber(
-                        event.continuationSequenceNumber());
+                    event.continuationSequenceNumber());
             } else {
                 LOG.warn("Received null continuation sequence number for shard {}", shardId);
             }
@@ -464,16 +520,23 @@ public class FanOutKinesisShardSubscription {
 
             if (LOG.isDebugEnabled()) {
                 LOG.debug(
-                        "Successfully processed event for shard {}, updated position to {}",
-                        shardId,
-                        startingPosition);
+                    "Successfully processed event for shard {}, updated position to {}",
+                    shardId,
+                    startingPosition);
             }
         } catch (InterruptedException e) {
+            // Log that we're handling an interruption during shutdown
+            LOG.info("Interrupted while adding Kinesis record to internal buffer for shard {} - this is expected during shutdown", shardId);
+
+            // Restore the interrupt status
             Thread.currentThread().interrupt();
-            // Consistent with current implementation - throw KinesisStreamsSourceException
-            throw new KinesisStreamsSourceException(
+
+            // During shutdown, we don't want to throw an exception that would cause a job failure
+            // Only throw if we're not in a shutdown context
+            if (!isShutdownInProgress()) {
+                throw new KinesisStreamsSourceException(
                     "Interrupted while adding Kinesis record to internal buffer.", e);
+            }
         }
-        // No catch for other exceptions - let them propagate to be handled by the AWS SDK
     }
 }

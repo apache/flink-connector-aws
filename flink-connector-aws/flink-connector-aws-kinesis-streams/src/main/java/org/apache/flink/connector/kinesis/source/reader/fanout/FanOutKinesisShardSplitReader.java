@@ -47,6 +47,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.EFO_CONSUMER_SUBSCRIPTION_TIMEOUT;
+import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.EFO_DEREGISTER_CONSUMER_TIMEOUT;
 
 /**
  * An implementation of the KinesisShardSplitReader that consumes from Kinesis using Enhanced
@@ -59,6 +60,7 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
     private final AsyncStreamProxy asyncStreamProxy;
     private final String consumerArn;
     private final Duration subscriptionTimeout;
+    private final Duration deregisterTimeout;
 
     /**
      * Shared executor service for all shard subscriptions.
@@ -175,6 +177,7 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
         this.asyncStreamProxy = asyncStreamProxy;
         this.consumerArn = consumerArn;
         this.subscriptionTimeout = configuration.get(EFO_CONSUMER_SUBSCRIPTION_TIMEOUT);
+        this.deregisterTimeout = configuration.get(EFO_DEREGISTER_CONSUMER_TIMEOUT);
         this.subscriptionFactory = subscriptionFactory;
         this.sharedShardSubscriptionExecutor = executorService;
     }
@@ -229,22 +232,92 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
         }
     }
 
+    /**
+     * Closes the split reader and releases all resources.
+     *
+     * <p>The close method follows a specific order to ensure proper shutdown:
+     * 1. First, cancel all active subscriptions to prevent new events from being processed
+     * 2. Then, shutdown the shared executor service to stop processing existing events
+     * 3. Finally, close the async stream proxy to release network resources
+     *
+     * <p>This ordering is critical because:
+     * - Cancelling subscriptions first prevents new events from being submitted to the executor
+     * - Shutting down the executor next ensures all in-flight tasks complete or are cancelled
+     * - Closing the async stream proxy last ensures all resources are properly released after
+     *   all processing has stopped
+     */
     @Override
     public void close() throws Exception {
-        // Shutdown the executor service first
-        if (sharedShardSubscriptionExecutor != null) {
-            sharedShardSubscriptionExecutor.shutdown();
-            try {
-                if (!sharedShardSubscriptionExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
-                    sharedShardSubscriptionExecutor.shutdownNow();
+        cancelActiveSubscriptions();
+        shutdownSharedShardSubscriptionExecutor();
+        closeAsyncStreamProxy();
+    }
+
+    /**
+     * Cancels all active subscriptions to prevent new events from being processed.
+     *
+     * <p>After cancelling subscriptions, we wait a short time to allow the cancellation
+     * signals to propagate before proceeding with executor shutdown.
+     */
+    private void cancelActiveSubscriptions() {
+        for (FanOutKinesisShardSubscription subscription : splitSubscriptions.values()) {
+            if (subscription.isActive()) {
+                try {
+                    subscription.cancelSubscription();
+                } catch (Exception e) {
+                    LOG.warn("Error cancelling subscription for shard {}",
+                        subscription.getShardId(), e);
                 }
-            } catch (InterruptedException e) {
-                sharedShardSubscriptionExecutor.shutdownNow();
-                Thread.currentThread().interrupt();
             }
         }
 
-        // Create a separate single-threaded executor for closing the asyncStreamProxy
+        // Wait a short time (200ms) to allow cancellation signals to propagate
+        // This helps ensure that no new tasks are submitted to the executor after we begin shutdown
+        try {
+            Thread.sleep(200);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
+     * Shuts down the shared executor service used for processing subscription events.
+     *
+     * <p>We use the EFO_DEREGISTER_CONSUMER_TIMEOUT (10 seconds) as the shutdown timeout
+     * to maintain consistency with other deregistration operations in the connector.
+     */
+    private void shutdownSharedShardSubscriptionExecutor() {
+        if (sharedShardSubscriptionExecutor == null) {
+            return;
+        }
+
+        sharedShardSubscriptionExecutor.shutdown();
+        try {
+            // Use the deregister consumer timeout (10 seconds)
+            // This timeout is consistent with other deregistration operations in the connector
+            if (!sharedShardSubscriptionExecutor.awaitTermination(
+                    deregisterTimeout.toMillis(),
+                    TimeUnit.MILLISECONDS)) {
+                LOG.warn("Executor did not terminate in the specified time. Forcing shutdown.");
+                sharedShardSubscriptionExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            LOG.warn("Interrupted while waiting for executor shutdown", e);
+            sharedShardSubscriptionExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
+     * Closes the async stream proxy with a timeout.
+     *
+     * <p>We use the EFO_CONSUMER_SUBSCRIPTION_TIMEOUT (60 seconds) as the close timeout
+     * since closing the client involves similar network operations as subscription.
+     * The longer timeout accounts for potential network delays during shutdown.
+     */
+    private void closeAsyncStreamProxy() {
+        // Create a dedicated single-threaded executor for closing the asyncStreamProxy
+        // This prevents the close operation from being affected by the main executor shutdown
         ExecutorService closeExecutor = new ThreadPoolExecutor(
             1, 1,
             0L, TimeUnit.MILLISECONDS,
@@ -252,7 +325,7 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
             new ExecutorThreadFactory("kinesis-client-close"));
 
         try {
-            // Submit the close task to the executor and wait with a timeout
+            // Submit the close task to the executor to avoid blocking the main thread
             Future<?> closeFuture = closeExecutor.submit(() -> {
                 try {
                     asyncStreamProxy.close();
@@ -261,16 +334,23 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
                 }
             });
 
-            // Wait for the close operation to complete with a timeout
             try {
-                closeFuture.get(30, TimeUnit.SECONDS);
+                // Use the subscription timeout (60 seconds)
+                // This longer timeout is necessary because closing the AWS SDK client
+                // may involve waiting for in-flight network operations to complete
+                closeFuture.get(
+                    subscriptionTimeout.toMillis(),
+                    TimeUnit.MILLISECONDS);
             } catch (TimeoutException e) {
                 LOG.warn("Timed out while closing async stream proxy", e);
+            } catch (InterruptedException e) {
+                LOG.warn("Interrupted while closing async stream proxy", e);
+                Thread.currentThread().interrupt();
             } catch (ExecutionException e) {
                 LOG.warn("Error while closing async stream proxy", e.getCause());
             }
         } finally {
-            // Ensure the close executor is shut down
+            // Ensure the close executor is always shut down to prevent resource leaks
             closeExecutor.shutdownNow();
         }
     }
