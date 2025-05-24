@@ -53,7 +53,7 @@ import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.core.internal.retry.SdkDefaultRetryStrategy;
 import software.amazon.awssdk.http.SdkHttpClient;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
-import software.amazon.awssdk.retries.AdaptiveRetryStrategy;
+import software.amazon.awssdk.retries.StandardRetryStrategy;
 import software.amazon.awssdk.retries.api.BackoffStrategy;
 import software.amazon.awssdk.services.dynamodb.streams.DynamoDbStreamsClient;
 import software.amazon.awssdk.utils.AttributeMap;
@@ -222,8 +222,8 @@ public class DynamoDbStreamsSource<T>
                 sourceConfig.get(DYNAMODB_STREAMS_EXPONENTIAL_BACKOFF_MAX_DELAY);
         BackoffStrategy backoffStrategy =
                 BackoffStrategy.exponentialDelay(minDescribeStreamDelay, maxDescribeStreamDelay);
-        AdaptiveRetryStrategy adaptiveRetryStrategy =
-                SdkDefaultRetryStrategy.adaptiveRetryStrategy()
+        StandardRetryStrategy standardRetryStrategy =
+                SdkDefaultRetryStrategy.standardRetryStrategy()
                         .toBuilder()
                         .maxAttempts(maxApiCallAttempts)
                         .backoffStrategy(backoffStrategy)
@@ -234,7 +234,7 @@ public class DynamoDbStreamsSource<T>
                         dynamoDbStreamsClientProperties,
                         httpClient,
                         DynamoDbStreamsClient.builder(),
-                        ClientOverrideConfiguration.builder().retryStrategy(adaptiveRetryStrategy),
+                        ClientOverrideConfiguration.builder().retryStrategy(standardRetryStrategy),
                         DynamodbStreamsSourceConfigConstants
                                 .BASE_DDB_STREAMS_USER_AGENT_PREFIX_FORMAT,
                         DynamodbStreamsSourceConfigConstants.DDB_STREAMS_CLIENT_USER_AGENT_PREFIX);
