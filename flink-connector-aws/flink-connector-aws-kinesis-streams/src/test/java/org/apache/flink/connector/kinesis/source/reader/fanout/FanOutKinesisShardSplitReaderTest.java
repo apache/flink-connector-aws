@@ -84,6 +84,7 @@ public class FanOutKinesisShardSplitReaderTest extends FanOutKinesisShardTestBas
                         shardMetricGroupMap,
                         newConfigurationForTest(),
                         createTestSubscriptionFactory(),
+                        testExecutor,
                         testExecutor);
         RecordsWithSplitIds<Record> retrievedRecords = splitReader.fetch();
 
@@ -103,9 +104,13 @@ public class FanOutKinesisShardSplitReaderTest extends FanOutKinesisShardTestBas
                         shardMetricGroupMap,
                         newConfigurationForTest(),
                         createTestSubscriptionFactory(),
+                        testExecutor,
                         testExecutor);
         splitReader.handleSplitsChanges(
                 new SplitsAddition<>(Collections.singletonList(getTestSplit(TEST_SHARD_ID))));
+
+        // Trigger the executor to execute the subscription tasks
+        testExecutor.triggerAll();
 
         // When fetching records
         RecordsWithSplitIds<Record> retrievedRecords = splitReader.fetch();
@@ -128,9 +133,13 @@ public class FanOutKinesisShardSplitReaderTest extends FanOutKinesisShardTestBas
                         shardMetricGroupMap,
                         newConfigurationForTest(),
                         createTestSubscriptionFactory(),
+                        testExecutor,
                         testExecutor);
         splitReader.handleSplitsChanges(
                 new SplitsAddition<>(Collections.singletonList(getTestSplit(TEST_SHARD_ID))));
+
+        // Trigger the executor to execute the subscription tasks
+        testExecutor.triggerAll();
 
         // When fetching records
         RecordsWithSplitIds<Record> retrievedRecords = splitReader.fetch();
@@ -151,6 +160,7 @@ public class FanOutKinesisShardSplitReaderTest extends FanOutKinesisShardTestBas
                         shardMetricGroupMap,
                         newConfigurationForTest(),
                         createTestSubscriptionFactory(),
+                        testExecutor,
                         testExecutor);
 
         // When wakeup is called
@@ -170,6 +180,7 @@ public class FanOutKinesisShardSplitReaderTest extends FanOutKinesisShardTestBas
                         shardMetricGroupMap,
                         newConfigurationForTest(),
                         createTestSubscriptionFactory(),
+                        testExecutor,
                         testExecutor);
 
         // When split reader is not closed

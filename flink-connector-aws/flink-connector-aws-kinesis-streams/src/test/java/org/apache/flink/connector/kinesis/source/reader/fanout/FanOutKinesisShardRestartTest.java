@@ -90,10 +90,14 @@ public class FanOutKinesisShardRestartTest extends FanOutKinesisShardTestBase {
                 metricsMap,
                 configuration,
                 createTestSubscriptionFactory(),
+                testExecutor,
                 testExecutor);
 
         // Add a split to the reader
         reader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
+
+        // Trigger the executor to execute the subscription tasks
+        testExecutor.triggerAll();
 
         // Verify that the subscription was activated with the initial starting position
         verify(customProxy, times(1)).subscribeToShard(
@@ -123,10 +127,14 @@ public class FanOutKinesisShardRestartTest extends FanOutKinesisShardTestBase {
                 metricsMap,
                 restartConfiguration,
                 createTestSubscriptionFactory(),
+                testExecutor,
                 testExecutor);
 
         // Add the updated split to the restarted reader
         restartedReader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(updatedSplit)));
+
+        // Trigger the executor to execute the subscription tasks for the restarted reader
+        testExecutor.triggerAll();
 
         // Verify that the subscription was reactivated with the updated starting position
         verify(customProxy, times(2)).subscribeToShard(
@@ -194,10 +202,14 @@ public class FanOutKinesisShardRestartTest extends FanOutKinesisShardTestBase {
                 metricsMap,
                 configuration,
                 createTestSubscriptionFactory(),
+                testExecutor,
                 testExecutor);
 
         // Add a split to the reader
         reader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
+
+        // Trigger the executor to execute the subscription tasks
+        testExecutor.triggerAll();
 
         // If the exception is recoverable, the reader should try to reactivate the subscription
         // If not, it should propagate the exception

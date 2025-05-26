@@ -42,6 +42,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -89,9 +90,9 @@ public class FanOutKinesisShardSplitReaderThreadPoolTest {
 
         // Create a custom subscription factory that creates test subscriptions
         FanOutKinesisShardSplitReader.SubscriptionFactory customFactory =
-                (proxy, consumerArn, shardId, startingPosition, timeout, executor) -> {
+                (proxy, consumerArn, shardId, startingPosition, timeout, eventProcessingExecutor, subscriptionCallExecutor) -> {
                     TestSubscription subscription = new TestSubscription(
-                            proxy, consumerArn, shardId, startingPosition, timeout, executor,
+                            proxy, consumerArn, shardId, startingPosition, timeout, eventProcessingExecutor, subscriptionCallExecutor,
                             processedEvents, expectedEvents);
                     testSubscriptions.put(shardId, subscription);
                     return subscription;
@@ -124,6 +125,7 @@ public class FanOutKinesisShardSplitReaderThreadPoolTest {
                 metricsMap,
                 configuration,
                 customFactory,
+                testExecutor,
                 testExecutor);
 
         // Add multiple splits to the reader
@@ -200,10 +202,13 @@ public class FanOutKinesisShardSplitReaderThreadPoolTest {
                 customProxy,
                 CONSUMER_ARN,
                 metricsMap,
-                configuration);
+                configuration,
+                createTestSubscriptionFactory(),
+                Executors.newCachedThreadPool(),
+                Executors.newCachedThreadPool());
 
-        // Get access to the executor service
-        ExecutorService executor = getExecutorService(splitReader);
+        // Get access to the event processing executor service
+        ExecutorService executor = getEventProcessingExecutorService(splitReader);
         assertThat(executor).isInstanceOf(ThreadPoolExecutor.class);
         ThreadPoolExecutor threadPoolExecutor = (ThreadPoolExecutor) executor;
 
@@ -224,9 +229,9 @@ public class FanOutKinesisShardSplitReaderThreadPoolTest {
 
         // Create a custom subscription factory that adds artificial delay
         FanOutKinesisShardSplitReader.SubscriptionFactory customFactory =
-                (proxy, consumerArn, shardId, startingPosition, timeout, executorService) -> {
+                (proxy, consumerArn, shardId, startingPosition, timeout, eventProcessingExecutor, subscriptionCallExecutor) -> {
                     return new FanOutKinesisShardSubscription(
-                            proxy, consumerArn, shardId, startingPosition, timeout, executorService) {
+                            proxy, consumerArn, shardId, startingPosition, timeout, eventProcessingExecutor, subscriptionCallExecutor) {
                         @Override
                         public void processSubscriptionEvent(SubscribeToShardEvent event) {
                             try {
@@ -312,17 +317,23 @@ public class FanOutKinesisShardSplitReaderThreadPoolTest {
                 mockAsyncStreamProxy,
                 CONSUMER_ARN,
                 metricsMap,
-                configuration);
+                configuration,
+                createTestSubscriptionFactory(),
+                Executors.newCachedThreadPool(),
+                Executors.newCachedThreadPool());
 
-        // Get access to the executor service
-        ExecutorService executor = getExecutorService(splitReader);
-        assertThat(executor).isNotNull();
+        // Get access to the executor services
+        ExecutorService eventProcessingExecutor = getEventProcessingExecutorService(splitReader);
+        ExecutorService subscriptionCallExecutor = getSubscriptionCallExecutorService(splitReader);
+        assertThat(eventProcessingExecutor).isNotNull();
+        assertThat(subscriptionCallExecutor).isNotNull();
 
         // Close the split reader
         splitReader.close();
 
-        // Verify that the executor service is shut down
-        assertThat(executor.isShutdown()).isTrue();
+        // Verify that both executor services are shut down
+        assertThat(eventProcessingExecutor.isShutdown()).isTrue();
+        assertThat(subscriptionCallExecutor.isShutdown()).isTrue();
     }
 
     /**
@@ -337,10 +348,19 @@ public class FanOutKinesisShardSplitReaderThreadPoolTest {
     }
 
     /**
-     * Gets the executor service from the split reader using reflection.
+     * Gets the event processing executor service from the split reader using reflection.
      */
-    private ExecutorService getExecutorService(FanOutKinesisShardSplitReader splitReader) throws Exception {
+    private ExecutorService getEventProcessingExecutorService(FanOutKinesisShardSplitReader splitReader) throws Exception {
         Field field = FanOutKinesisShardSplitReader.class.getDeclaredField("sharedShardSubscriptionExecutor");
+        field.setAccessible(true);
+        return (ExecutorService) field.get(splitReader);
+    }
+
+    /**
+     * Gets the subscription call executor service from the split reader using reflection.
+     */
+    private ExecutorService getSubscriptionCallExecutorService(FanOutKinesisShardSplitReader splitReader) throws Exception {
+        Field field = FanOutKinesisShardSplitReader.class.getDeclaredField("sharedSubscriptionCallExecutor");
         field.setAccessible(true);
         return (ExecutorService) field.get(splitReader);
     }
@@ -354,6 +374,23 @@ public class FanOutKinesisShardSplitReaderThreadPoolTest {
         Field field = FanOutKinesisShardSplitReader.class.getDeclaredField("subscriptionFactory");
         field.setAccessible(true);
         field.set(splitReader, factory);
+    }
+
+    /**
+     * Creates a test subscription factory.
+     *
+     * @return A test subscription factory
+     */
+    private FanOutKinesisShardSplitReader.SubscriptionFactory createTestSubscriptionFactory() {
+        return (proxy, consumerArn, shardId, startingPosition, timeout, eventProcessingExecutor, subscriptionCallExecutor) ->
+                new FanOutKinesisShardSubscription(
+                        proxy,
+                        consumerArn,
+                        shardId,
+                        startingPosition,
+                        timeout,
+                        eventProcessingExecutor,
+                        subscriptionCallExecutor);
     }
 
     /**
@@ -371,10 +408,11 @@ public class FanOutKinesisShardSplitReaderThreadPoolTest {
                 String shardId,
                 StartingPosition startingPosition,
                 Duration timeout,
-                ExecutorService executor,
+                ExecutorService eventProcessingExecutor,
+                ExecutorService subscriptionCallExecutor,
                 AtomicInteger globalCounter,
                 int expectedTotal) {
-            super(proxy, consumerArn, shardId, startingPosition, timeout, executor);
+            super(proxy, consumerArn, shardId, startingPosition, timeout, eventProcessingExecutor, subscriptionCallExecutor);
             this.shardId = shardId;
             this.globalCounter = globalCounter;
             this.expectedTotal = expectedTotal;

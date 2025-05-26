@@ -362,7 +362,7 @@ public class FanOutKinesisShardSubscriptionThreadSafetyTest {
                 Duration subscriptionTimeout,
                 ExecutorService subscriptionEventProcessingExecutor,
                 BlockingQueue<SubscribeToShardEvent> testEventQueue) {
-            super(kinesis, consumerArn, shardId, startingPosition, subscriptionTimeout, subscriptionEventProcessingExecutor);
+            super(kinesis, consumerArn, shardId, startingPosition, subscriptionTimeout, subscriptionEventProcessingExecutor, subscriptionEventProcessingExecutor);
             this.testEventQueue = testEventQueue;
             this.currentStartingPosition = startingPosition;
         }

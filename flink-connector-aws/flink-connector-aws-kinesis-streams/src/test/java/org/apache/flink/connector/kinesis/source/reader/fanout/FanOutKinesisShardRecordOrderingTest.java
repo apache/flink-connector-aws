@@ -258,6 +258,7 @@ public class FanOutKinesisShardRecordOrderingTest extends FanOutKinesisShardTest
                 Collections.emptyMap(),
                 configuration,
                 createTestSubscriptionFactory(),
+                testExecutor,
                 testExecutor);
 
         // Add a split to the reader
@@ -267,6 +268,9 @@ public class FanOutKinesisShardRecordOrderingTest extends FanOutKinesisShardTest
                 StartingPosition.fromStart());
 
         customReader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
+
+        // Trigger the executor to execute the subscription tasks
+        testExecutor.triggerAll();
 
         // Create test events with records
         int numEvents = 5;

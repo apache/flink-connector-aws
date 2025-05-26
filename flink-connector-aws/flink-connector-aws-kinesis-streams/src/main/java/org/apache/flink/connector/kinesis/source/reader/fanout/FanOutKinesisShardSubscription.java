@@ -82,6 +82,9 @@ public class FanOutKinesisShardSubscription {
     /** Executor service to run subscription event processing tasks. */
     private final ExecutorService subscriptionEventProcessingExecutor;
 
+    /** Executor service to run subscription API calls. */
+    private final ExecutorService subscriptionCallExecutor;
+
     // Lock removed as we're using method-level synchronization instead
 
     // Queue is meant for eager retrieval of records from the Kinesis stream. We will always have 2
@@ -153,6 +156,7 @@ public class FanOutKinesisShardSubscription {
      * @param startingPosition The starting position for the subscription
      * @param subscriptionTimeout The timeout for the subscription
      * @param subscriptionEventProcessingExecutor The executor service to use for processing subscription events
+     * @param subscriptionCallExecutor The executor service to use for making subscription API calls
      */
     public FanOutKinesisShardSubscription(
             AsyncStreamProxy kinesis,
@@ -160,13 +164,15 @@ public class FanOutKinesisShardSubscription {
             String shardId,
             StartingPosition startingPosition,
             Duration subscriptionTimeout,
-            ExecutorService subscriptionEventProcessingExecutor) {
+            ExecutorService subscriptionEventProcessingExecutor,
+            ExecutorService subscriptionCallExecutor) {
         this.kinesis = kinesis;
         this.consumerArn = consumerArn;
         this.shardId = shardId;
         this.startingPosition = startingPosition;
         this.subscriptionTimeout = subscriptionTimeout;
         this.subscriptionEventProcessingExecutor = subscriptionEventProcessingExecutor;
+        this.subscriptionCallExecutor = subscriptionCallExecutor;
     }
 
     /** Method to allow eager activation of the subscription. */
@@ -211,27 +217,49 @@ public class FanOutKinesisShardSubscription {
                                 })
                         .build();
 
-        // We don't need to keep track of the future here because we monitor subscription success
-        // using our own CountDownLatch
-        kinesis.subscribeToShard(consumerArn, shardId, startingPosition, responseHandler)
-                .exceptionally(
-                        throwable -> {
-                            // If consumer exists and is still activating, we want to countdown.
-                            if (ExceptionUtils.findThrowable(
-                                            throwable, ResourceInUseException.class)
-                                    .isPresent()) {
-                                waitForSubscriptionLatch.countDown();
-                                return null;
-                            }
-                            LOG.error(
-                                    "Error subscribing to shard {} with starting position {} for consumer {}.",
-                                    shardId,
-                                    startingPosition,
-                                    consumerArn,
-                                    throwable);
-                            terminateSubscription(throwable);
-                            return null;
-                        });
+        // Use the executor service to make the subscription call
+        // This offloads the potentially blocking API call to a dedicated thread pool,
+        // preventing it from blocking the main thread or the event processing threads.
+        // This separation is crucial to avoid potential deadlocks that could occur when
+        // the Netty event loop thread (used by the AWS SDK) needs to handle both the
+        // subscription call and the resulting events.
+        CompletableFuture<Void> subscriptionFuture = CompletableFuture.supplyAsync(
+            () -> {
+                try {
+                    LOG.debug("Making subscribeToShard API call for shard {} on thread {}",
+                            shardId, Thread.currentThread().getName());
+
+                    // Make the API call using the provided executor
+                    return kinesis.subscribeToShard(consumerArn, shardId, startingPosition, responseHandler);
+                } catch (Exception e) {
+                    // Handle any exceptions that occur during the API call
+                    LOG.error("Exception during subscribeToShard API call for shard {}", shardId, e);
+                    terminateSubscription(e);
+                    waitForSubscriptionLatch.countDown();
+                    return CompletableFuture.<Void>completedFuture(null);
+                }
+            },
+            subscriptionCallExecutor
+        ).thenCompose(future -> future); // Flatten the CompletableFuture<CompletableFuture<Void>> to CompletableFuture<Void>
+
+        subscriptionFuture.exceptionally(
+                throwable -> {
+                    // If consumer exists and is still activating, we want to countdown.
+                    if (ExceptionUtils.findThrowable(
+                                    throwable, ResourceInUseException.class)
+                            .isPresent()) {
+                        waitForSubscriptionLatch.countDown();
+                        return null;
+                    }
+                    LOG.error(
+                            "Error subscribing to shard {} with starting position {} for consumer {}.",
+                            shardId,
+                            startingPosition,
+                            consumerArn,
+                            throwable);
+                    terminateSubscription(throwable);
+                    return null;
+                });
 
         // We have to handle timeout for subscriptions separately because Java 8 does not support a
         // fluent orTimeout() methods on CompletableFuture.

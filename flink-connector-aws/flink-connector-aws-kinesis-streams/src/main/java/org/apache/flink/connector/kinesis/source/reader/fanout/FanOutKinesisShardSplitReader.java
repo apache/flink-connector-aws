@@ -91,6 +91,27 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
      */
     private final ExecutorService sharedShardSubscriptionExecutor;
 
+    /**
+     * Shared executor service for making subscribeToShard API calls.
+     *
+     * <p>This executor is separate from the event processing executor to avoid contention
+     * between API calls and event processing. Using a dedicated executor for subscription calls
+     * provides several important benefits:
+     *
+     * <ol>
+     *   <li>Prevents blocking of the main thread or event processing threads during API calls</li>
+     *   <li>Isolates API call failures from event processing operations</li>
+     *   <li>Allows for controlled concurrency of API calls across multiple shards</li>
+     *   <li>Prevents potential deadlocks that could occur when the same thread handles both
+     *       subscription calls and event processing</li>
+     * </ol>
+     *
+     * <p>The executor uses a smaller number of threads than the event processing executor since
+     * subscription calls are less frequent and primarily I/O bound. This helps optimize resource
+     * usage while still providing sufficient parallelism for multiple concurrent subscription calls.
+     */
+    private final ExecutorService sharedSubscriptionCallExecutor;
+
     private final Map<String, FanOutKinesisShardSubscription> splitSubscriptions = new HashMap<>();
 
     /**
@@ -104,7 +125,8 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
                 String shardId,
                 StartingPosition startingPosition,
                 Duration timeout,
-                ExecutorService executor);
+                ExecutorService eventProcessingExecutor,
+                ExecutorService subscriptionCallExecutor);
     }
 
     /**
@@ -118,14 +140,16 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
                 String shardId,
                 StartingPosition startingPosition,
                 Duration timeout,
-                ExecutorService executor) {
+                ExecutorService eventProcessingExecutor,
+                ExecutorService subscriptionCallExecutor) {
             return new FanOutKinesisShardSubscription(
                     proxy,
                     consumerArn,
                     shardId,
                     startingPosition,
                     timeout,
-                    executor);
+                    eventProcessingExecutor,
+                    subscriptionCallExecutor);
         }
     }
 
@@ -152,18 +176,20 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
             shardMetricGroupMap,
             configuration,
             subscriptionFactory,
-            createDefaultExecutor());
+            createDefaultEventProcessingExecutor(),
+            createDefaultSubscriptionCallExecutor());
     }
 
     /**
-     * Constructor with injected executor service for testing.
+     * Constructor with injected executor services for testing.
      *
      * @param asyncStreamProxy The proxy for Kinesis API calls
      * @param consumerArn The ARN of the consumer
      * @param shardMetricGroupMap The metrics map
      * @param configuration The configuration
      * @param subscriptionFactory The factory for creating subscriptions
-     * @param executorService The executor service to use for subscription tasks
+     * @param eventProcessingExecutor The executor service to use for event processing tasks
+     * @param subscriptionCallExecutor The executor service to use for subscription API calls
      */
     @VisibleForTesting
     FanOutKinesisShardSplitReader(
@@ -172,22 +198,24 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
             Map<String, KinesisShardMetrics> shardMetricGroupMap,
             Configuration configuration,
             SubscriptionFactory subscriptionFactory,
-            ExecutorService executorService) {
+            ExecutorService eventProcessingExecutor,
+            ExecutorService subscriptionCallExecutor) {
         super(shardMetricGroupMap, configuration);
         this.asyncStreamProxy = asyncStreamProxy;
         this.consumerArn = consumerArn;
         this.subscriptionTimeout = configuration.get(EFO_CONSUMER_SUBSCRIPTION_TIMEOUT);
         this.deregisterTimeout = configuration.get(EFO_DEREGISTER_CONSUMER_TIMEOUT);
         this.subscriptionFactory = subscriptionFactory;
-        this.sharedShardSubscriptionExecutor = executorService;
+        this.sharedShardSubscriptionExecutor = eventProcessingExecutor;
+        this.sharedSubscriptionCallExecutor = subscriptionCallExecutor;
     }
 
     /**
-     * Creates the default executor service for subscription tasks.
+     * Creates the default executor service for event processing tasks.
      *
      * @return A new executor service
      */
-    private static ExecutorService createDefaultExecutor() {
+    private static ExecutorService createDefaultEventProcessingExecutor() {
         int minThreads = Runtime.getRuntime().availableProcessors();
         int maxThreads = minThreads * 2;
         return new ThreadPoolExecutor(
@@ -196,6 +224,37 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
             60L, TimeUnit.SECONDS,
             new LinkedBlockingQueue<>(), // Unbounded queue with natural flow control
             new ExecutorThreadFactory("kinesis-efo-subscription"));
+    }
+
+    /**
+     * Creates the default executor service for subscription API calls.
+     *
+     * <p>This executor is configured with:
+     * <ul>
+     *   <li>Minimum threads: 1 - Ensures at least one thread is always available for API calls</li>
+     *   <li>Maximum threads: max(2, availableProcessors/4) - Scales with system resources but
+     *       keeps the thread count relatively low since API calls are I/O bound</li>
+     *   <li>Keep-alive time: 60 seconds - Allows for efficient reuse of threads</li>
+     *   <li>Unbounded queue - Safe because the number of subscription tasks is naturally limited
+     *       by the number of shards</li>
+     *   <li>Custom thread factory - Provides meaningful thread names for debugging</li>
+     * </ul>
+     *
+     * <p>This configuration balances resource efficiency with responsiveness for subscription calls.
+     * Since subscription calls are primarily waiting on network I/O, a relatively small number of
+     * threads can efficiently handle many concurrent calls.
+     *
+     * @return A new executor service optimized for subscription API calls
+     */
+    private static ExecutorService createDefaultSubscriptionCallExecutor() {
+        int minThreads = 1;
+        int maxThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 4);
+        return new ThreadPoolExecutor(
+            minThreads,
+            maxThreads,
+            60L, TimeUnit.SECONDS,
+            new LinkedBlockingQueue<>(), // Unbounded queue with natural flow control
+            new ExecutorThreadFactory("kinesis-subscription-caller"));
     }
 
     @Override
@@ -226,7 +285,8 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
                             split.getShardId(),
                             split.getStartingPosition(),
                             subscriptionTimeout,
-                            sharedShardSubscriptionExecutor);
+                            sharedShardSubscriptionExecutor,
+                            sharedSubscriptionCallExecutor);
             subscription.activateSubscription();
             splitSubscriptions.put(split.splitId(), subscription);
         }
@@ -250,6 +310,7 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
     public void close() throws Exception {
         cancelActiveSubscriptions();
         shutdownSharedShardSubscriptionExecutor();
+        shutdownSharedSubscriptionCallExecutor();
         closeAsyncStreamProxy();
     }
 
@@ -298,12 +359,39 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
             if (!sharedShardSubscriptionExecutor.awaitTermination(
                     deregisterTimeout.toMillis(),
                     TimeUnit.MILLISECONDS)) {
-                LOG.warn("Executor did not terminate in the specified time. Forcing shutdown.");
+                LOG.warn("Event processing executor did not terminate in the specified time. Forcing shutdown.");
                 sharedShardSubscriptionExecutor.shutdownNow();
             }
         } catch (InterruptedException e) {
-            LOG.warn("Interrupted while waiting for executor shutdown", e);
+            LOG.warn("Interrupted while waiting for event processing executor shutdown", e);
             sharedShardSubscriptionExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
+     * Shuts down the shared executor service used for subscription API calls.
+     *
+     * <p>We use the EFO_DEREGISTER_CONSUMER_TIMEOUT (10 seconds) as the shutdown timeout
+     * to maintain consistency with other deregistration operations in the connector.
+     */
+    private void shutdownSharedSubscriptionCallExecutor() {
+        if (sharedSubscriptionCallExecutor == null) {
+            return;
+        }
+
+        sharedSubscriptionCallExecutor.shutdown();
+        try {
+            // Use a shorter timeout since these are just API calls
+            if (!sharedSubscriptionCallExecutor.awaitTermination(
+                    deregisterTimeout.toMillis(),
+                    TimeUnit.MILLISECONDS)) {
+                LOG.warn("Subscription call executor did not terminate in the specified time. Forcing shutdown.");
+                sharedSubscriptionCallExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            LOG.warn("Interrupted while waiting for subscription call executor shutdown", e);
+            sharedSubscriptionCallExecutor.shutdownNow();
             Thread.currentThread().interrupt();
         }
     }

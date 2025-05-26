@@ -79,10 +79,14 @@ public class FanOutKinesisShardHappyPathTest extends FanOutKinesisShardTestBase 
                 metricsMap,
                 configuration,
                 createTestSubscriptionFactory(),
+                testExecutor,
                 testExecutor);
 
         // Add a split to the reader
         reader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
+
+        // Trigger the executor to execute the subscription tasks
+        testExecutor.triggerAll();
 
         // Verify that the subscription was activated
         ArgumentCaptor<String> shardIdCaptor = ArgumentCaptor.forClass(String.class);
@@ -132,6 +136,7 @@ public class FanOutKinesisShardHappyPathTest extends FanOutKinesisShardTestBase 
                 metricsMap,
                 configuration,
                 createTestSubscriptionFactory(),
+                testExecutor,
                 testExecutor);
 
         // Add splits to the reader
@@ -139,6 +144,9 @@ public class FanOutKinesisShardHappyPathTest extends FanOutKinesisShardTestBase 
         splits.add(split1);
         splits.add(split2);
         reader.handleSplitsChanges(new SplitsAddition<>(splits));
+
+        // Trigger the executor to execute the subscription tasks
+        testExecutor.triggerAll();
 
         // Verify that subscriptions were activated for both shards
         ArgumentCaptor<String> shardIdCaptor = ArgumentCaptor.forClass(String.class);

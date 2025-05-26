@@ -82,8 +82,9 @@ public abstract class FanOutKinesisShardTestBase {
                 StartingPosition startingPosition,
                 Duration subscriptionTimeout,
                 ExecutorService subscriptionEventProcessingExecutor,
+                ExecutorService subscriptionCallExecutor,
                 BlockingQueue<Record> recordQueue) {
-            super(kinesis, consumerArn, shardId, startingPosition, subscriptionTimeout, subscriptionEventProcessingExecutor);
+            super(kinesis, consumerArn, shardId, startingPosition, subscriptionTimeout, subscriptionEventProcessingExecutor, subscriptionCallExecutor);
             this.recordQueue = recordQueue;
             this.currentStartingPosition = startingPosition;
         }
@@ -146,6 +147,7 @@ public abstract class FanOutKinesisShardTestBase {
                 startingPosition,
                 TEST_SUBSCRIPTION_TIMEOUT,
                 testExecutor,
+                testExecutor, // Use the same executor for subscription calls
                 recordQueue);
     }
 
@@ -155,14 +157,15 @@ public abstract class FanOutKinesisShardTestBase {
      * @return A test subscription factory
      */
     protected FanOutKinesisShardSplitReader.SubscriptionFactory createTestSubscriptionFactory() {
-        return (proxy, consumerArn, shardId, startingPosition, timeout, executor) ->
+        return (proxy, consumerArn, shardId, startingPosition, timeout, eventProcessingExecutor, subscriptionCallExecutor) ->
                 new FanOutKinesisShardSubscription(
                         proxy,
                         consumerArn,
                         shardId,
                         startingPosition,
                         timeout,
-                        executor);
+                        eventProcessingExecutor,
+                        subscriptionCallExecutor);
     }
 
     /**
@@ -182,6 +185,7 @@ public abstract class FanOutKinesisShardTestBase {
                 Mockito.mock(java.util.Map.class),
                 configuration,
                 createTestSubscriptionFactory(),
+                testExecutor,
                 testExecutor);
 
         // Create a split
