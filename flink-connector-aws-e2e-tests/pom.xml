@@ -42,6 +42,7 @@ under the License.
         <module>flink-connector-aws-kinesis-streams-e2e-tests</module>
         <module>flink-connector-kinesis-e2e-tests</module>
         <module>flink-connector-aws-sqs-e2e-tests</module>
+        <module>flink-connector-dynamodb-e2e-tests</module>
         <module>flink-formats-avro-glue-schema-registry-e2e-tests</module>
         <module>flink-formats-json-glue-schema-registry-e2e-tests</module>
     </modules>
@@ -90,6 +91,7 @@ under the License.
                                         <moduleDir>${project.basedir}</moduleDir>
                                     </systemPropertyVariables>
                                     <excludedGroups>requires-aws-credentials</excludedGroups>
+                                    <argLine>--add-opens java.base/java.util=ALL-UNNAMED</argLine>
                                 </configuration>
                             </execution>
                         </executions>
@@ -121,6 +123,7 @@ under the License.
                                     <systemPropertyVariables>
                                         <moduleDir>${project.basedir}</moduleDir>
                                     </systemPropertyVariables>
+                                    <argLine>--add-opens java.base/java.util=ALL-UNNAMED</argLine>
                                 </configuration>
                             </execution>
                         </executions>

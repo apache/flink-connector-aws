@@ -16,14 +16,19 @@
  * limitations under the License.
  */
 
-package org.apache.flink.connector.dynamodb.sink;
+package org.apache.flink.connector.dynamodb.sink.test;
 
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
+import org.apache.flink.api.connector.sink2.SinkWriter;
+import org.apache.flink.connector.base.sink.writer.ElementConverter;
+import org.apache.flink.connector.dynamodb.sink.DynamoDbSink;
+import org.apache.flink.connector.dynamodb.sink.DynamoDbWriteRequest;
+import org.apache.flink.connector.dynamodb.sink.DynamoDbWriteRequestType;
+import org.apache.flink.connector.dynamodb.testutils.DockerImageVersions;
 import org.apache.flink.connector.dynamodb.testutils.DynamoDBHelpers;
 import org.apache.flink.connector.dynamodb.testutils.DynamoDbContainer;
 import org.apache.flink.connector.dynamodb.testutils.Item;
 import org.apache.flink.connector.dynamodb.testutils.Items;
-import org.apache.flink.connector.dynamodb.util.DockerImageVersions;
 import org.apache.flink.runtime.client.JobExecutionException;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -345,6 +350,19 @@ public class DynamoDbSinkITCase {
         public Scenario withClientProperties(Properties properties) {
             this.properties = properties;
             return this;
+        }
+    }
+
+    private static class TestDynamoDbElementConverter
+            implements ElementConverter<Map<String, AttributeValue>, DynamoDbWriteRequest> {
+
+        @Override
+        public DynamoDbWriteRequest apply(
+                Map<String, AttributeValue> elements, SinkWriter.Context context) {
+            return DynamoDbWriteRequest.builder()
+                    .setType(DynamoDbWriteRequestType.PUT)
+                    .setItem(elements)
+                    .build();
         }
     }
 }

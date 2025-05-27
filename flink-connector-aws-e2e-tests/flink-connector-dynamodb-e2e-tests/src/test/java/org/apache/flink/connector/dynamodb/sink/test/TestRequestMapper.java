@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.flink.connector.dynamodb.sink;
+package org.apache.flink.connector.dynamodb.sink.test;
 
 import org.apache.flink.api.common.functions.RichMapFunction;
 

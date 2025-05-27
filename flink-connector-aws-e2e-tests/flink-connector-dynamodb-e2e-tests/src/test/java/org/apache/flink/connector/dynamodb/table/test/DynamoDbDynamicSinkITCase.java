@@ -16,12 +16,13 @@
  * limitations under the License.
  */
 
-package org.apache.flink.connector.dynamodb.table;
+package org.apache.flink.connector.dynamodb.table.test;
 
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
+import org.apache.flink.connector.dynamodb.table.DynamoDbDynamicSink;
+import org.apache.flink.connector.dynamodb.testutils.DockerImageVersions;
 import org.apache.flink.connector.dynamodb.testutils.DynamoDBHelpers;
 import org.apache.flink.connector.dynamodb.testutils.DynamoDbContainer;
-import org.apache.flink.connector.dynamodb.util.DockerImageVersions;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.Table;
@@ -49,7 +50,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 
-/** Integration test for {@link org.apache.flink.connector.dynamodb.table.DynamoDbDynamicSink}. */
+/** Integration test for {@link DynamoDbDynamicSink}. */
 @Testcontainers
 @ExtendWith(MiniClusterExtension.class)
 public class DynamoDbDynamicSinkITCase {

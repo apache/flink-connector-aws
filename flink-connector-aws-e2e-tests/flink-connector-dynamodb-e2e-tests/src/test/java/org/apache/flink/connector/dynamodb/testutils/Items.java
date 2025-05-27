@@ -16,17 +16,32 @@
  * limitations under the License.
  */
 
-package org.apache.flink.connector.dynamodb.util;
+package org.apache.flink.connector.dynamodb.testutils;
 
-/**
- * Utility class for defining the image names and versions of Docker containers used during the Java
- * tests. The names/versions are centralised here in order to make testing version updates easier,
- * as well as to provide a central file to use as a key when caching testing Docker files.
- *
- * <p>In order for an image to be cached it must be added to {@code
- * cache_docker_images.sh#DOCKER_IMAGE_CACHE_PATTERN}.
- */
-public class DockerImageVersions {
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
-    public static final String DYNAMODB = "amazon/dynamodb-local:1.16.0";
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+/** Container for DynamoDB items. */
+public class Items {
+
+    public static ItemsBuilder builder() {
+        return new ItemsBuilder();
+    }
+
+    /** Builder to constrict DynamoDB items. */
+    public static final class ItemsBuilder {
+        private final List<Map<String, AttributeValue>> items = new ArrayList<>();
+
+        public ItemsBuilder item(Map<String, AttributeValue> attributes) {
+            items.add(attributes);
+            return this;
+        }
+
+        public List<Map<String, AttributeValue>> build() {
+            return items;
+        }
+    }
 }
