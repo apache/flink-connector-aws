@@ -18,7 +18,7 @@
 
 package org.apache.flink.connector.dynamodb.sink;
 
-import org.apache.flink.api.common.ExecutionConfig;
+import org.apache.flink.api.common.serialization.SerializerConfig;
 import org.apache.flink.api.common.typeinfo.BasicArrayTypeInfo;
 import org.apache.flink.api.common.typeinfo.BasicTypeInfo;
 import org.apache.flink.api.common.typeinfo.PrimitiveArrayTypeInfo;
@@ -388,7 +388,8 @@ public class DynamoDbTypeInformedElementConverterTest {
                     }
 
                     @Override
-                    public TypeSerializer<Order> createSerializer(ExecutionConfig executionConfig) {
+                    public TypeSerializer<Order> createSerializer(
+                            SerializerConfig serializerConfig) {
                         return null;
                     }
 

@@ -19,6 +19,8 @@ package org.apache.flink.connector.kinesis.sink;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.PublicEvolving;
+import org.apache.flink.api.connector.sink2.StatefulSinkWriter;
+import org.apache.flink.api.connector.sink2.WriterInitContext;
 import org.apache.flink.connector.base.sink.AsyncSinkBase;
 import org.apache.flink.connector.base.sink.writer.BufferedRequestState;
 import org.apache.flink.connector.base.sink.writer.ElementConverter;
@@ -127,7 +129,7 @@ public class KinesisStreamsSink<InputT> extends AsyncSinkBase<InputT, PutRecords
     @Internal
     @Override
     public StatefulSinkWriter<InputT, BufferedRequestState<PutRecordsRequestEntry>> createWriter(
-            InitContext context) throws IOException {
+            WriterInitContext context) throws IOException {
         return new KinesisStreamsSinkWriter<>(
                 getElementConverter(),
                 context,
@@ -154,7 +156,7 @@ public class KinesisStreamsSink<InputT> extends AsyncSinkBase<InputT, PutRecords
     @Internal
     @Override
     public StatefulSinkWriter<InputT, BufferedRequestState<PutRecordsRequestEntry>> restoreWriter(
-            InitContext context,
+            WriterInitContext context,
             Collection<BufferedRequestState<PutRecordsRequestEntry>> recoveredState)
             throws IOException {
         return new KinesisStreamsSinkWriter<>(
