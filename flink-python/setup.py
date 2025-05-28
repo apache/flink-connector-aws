@@ -32,7 +32,7 @@ POM_FILE = os.path.join(CURRENT_DIR, '../pom.xml')
 README_FILE = os.path.join(CURRENT_DIR, 'README.txt')
 
 # Generated files and directories
-VERSION_FILE = os.path.join(CURRENT_DIR, 'pyflink/datastream/connectors/aws_connector_version.py')
+VERSION_FILE = os.path.join(CURRENT_DIR, 'pyflink/datastream/connectors/kinesis.py')
 DEPENDENCY_FILE = os.path.join(CURRENT_DIR, 'dev/dev-requirements.txt')
 
 
@@ -103,8 +103,8 @@ if sys.version_info < (3, 7):
 #  - In the connector source root directory - package preparation
 #  - Otherwise - package deployment
 in_flink_source = os.path.isfile(
-    "../flink-connector-aws/flink-connector-kinesis/src/main" +
-    "/java/org/apache/flink/streaming/connectors/kinesis/FlinkKinesisConsumer.java")
+    "../flink-connector-aws/flink-connector-aws-kinesis-streams/src/main" +
+    "/java/org/apache/flink/connector/kinesis/source/KinesisStreamsSource.java")
 
 # Cleans up the generated files and directories and regenerate them.
 if in_flink_source:

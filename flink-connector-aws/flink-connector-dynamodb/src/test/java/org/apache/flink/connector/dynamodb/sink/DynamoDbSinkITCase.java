@@ -18,7 +18,8 @@
 
 package org.apache.flink.connector.dynamodb.sink;
 
-import org.apache.flink.api.common.restartstrategy.RestartStrategies;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.RestartStrategyOptions;
 import org.apache.flink.connector.dynamodb.testutils.DynamoDBHelpers;
 import org.apache.flink.connector.dynamodb.testutils.DynamoDbContainer;
 import org.apache.flink.connector.dynamodb.testutils.Item;
@@ -81,7 +82,11 @@ public class DynamoDbSinkITCase {
     public void setup() throws URISyntaxException {
         testTableName = UUID.randomUUID().toString();
         env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setRestartStrategy(RestartStrategies.noRestart());
+        Configuration config = new Configuration();
+        config.set(
+                RestartStrategyOptions.RESTART_STRATEGY,
+                RestartStrategyOptions.RestartStrategyType.NO_RESTART_STRATEGY.getMainValue());
+        env.configure(config);
         env.setParallelism(1);
 
         dynamoDBHelpers = new DynamoDBHelpers(LOCALSTACK.getHostClient());

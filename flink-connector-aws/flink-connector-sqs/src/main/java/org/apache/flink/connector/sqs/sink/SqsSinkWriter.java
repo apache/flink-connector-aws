@@ -18,7 +18,7 @@
 package org.apache.flink.connector.sqs.sink;
 
 import org.apache.flink.annotation.Internal;
-import org.apache.flink.api.connector.sink2.Sink;
+import org.apache.flink.api.connector.sink2.WriterInitContext;
 import org.apache.flink.connector.aws.sink.throwable.AWSExceptionHandler;
 import org.apache.flink.connector.aws.util.AWSGeneralUtil;
 import org.apache.flink.connector.base.sink.throwable.FatalExceptionClassifier;
@@ -89,7 +89,7 @@ class SqsSinkWriter<InputT> extends AsyncSinkWriter<InputT, SendMessageBatchRequ
 
     SqsSinkWriter(
             ElementConverter<InputT, SendMessageBatchRequestEntry> elementConverter,
-            Sink.InitContext context,
+            WriterInitContext context,
             int maxBatchSize,
             int maxInFlightRequests,
             int maxBufferedRequests,

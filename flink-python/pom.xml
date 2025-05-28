@@ -41,7 +41,7 @@ under the License.
     <dependencies>
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-sql-connector-kinesis</artifactId>
+            <artifactId>flink-sql-connector-aws-kinesis-streams</artifactId>
             <version>${project.version}</version>
             <scope>provided</scope>
         </dependency>
@@ -101,7 +101,7 @@ under the License.
                             <artifactItems>
                                 <artifactItem>
                                     <groupId>org.apache.flink</groupId>
-                                    <artifactId>flink-sql-connector-kinesis</artifactId>
+                                    <artifactId>flink-sql-connector-aws-kinesis-streams</artifactId>
                                 </artifactItem>
                                 <artifactItem>
                                     <groupId>org.apache.flink</groupId>
