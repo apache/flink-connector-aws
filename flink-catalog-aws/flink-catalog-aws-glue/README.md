@@ -330,13 +330,113 @@ The connector handles mapping between Flink data types and AWS Glue data types a
 | ARRAY      | array         |
 | MAP        | map           |
 
+## Object Name Case Preservation
+
+### Overview
+
+AWS Glue stores object names in lowercase, but this Flink connector preserves the original case of your database, table, and column names by storing the original names in metadata parameters. This allows you to use any casing convention you prefer while ensuring compatibility with data formats that require specific casing (like JSON).
+
+### How It Works
+
+When you create objects with mixed case names, the connector:
+
+1. **Stores the lowercase version** in Glue (as required by AWS Glue)
+2. **Preserves the original case** in metadata parameters
+3. **Returns the original case** when listing or retrieving objects
+4. **Handles lookups** by original name, regardless of case variations
+
+### Metadata Storage Details
+
+The original names are stored using these parameter keys in AWS Glue:
+
+| Object Type | Glue Storage Location | Parameter Key |
+|-------------|----------------------|---------------|
+| **Database** | `Database.parameters` | `flink.original-database-name` |
+| **Table/View** | `Table.parameters` | `flink.original-table-name` |
+| **Column** | `Column.parameters` | `originalName` |
+| **Function** | ⚠️ *Not supported yet* | *No parameters field available* |
+
+### Examples
+
+#### Database Names
+```sql
+-- Create database with mixed case
+CREATE DATABASE MyCompanyDB;
+
+-- Stored in Glue as: "mycompanydb" 
+-- With parameter: flink.original-database-name = "MyCompanyDB"
+
+-- All these work equivalently:
+USE MyCompanyDB;
+USE mycompanydb;
+USE MYCOMPANYDB;
+
+-- But SHOW DATABASES returns: "MyCompanyDB"
+```
+
+#### Table Names
+```sql
+-- Create table with mixed case
+CREATE TABLE MyCompanyDB.UserProfiles (
+  UserId INT,
+  UserName VARCHAR(100)
+);
+
+-- Stored in Glue as: "userprofiles"
+-- With parameter: flink.original-table-name = "UserProfiles"
+
+-- All these work equivalently:
+SELECT * FROM MyCompanyDB.UserProfiles;
+SELECT * FROM mycompanydb.userprofiles;
+SELECT * FROM MYCOMPANYDB.USERPROFILES;
+
+-- But SHOW TABLES returns: "UserProfiles"
+```
+
+#### Column Names
+```sql
+-- Columns preserve case automatically
+SELECT UserId, UserName FROM UserProfiles;
+
+-- JSON parsing works correctly with original case:
+-- {"UserId": 123, "UserName": "John"}
+```
+
+### Benefits
+
+1. **User-Friendly**: Use any casing convention you prefer
+2. **JSON Compatibility**: Original case preserved for JSON field mapping
+3. **External Tool Compatibility**: Other tools can access the same data using Glue's lowercase names
+4. **Backward Compatibility**: Existing lowercase objects continue to work
+5. **Case-Insensitive Operations**: Objects can be referenced with any case variation
+
+### Limitations
+
+1. **Functions**: Case preservation not yet implemented for user-defined functions due to AWS Glue API limitations
+2. **External Tools**: Tools that bypass this connector may only see lowercase names in Glue
+3. **Performance**: Initial lookup may require scanning when direct case match fails (rare)
+
+### Migration from Lowercase-Only
+
+Existing catalogs with lowercase-only names will continue to work seamlessly:
+
+- Objects without original name metadata fall back to stored (lowercase) names
+- No migration required for existing data
+- New objects automatically get case preservation
+
+### Best Practices
+
+1. **Consistent Casing**: Use consistent casing conventions within your organization
+2. **Documentation**: Document your naming conventions for team consistency
+3. **Testing**: Test with your actual data formats (especially JSON) to ensure case handling meets your needs
+
 ## Limitations and Considerations
 
-1. **Case Sensitivity**: As detailed above, always use the original column names from your schema definition when querying.
-3. **AWS Service Limits**: Be aware of AWS Glue service limits that may affect your application.
-4. **Authentication**: Ensure proper AWS credentials with appropriate permissions are available.
-5. **Region Selection**: The Glue catalog must be registered with the correct AWS region where your Glue resources exist.
-6. **Unsupported Operations**: The following operations are not currently supported:
+1. **Case Sensitivity**: As detailed above, database, table, and column names preserve original case, while function names currently use case-insensitive handling.
+2. **AWS Service Limits**: Be aware of AWS Glue service limits that may affect your application.
+3. **Authentication**: Ensure proper AWS credentials with appropriate permissions are available.
+4. **Region Selection**: The Glue catalog must be registered with the correct AWS region where your Glue resources exist.
+5. **Unsupported Operations**: The following operations are not currently supported:
    - ALTER DATABASE (modifying database properties)
    - ALTER TABLE (modifying table properties or schema)
    - RENAME TABLE

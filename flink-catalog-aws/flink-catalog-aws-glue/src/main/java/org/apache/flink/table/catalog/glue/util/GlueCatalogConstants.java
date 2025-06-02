@@ -40,13 +40,20 @@ public class GlueCatalogConstants {
     public static final String TABLE_INPUT_FORMAT = "table.input.format";
     public static final String TABLE_OUTPUT_FORMAT = "table.output.format";
 
+    // Constants for preserving original case of object names
+    // These follow the pattern established for column names
+    public static final String ORIGINAL_DATABASE_NAME = "flink.original-database-name";
+    public static final String ORIGINAL_TABLE_NAME = "flink.original-table-name";
+    public static final String ORIGINAL_COLUMN_NAME = "originalName"; // Keep existing for backward compatibility
+    public static final String ORIGINAL_FUNCTION_NAME = "flink.original-function-name";
+
     public static final String FLINK_SCALA_FUNCTION_PREFIX = "flink:scala:";
     public static final String FLINK_PYTHON_FUNCTION_PREFIX = "flink:python:";
     public static final String FLINK_JAVA_FUNCTION_PREFIX = "flink:java:";
 
     public static final String FLINK_CATALOG = "FLINK_CATALOG";
 
-    public static final Pattern GLUE_DB_PATTERN = Pattern.compile("^[a-z0-9_]{1,255}$");
+    public static final Pattern GLUE_DB_PATTERN = Pattern.compile("^[a-zA-Z0-9_]{1,255}$");
     public static final String GLUE_EXCEPTION_MSG_IDENTIFIER = "GLUE EXCEPTION";
     public static final String TABLE_NOT_EXISTS_IDENTIFIER = "TABLE DOESN'T EXIST";
     public static final String DEFAULT_PARTITION_NAME = "__GLUE_DEFAULT_PARTITION__";

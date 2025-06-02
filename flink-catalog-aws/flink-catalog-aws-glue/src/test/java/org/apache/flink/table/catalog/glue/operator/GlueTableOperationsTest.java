@@ -96,13 +96,8 @@ public class GlueTableOperationsTest {
     void testCreateTableWithUppercaseLetters() {
         TableInput tableInput = TableInput.builder().name("TestTable").build();
 
-        CatalogException exception = Assertions.assertThrows(
-                CatalogException.class,
-                () -> glueTableOperations.createTable(DATABASE_NAME, tableInput));
-
-        Assertions.assertTrue(
-                exception.getMessage().contains("lowercase letters"),
-                "Exception message should mention lowercase letters requirement");
+        // Uppercase letters should now be accepted with case preservation
+        Assertions.assertDoesNotThrow(() -> glueTableOperations.createTable(DATABASE_NAME, tableInput));
     }
 
     @Test
@@ -114,7 +109,7 @@ public class GlueTableOperationsTest {
                 () -> glueTableOperations.createTable(DATABASE_NAME, tableInput));
 
         Assertions.assertTrue(
-                exception.getMessage().contains("lowercase letters"),
+                exception.getMessage().contains("letters, numbers, and underscores"),
                 "Exception message should mention allowed characters");
     }
 
@@ -127,7 +122,7 @@ public class GlueTableOperationsTest {
                 () -> glueTableOperations.createTable(DATABASE_NAME, tableInput));
 
         Assertions.assertTrue(
-                exception.getMessage().contains("lowercase letters"),
+                exception.getMessage().contains("letters, numbers, and underscores"),
                 "Exception message should mention allowed characters");
     }
 
@@ -143,7 +138,7 @@ public class GlueTableOperationsTest {
                         null));
 
         Assertions.assertTrue(
-                exception.getMessage().contains("lowercase letters"),
+                exception.getMessage().contains("letters, numbers, and underscores"),
                 "Exception message should mention allowed characters");
     }
 

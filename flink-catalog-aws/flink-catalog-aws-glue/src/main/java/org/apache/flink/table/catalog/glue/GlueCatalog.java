@@ -18,6 +18,7 @@
 
 package org.apache.flink.table.catalog.glue;
 
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.catalog.AbstractCatalog;
 import org.apache.flink.table.catalog.CatalogBaseTable;
@@ -52,6 +53,8 @@ import org.apache.flink.table.catalog.stats.CatalogColumnStatistics;
 import org.apache.flink.table.catalog.stats.CatalogTableStatistics;
 import org.apache.flink.table.expressions.Expression;
 import org.apache.flink.table.functions.FunctionIdentifier;
+import org.apache.flink.util.Preconditions;
+import org.apache.flink.util.StringUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -79,12 +82,17 @@ public class GlueCatalog extends AbstractCatalog {
 
     private static final Logger LOG = LoggerFactory.getLogger(GlueCatalog.class);
 
-    private final GlueClient glueClient;
-    private final GlueTypeConverter glueTypeConverter;
-    private final GlueDatabaseOperator glueDatabaseOperations;
-    private final GlueTableOperator glueTableOperations;
-    private final GlueFunctionOperator glueFunctionsOperations;
-    private final GlueTableUtils glueTableUtils;
+    // Constants for client cleanup retry logic
+    private static final int MAX_CLOSE_RETRIES = 3;
+    private static final long INITIAL_RETRY_DELAY_MS = 200L;
+    private static final int RETRY_DELAY_MULTIPLIER = 2;
+
+    private GlueClient glueClient;
+    private GlueTypeConverter glueTypeConverter;
+    private GlueDatabaseOperator glueDatabaseOperations;
+    private GlueTableOperator glueTableOperations;
+    private GlueFunctionOperator glueFunctionsOperations;
+    private GlueTableUtils glueTableUtils;
 
     /**
      * Constructs a GlueCatalog with a provided Glue client.
@@ -94,23 +102,24 @@ public class GlueCatalog extends AbstractCatalog {
      * @param region          the AWS region to be used for Glue operations
      * @param glueClient      Glue Client so we can decide which one to use for testing
      */
-    public GlueCatalog(String name, String defaultDatabase, String region, GlueClient glueClient) {
+    @VisibleForTesting
+    GlueCatalog(String name, String defaultDatabase, String region, GlueClient glueClient) {
         super(name, defaultDatabase);
+
+        // Validate region parameter
+        Preconditions.checkNotNull(region, "region cannot be null");
+        Preconditions.checkArgument(!region.trim().isEmpty(), "region cannot be empty");
 
         // Initialize GlueClient in the constructor
         if (glueClient != null) {
-            this.glueClient = glueClient;
+            setup(glueClient);
         } else {
             // If no GlueClient is provided, initialize it using the default region
-            this.glueClient = GlueClient.builder()
+            GlueClient client = GlueClient.builder()
                     .region(Region.of(region))
                     .build();
+            setup(client);
         }
-        this.glueTypeConverter = new GlueTypeConverter();
-        this.glueTableUtils = new GlueTableUtils(glueTypeConverter);
-        this.glueDatabaseOperations = new GlueDatabaseOperator(glueClient, getName());
-        this.glueTableOperations = new GlueTableOperator(glueClient, getName());
-        this.glueFunctionsOperations = new GlueFunctionOperator(glueClient, getName());
     }
 
     /**
@@ -123,16 +132,48 @@ public class GlueCatalog extends AbstractCatalog {
     public GlueCatalog(String name, String defaultDatabase, String region) {
         super(name, defaultDatabase);
 
+        // Validate region parameter
+        Preconditions.checkNotNull(region, "region cannot be null");
+        Preconditions.checkArgument(!region.trim().isEmpty(), "region cannot be empty");
+
         // Create a synchronized client builder to avoid concurrent modification exceptions
-        this.glueClient = GlueClient.builder()
+        GlueClient client = GlueClient.builder()
                 .region(Region.of(region))
                 .credentialsProvider(software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider.create())
                 .build();
+        setup(client);
+    }
+
+    /**
+     * Private helper method to set up the GlueCatalog with a GlueClient instance.
+     * This method initializes all the necessary components and operators.
+     *
+     * @param glueClient the GlueClient to use for AWS Glue operations
+     */
+    private void setup(GlueClient glueClient) {
+        this.glueClient = glueClient;
         this.glueTypeConverter = new GlueTypeConverter();
         this.glueTableUtils = new GlueTableUtils(glueTypeConverter);
         this.glueDatabaseOperations = new GlueDatabaseOperator(glueClient, getName());
         this.glueTableOperations = new GlueTableOperator(glueClient, getName());
         this.glueFunctionsOperations = new GlueFunctionOperator(glueClient, getName());
+    }
+
+    /**
+     * Validates that a database exists, throwing DatabaseNotExistException if it doesn't.
+     *
+     * @param databaseName the name of the database to validate
+     * @throws DatabaseNotExistException if the database does not exist
+     * @throws CatalogException if an error occurs while checking database existence
+     */
+    private void validateDatabaseExists(String databaseName) throws DatabaseNotExistException, CatalogException {
+        Preconditions.checkArgument(
+                !StringUtils.isNullOrWhitespaceOnly(databaseName),
+                "databaseName cannot be null or empty");
+
+        if (!databaseExists(databaseName)) {
+            throw new DatabaseNotExistException(getName(), databaseName);
+        }
     }
 
     /**
@@ -154,9 +195,9 @@ public class GlueCatalog extends AbstractCatalog {
     public void close() throws CatalogException {
         if (glueClient != null) {
             LOG.info("Closing GlueCatalog client");
-            int maxRetries = 3;
+            int maxRetries = MAX_CLOSE_RETRIES;
             int retryCount = 0;
-            long retryDelayMs = 200;
+            long retryDelayMs = INITIAL_RETRY_DELAY_MS;
             while (retryCount < maxRetries) {
                 try {
                     glueClient.close();
@@ -173,7 +214,7 @@ public class GlueCatalog extends AbstractCatalog {
                     try {
                         Thread.sleep(retryDelayMs);
                         // Exponential backoff
-                        retryDelayMs *= 2;
+                        retryDelayMs *= RETRY_DELAY_MULTIPLIER;
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
                         throw new CatalogException("Interrupted while retrying to close GlueCatalog client", ie);
@@ -204,11 +245,11 @@ public class GlueCatalog extends AbstractCatalog {
      */
     @Override
     public CatalogDatabase getDatabase(String databaseName) throws DatabaseNotExistException, CatalogException {
-        boolean databaseExists = databaseExists(databaseName);
-        if (!databaseExists) {
-            throw new DatabaseNotExistException(getName(), databaseName);
-        }
+        Preconditions.checkArgument(
+                !StringUtils.isNullOrWhitespaceOnly(databaseName),
+                "databaseName cannot be null or empty");
 
+        validateDatabaseExists(databaseName);
         return glueDatabaseOperations.getDatabase(databaseName);
     }
 
@@ -221,6 +262,10 @@ public class GlueCatalog extends AbstractCatalog {
      */
     @Override
     public boolean databaseExists(String databaseName) throws CatalogException {
+        Preconditions.checkArgument(
+                !StringUtils.isNullOrWhitespaceOnly(databaseName),
+                "databaseName cannot be null or empty");
+
         return glueDatabaseOperations.glueDatabaseExists(databaseName);
     }
 
@@ -236,6 +281,11 @@ public class GlueCatalog extends AbstractCatalog {
     @Override
     public void createDatabase(String databaseName, CatalogDatabase catalogDatabase, boolean ifNotExists)
             throws DatabaseAlreadyExistException, CatalogException {
+        Preconditions.checkArgument(
+                !StringUtils.isNullOrWhitespaceOnly(databaseName),
+                "databaseName cannot be null or empty");
+        Preconditions.checkNotNull(catalogDatabase, "CatalogDatabase cannot be null");
+
         boolean exists = databaseExists(databaseName);
 
         if (exists && !ifNotExists) {
@@ -260,10 +310,105 @@ public class GlueCatalog extends AbstractCatalog {
     @Override
     public void dropDatabase(String databaseName, boolean ignoreIfNotExists, boolean cascade)
             throws DatabaseNotExistException, DatabaseNotEmptyException, CatalogException {
-        if (databaseExists(databaseName)) {
-            glueDatabaseOperations.dropGlueDatabase(databaseName);
-        } else if (!ignoreIfNotExists) {
-            throw new DatabaseNotExistException(getName(), databaseName);
+        Preconditions.checkArgument(
+                !StringUtils.isNullOrWhitespaceOnly(databaseName),
+                "databaseName cannot be null or empty");
+
+        if (!databaseExists(databaseName)) {
+            if (!ignoreIfNotExists) {
+                throw new DatabaseNotExistException(getName(), databaseName);
+            }
+            return; // Database doesn't exist and ignoreIfNotExists is true
+        }
+
+        // Check if database is empty (contains no tables, views, or functions)
+        boolean isEmpty = isDatabaseEmpty(databaseName);
+
+        if (!isEmpty && !cascade) {
+            throw new DatabaseNotEmptyException(getName(), databaseName);
+        }
+
+        if (!isEmpty && cascade) {
+            // Drop all objects in the database before dropping the database
+            dropAllObjectsInDatabase(databaseName);
+        }
+
+        // Drop the database
+        glueDatabaseOperations.dropGlueDatabase(databaseName);
+    }
+
+    /**
+     * Checks if a database is empty (contains no tables, views, or functions).
+     *
+     * @param databaseName the name of the database to check
+     * @return true if the database is empty, false otherwise
+     * @throws CatalogException if an error occurs while checking the database contents
+     */
+    private boolean isDatabaseEmpty(String databaseName) throws CatalogException {
+        try {
+            // Check for tables
+            List<String> tables = listTables(databaseName);
+            if (!tables.isEmpty()) {
+                return false;
+            }
+
+            // Check for views
+            List<String> views = listViews(databaseName);
+            if (!views.isEmpty()) {
+                return false;
+            }
+
+            // Check for functions
+            List<String> functions = listFunctions(databaseName);
+            if (!functions.isEmpty()) {
+                return false;
+            }
+
+            return true;
+        } catch (DatabaseNotExistException e) {
+            // This shouldn't happen since we checked existence earlier, but handle it gracefully
+            throw new CatalogException("Database " + databaseName + " does not exist", e);
+        }
+    }
+
+    /**
+     * Drops all objects (tables, views, functions) in a database.
+     * This is used when cascade=true in dropDatabase.
+     *
+     * @param databaseName the name of the database
+     * @throws CatalogException if an error occurs while dropping objects
+     */
+    private void dropAllObjectsInDatabase(String databaseName) throws CatalogException {
+        try {
+            // Drop all tables
+            List<String> tables = listTables(databaseName);
+            for (String tableName : tables) {
+                ObjectPath tablePath = new ObjectPath(databaseName, tableName);
+                dropTable(tablePath, true); // Use ifExists=true to avoid exceptions
+            }
+
+            // Drop all views (views are also stored as tables in Glue, so they should be handled by dropTable above)
+            // But let's be explicit and handle them separately if needed
+            List<String> views = listViews(databaseName);
+            for (String viewName : views) {
+                ObjectPath viewPath = new ObjectPath(databaseName, viewName);
+                // Views are handled as tables in Glue, so dropTable should work
+                dropTable(viewPath, true);
+            }
+
+            // Drop all functions
+            List<String> functions = listFunctions(databaseName);
+            for (String functionName : functions) {
+                ObjectPath functionPath = new ObjectPath(databaseName, functionName);
+                dropFunction(functionPath, true); // Use ignoreIfNotExists=true to avoid exceptions
+            }
+
+            LOG.info("Successfully dropped all objects in database: {}", databaseName);
+        } catch (DatabaseNotExistException e) {
+            throw new CatalogException("Database " + databaseName + " does not exist", e);
+        } catch (TableNotExistException | FunctionNotExistException e) {
+            // This could happen in concurrent scenarios, but we use ifExists/ignoreIfNotExists flags
+            LOG.warn("Object was already deleted while cascading drop for database: {}", databaseName, e);
         }
     }
 
@@ -277,10 +422,11 @@ public class GlueCatalog extends AbstractCatalog {
      */
     @Override
     public List<String> listTables(String databaseName) throws DatabaseNotExistException, CatalogException {
-        if (!databaseExists(databaseName)) {
-            throw new DatabaseNotExistException(getName(), databaseName);
-        }
+        Preconditions.checkArgument(
+                !StringUtils.isNullOrWhitespaceOnly(databaseName),
+                "databaseName cannot be null or empty");
 
+        validateDatabaseExists(databaseName);
         return glueTableOperations.listTables(databaseName);
     }
 
@@ -346,6 +492,7 @@ public class GlueCatalog extends AbstractCatalog {
      * @param objectPath       the object path of the table to create
      * @param catalogBaseTable the table definition containing the schema and properties
      * @param ifNotExists      flag indicating whether to ignore the exception if the table already exists
+     * @throws NullPointerException       if objectPath or catalogBaseTable is null
      * @throws TableAlreadyExistException if the table already exists and ifNotExists is false
      * @throws DatabaseNotExistException  if the database does not exist
      * @throws CatalogException           if an error occurs while creating the table
@@ -355,21 +502,14 @@ public class GlueCatalog extends AbstractCatalog {
             throws TableAlreadyExistException, DatabaseNotExistException, CatalogException {
 
         // Validate that required parameters are not null
-        if (objectPath == null) {
-            throw new NullPointerException("ObjectPath cannot be null");
-        }
-
-        if (catalogBaseTable == null) {
-            throw new NullPointerException("CatalogBaseTable cannot be null");
-        }
+        Preconditions.checkNotNull(objectPath, "ObjectPath cannot be null");
+        Preconditions.checkNotNull(catalogBaseTable, "CatalogBaseTable cannot be null");
 
         String databaseName = objectPath.getDatabaseName();
         String tableName = objectPath.getObjectName();
 
         // Check if the database exists
-        if (!databaseExists(databaseName)) {
-            throw new DatabaseNotExistException(getName(), databaseName);
-        }
+        validateDatabaseExists(databaseName);
 
         // Check if the table already exists
         if (glueTableOperations.glueTableExists(databaseName, tableName)) {
@@ -408,11 +548,12 @@ public class GlueCatalog extends AbstractCatalog {
      */
     @Override
     public List<String> listViews(String databaseName) throws DatabaseNotExistException, CatalogException {
+        Preconditions.checkArgument(
+                !StringUtils.isNullOrWhitespaceOnly(databaseName),
+                "databaseName cannot be null or empty");
 
         // Check if the database exists before listing views
-        if (!databaseExists(databaseName)) {
-            throw new DatabaseNotExistException(getName(), databaseName);
-        }
+        validateDatabaseExists(databaseName);
 
         try {
             // Get all tables in the database
@@ -497,11 +638,10 @@ public class GlueCatalog extends AbstractCatalog {
      *
      * @param path the object path to normalize
      * @return the normalized object path
+     * @throws NullPointerException if path is null
      */
-    public ObjectPath normalize(ObjectPath path) {
-        if (path == null) {
-            throw new NullPointerException("ObjectPath cannot be null");
-        }
+    private ObjectPath normalize(ObjectPath path) {
+        Preconditions.checkNotNull(path, "ObjectPath cannot be null");
 
         return new ObjectPath(
                 path.getDatabaseName(),
@@ -518,9 +658,11 @@ public class GlueCatalog extends AbstractCatalog {
      */
     @Override
     public List<String> listFunctions(String databaseName) throws DatabaseNotExistException, CatalogException {
-        if (!databaseExists(databaseName)) {
-            throw new DatabaseNotExistException(getName(), databaseName);
-        }
+        Preconditions.checkArgument(
+                !StringUtils.isNullOrWhitespaceOnly(databaseName),
+                "databaseName cannot be null or empty");
+
+        validateDatabaseExists(databaseName);
 
         try {
             List<String> functions = glueFunctionsOperations.listGlueFunctions(databaseName);
@@ -542,7 +684,6 @@ public class GlueCatalog extends AbstractCatalog {
      */
     @Override
     public CatalogFunction getFunction(ObjectPath functionPath) throws FunctionNotExistException, CatalogException {
-
         // Normalize the path for case-insensitive handling
         ObjectPath normalizedPath = normalize(functionPath);
 
@@ -550,10 +691,14 @@ public class GlueCatalog extends AbstractCatalog {
             throw new CatalogException(getName());
         }
 
+        boolean exists = functionExists(normalizedPath);
+
+        if (!exists) {
+            throw new FunctionNotExistException(getName(), normalizedPath);
+        }
+
         try {
             return glueFunctionsOperations.getGlueFunction(normalizedPath);
-        } catch (FunctionNotExistException e) {
-            throw e;
         } catch (CatalogException e) {
             throw new CatalogException(
                     String.format("Failed to get function %s", normalizedPath.getFullName()), e);
@@ -569,7 +714,6 @@ public class GlueCatalog extends AbstractCatalog {
      */
     @Override
     public boolean functionExists(ObjectPath functionPath) throws CatalogException {
-
         // Normalize the path for case-insensitive handling
         ObjectPath normalizedPath = normalize(functionPath);
 
@@ -602,9 +746,7 @@ public class GlueCatalog extends AbstractCatalog {
         // Normalize the path for case-insensitive handling
         ObjectPath normalizedPath = normalize(functionPath);
 
-        if (!databaseExists(normalizedPath.getDatabaseName())) {
-            throw new DatabaseNotExistException(getName(), normalizedPath.getDatabaseName());
-        }
+        validateDatabaseExists(normalizedPath.getDatabaseName());
 
         boolean exists = functionExists(normalizedPath);
 
@@ -616,8 +758,6 @@ public class GlueCatalog extends AbstractCatalog {
 
         try {
             glueFunctionsOperations.createGlueFunction(normalizedPath, function);
-        } catch (FunctionAlreadyExistException e) {
-            throw e;
         } catch (CatalogException e) {
             throw new CatalogException(
                     String.format("Failed to create function %s", normalizedPath.getFullName()), e);
@@ -640,18 +780,18 @@ public class GlueCatalog extends AbstractCatalog {
         // Normalize the path for case-insensitive handling
         ObjectPath normalizedPath = normalize(functionPath);
 
-        try {
-            // Check if function exists without throwing an exception first
-            boolean functionExists = functionExists(normalizedPath);
+        // Check if function exists without throwing an exception first
+        boolean functionExists = functionExists(normalizedPath);
 
-            if (!functionExists) {
-                if (ignoreIfNotExists) {
-                    return;
-                } else {
-                    throw new FunctionNotExistException(getName(), normalizedPath);
-                }
+        if (!functionExists) {
+            if (ignoreIfNotExists) {
+                return;
+            } else {
+                throw new FunctionNotExistException(getName(), normalizedPath);
             }
+        }
 
+        try {
             // Check for type compatibility of function
             CatalogFunction existingFunction = getFunction(normalizedPath);
             if (existingFunction.getClass() != newFunction.getClass()) {
@@ -664,11 +804,6 @@ public class GlueCatalog extends AbstractCatalog {
 
             // Proceed with alteration
             glueFunctionsOperations.alterGlueFunction(normalizedPath, newFunction);
-        } catch (FunctionNotExistException e) {
-            if (ignoreIfNotExists) {
-            } else {
-                throw e;
-            }
         } catch (CatalogException e) {
             throw new CatalogException(
                     String.format("Failed to alter function %s", normalizedPath.getFullName()), e);
@@ -697,22 +832,19 @@ public class GlueCatalog extends AbstractCatalog {
             throw new FunctionNotExistException(getName(), normalizedPath);
         }
 
-        try {
-            boolean exists = functionExists(normalizedPath);
-            if (!exists) {
-                if (ignoreIfNotExists) {
-                    return;
-                } else {
-                    throw new FunctionNotExistException(getName(), normalizedPath);
-                }
-            }
+        boolean exists = functionExists(normalizedPath);
 
+        if (!exists) {
+            if (ignoreIfNotExists) {
+                return;
+            } else {
+                throw new FunctionNotExistException(getName(), normalizedPath);
+            }
+        }
+
+        try {
             // Function exists, proceed with dropping it
             glueFunctionsOperations.dropGlueFunction(normalizedPath);
-        } catch (FunctionNotExistException e) {
-            if (!ignoreIfNotExists) {
-                throw e;
-            }
         } catch (CatalogException e) {
             throw new CatalogException(
                     String.format("Failed to drop function %s", normalizedPath.getFullName()), e);
@@ -885,9 +1017,13 @@ public class GlueCatalog extends AbstractCatalog {
 
         StorageDescriptor storageDescriptor = glueTableUtils.buildStorageDescriptor(tableProperties, glueColumns, tableLocation);
 
+        // Pass original table name to preserve case
         TableInput tableInput = glueTableOperations.buildTableInput(tableName, glueColumns, catalogTable, storageDescriptor, tableProperties);
 
-        glueTableOperations.createTable(databaseName, tableInput);
+        // Use Glue storage name for database (for now, assume it's already converted)
+        // TODO: This will be updated when we integrate with database name conversion
+        String glueDatabaseName = databaseName.toLowerCase();
+        glueTableOperations.createTable(glueDatabaseName, tableInput);
     }
 
     /**
@@ -918,18 +1054,32 @@ public class GlueCatalog extends AbstractCatalog {
                 .columns(glueColumns)
                 .build();
 
+        // Store lowercase name in Glue (Glue requirement) but preserve original in metadata
+        String glueTableName = tableName.toLowerCase();
+
+        // Prepare view properties with original name preservation
+        Map<String, String> enhancedProperties = new HashMap<>();
+        if (tableProperties != null) {
+            enhancedProperties.putAll(tableProperties);
+        }
+
+        // Store original table name in metadata
+        enhancedProperties.put(GlueCatalogConstants.ORIGINAL_TABLE_NAME, tableName);
+
         // Create view-specific TableInput
         TableInput viewInput = TableInput.builder()
-                .name(tableName)
+                .name(glueTableName)
                 .tableType(CatalogBaseTable.TableKind.VIEW.name())
                 .viewOriginalText(catalogView.getOriginalQuery())
                 .viewExpandedText(catalogView.getExpandedQuery())
                 .storageDescriptor(storageDescriptor)
-                .parameters(tableProperties)
+                .parameters(enhancedProperties)
                 .description(catalogView.getComment())
                 .build();
 
-        // Create the view
-        glueTableOperations.createTable(databaseName, viewInput);
+        // Use Glue storage name for database (for now, assume it's already converted)
+        // TODO: This will be updated when we integrate with database name conversion
+        String glueDatabaseName = databaseName.toLowerCase();
+        glueTableOperations.createTable(glueDatabaseName, viewInput);
     }
 }

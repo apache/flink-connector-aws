@@ -42,14 +42,18 @@ class GlueDatabaseOperationsTest {
     }
 
     @Test
-    void testCreateDatabaseWithUppercaseLetters() {
+    void testCreateDatabaseWithUppercaseLetters() throws DatabaseAlreadyExistException, DatabaseNotExistException {
         CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test");
-        CatalogException exception = Assertions.assertThrows(
-                CatalogException.class,
-                () -> glueDatabaseOperations.createDatabase("DB1", catalogDatabase));
-        Assertions.assertTrue(
-                exception.getMessage().contains("lowercase letters"),
-                "Exception message should mention lowercase letters");
+        // Uppercase letters should now be accepted with case preservation
+        Assertions.assertDoesNotThrow(() -> glueDatabaseOperations.createDatabase("TestDB", catalogDatabase));
+
+        // Verify database was created and exists
+        Assertions.assertTrue(glueDatabaseOperations.glueDatabaseExists("TestDB"));
+
+        // Verify the database can be retrieved
+        CatalogDatabase retrieved = glueDatabaseOperations.getDatabase("TestDB");
+        Assertions.assertNotNull(retrieved);
+        Assertions.assertEquals("test", retrieved.getDescription().orElse(null));
     }
 
     @Test
@@ -59,8 +63,8 @@ class GlueDatabaseOperationsTest {
                 CatalogException.class,
                 () -> glueDatabaseOperations.createDatabase("db-1", catalogDatabase));
         Assertions.assertTrue(
-                exception.getMessage().contains("lowercase letters"),
-                "Exception message should mention lowercase letters");
+                exception.getMessage().contains("letters, numbers, and underscores"),
+                "Exception message should mention allowed characters");
     }
 
     @Test
@@ -70,8 +74,8 @@ class GlueDatabaseOperationsTest {
                 CatalogException.class,
                 () -> glueDatabaseOperations.createDatabase("db.1", catalogDatabase));
         Assertions.assertTrue(
-                exception.getMessage().contains("lowercase letters"),
-                "Exception message should mention lowercase letters");
+                exception.getMessage().contains("letters, numbers, and underscores"),
+                "Exception message should mention allowed characters");
     }
 
     @Test
@@ -223,41 +227,45 @@ class GlueDatabaseOperationsTest {
     void testGlueDatabaseExistsInvalidInput() {
         fakeGlueClient.setNextException(
                 InvalidInputException.builder().message("Invalid database name").build());
-        Assertions.assertThrows(
-                CatalogException.class, () -> glueDatabaseOperations.glueDatabaseExists("db1"));
+        // exists() methods should return false on errors, not throw exceptions
+        Assertions.assertFalse(glueDatabaseOperations.glueDatabaseExists("db1"));
     }
 
     @Test
     void testGlueDatabaseExistsTimeout() {
         fakeGlueClient.setNextException(
                 OperationTimeoutException.builder().message("Operation timed out").build());
-        Assertions.assertThrows(
-                CatalogException.class, () -> glueDatabaseOperations.glueDatabaseExists("db1"));
+        // exists() methods should return false on errors, not throw exceptions
+        Assertions.assertFalse(glueDatabaseOperations.glueDatabaseExists("db1"));
     }
 
     @Test
     void testCaseSensitivityInDatabaseOperations() throws Exception {
         CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test_database");
-        // Create a database with lowercase name
-        String lowerCaseName = "testdb";
+
+        // Test creating databases with different cases - use unique names to avoid conflicts
+        String lowerCaseName = "testdb_case_lower";
+        String mixedCaseName = "TestDB_Case_Mixed";
+
+        // Create database with lowercase name
         glueDatabaseOperations.createDatabase(lowerCaseName, catalogDatabase);
-        // Verify the database exists
         Assertions.assertTrue(glueDatabaseOperations.glueDatabaseExists(lowerCaseName));
-        // Test retrieval with the same name
-        CatalogDatabase retrievedDb = glueDatabaseOperations.getDatabase(lowerCaseName);
-        Assertions.assertEquals("test_database", retrievedDb.getDescription().orElse(null));
-        // Try to access with different case variations
-        Assertions.assertFalse(glueDatabaseOperations.glueDatabaseExists("TestDB"),
-                "AWS Glue is case-sensitive for database operations despite lowercasing identifiers internally");
-        Assertions.assertFalse(glueDatabaseOperations.glueDatabaseExists("TESTDB"),
-                "AWS Glue is case-sensitive for database operations despite lowercasing identifiers internally");
-        // This simulates what would happen with SHOW DATABASES
+
+        // Create database with mixed case name - should be allowed now with case preservation
+        CatalogDatabase catalogDatabase2 = new CatalogDatabaseImpl(Collections.emptyMap(), "mixed_case_database");
+        Assertions.assertDoesNotThrow(() -> glueDatabaseOperations.createDatabase(mixedCaseName, catalogDatabase2));
+        Assertions.assertTrue(glueDatabaseOperations.glueDatabaseExists(mixedCaseName));
+
+        // Verify both databases exist and can be retrieved
+        CatalogDatabase retrievedLower = glueDatabaseOperations.getDatabase(lowerCaseName);
+        Assertions.assertEquals("test_database", retrievedLower.getDescription().orElse(null));
+
+        CatalogDatabase retrievedMixed = glueDatabaseOperations.getDatabase(mixedCaseName);
+        Assertions.assertEquals("mixed_case_database", retrievedMixed.getDescription().orElse(null));
+
+        // List databases should show both with original case preserved
         List<String> databases = glueDatabaseOperations.listDatabases();
-        Assertions.assertTrue(databases.contains(lowerCaseName), "Database should appear in the list with original case");
-        // Ensure we can't create another database with the same name but different case
-        String upperCaseName = "TESTDB";
-        Assertions.assertThrows(CatalogException.class,
-                () -> glueDatabaseOperations.createDatabase(upperCaseName, catalogDatabase),
-                "Should reject uppercase database names");
+        Assertions.assertTrue(databases.contains(lowerCaseName), "Lowercase database should appear in list");
+        Assertions.assertTrue(databases.contains(mixedCaseName), "Mixed-case database should appear with original case");
     }
 }

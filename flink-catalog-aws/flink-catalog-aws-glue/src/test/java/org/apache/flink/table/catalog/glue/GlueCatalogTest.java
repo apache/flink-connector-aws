@@ -43,7 +43,6 @@ import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.flink.table.catalog.glue.operator.FakeGlueClient;
 import org.apache.flink.table.catalog.glue.operator.GlueDatabaseOperator;
 import org.apache.flink.table.catalog.glue.operator.GlueTableOperator;
-import org.apache.flink.table.functions.FunctionIdentifier;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -214,6 +213,164 @@ public class GlueCatalogTest {
         assertThatThrownBy(() -> {
             glueCatalog.dropDatabase("nonexistingdatabase", false, false);
         }).isInstanceOf(DatabaseNotExistException.class);
+    }
+
+    /**
+     * Test drop non-empty database with cascade=false should throw DatabaseNotEmptyException.
+     */
+    @Test
+    public void testDropNonEmptyDatabaseWithoutCascade() throws DatabaseAlreadyExistException, TableAlreadyExistException, DatabaseNotExistException {
+        // Arrange
+        String databaseName = "testdatabase";
+        String tableName = "testtable";
+
+        // Create database
+        CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test");
+        glueCatalog.createDatabase(databaseName, catalogDatabase, false);
+
+        // Create table in database
+        CatalogTable catalogTable = CatalogTable.of(
+                Schema.newBuilder().build(),
+                "test table",
+                Collections.emptyList(),
+                Collections.emptyMap());
+        ResolvedSchema resolvedSchema = ResolvedSchema.of();
+        ResolvedCatalogTable resolvedCatalogTable = new ResolvedCatalogTable(catalogTable, resolvedSchema);
+        glueCatalog.createTable(new ObjectPath(databaseName, tableName), resolvedCatalogTable, false);
+
+        // Act & Assert - should throw DatabaseNotEmptyException with cascade=false
+        assertThatThrownBy(() -> {
+            glueCatalog.dropDatabase(databaseName, false, false);
+        }).isInstanceOf(DatabaseNotEmptyException.class);
+
+        // Verify database and table still exist
+        assertThat(glueCatalog.databaseExists(databaseName)).isTrue();
+        assertThat(glueCatalog.tableExists(new ObjectPath(databaseName, tableName))).isTrue();
+    }
+
+    /**
+     * Test drop non-empty database with cascade=true should succeed and delete all objects.
+     */
+    @Test
+    public void testDropNonEmptyDatabaseWithCascade() throws DatabaseAlreadyExistException, TableAlreadyExistException,
+            DatabaseNotExistException, DatabaseNotEmptyException, FunctionAlreadyExistException {
+        // Arrange
+        String databaseName = "testdatabase";
+        String tableName = "testtable";
+        String viewName = "testview";
+        String functionName = "testfunction";
+
+        // Create database
+        CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test");
+        glueCatalog.createDatabase(databaseName, catalogDatabase, false);
+
+        // Create table in database
+        CatalogTable catalogTable = CatalogTable.of(
+                Schema.newBuilder().build(),
+                "test table",
+                Collections.emptyList(),
+                Collections.emptyMap());
+        ResolvedSchema resolvedSchema = ResolvedSchema.of();
+        ResolvedCatalogTable resolvedCatalogTable = new ResolvedCatalogTable(catalogTable, resolvedSchema);
+        glueCatalog.createTable(new ObjectPath(databaseName, tableName), resolvedCatalogTable, false);
+
+        // Create view in database
+        CatalogView catalogView = CatalogView.of(
+                Schema.newBuilder().build(),
+                "test view",
+                "SELECT * FROM " + tableName,
+                "SELECT * FROM " + tableName,
+                Collections.emptyMap());
+        ResolvedCatalogView resolvedCatalogView = new ResolvedCatalogView(catalogView, resolvedSchema);
+        glueCatalog.createTable(new ObjectPath(databaseName, viewName), resolvedCatalogView, false);
+
+        // Create function in database
+        CatalogFunction catalogFunction = new CatalogFunctionImpl("com.example.TestFunction", FunctionLanguage.JAVA);
+        glueCatalog.createFunction(new ObjectPath(databaseName, functionName), catalogFunction, false);
+
+        // Verify objects exist before cascade drop
+        assertThat(glueCatalog.databaseExists(databaseName)).isTrue();
+        assertThat(glueCatalog.tableExists(new ObjectPath(databaseName, tableName))).isTrue();
+        assertThat(glueCatalog.tableExists(new ObjectPath(databaseName, viewName))).isTrue();
+        assertThat(glueCatalog.functionExists(new ObjectPath(databaseName, functionName))).isTrue();
+
+        // Act - drop database with cascade=true
+        glueCatalog.dropDatabase(databaseName, false, true);
+
+        // Assert - database and all objects should be gone
+        assertThat(glueCatalog.databaseExists(databaseName)).isFalse();
+    }
+
+    /**
+     * Test drop empty database with cascade=false should succeed.
+     */
+    @Test
+    public void testDropEmptyDatabaseWithoutCascade() throws DatabaseAlreadyExistException, DatabaseNotExistException, DatabaseNotEmptyException {
+        // Arrange
+        String databaseName = "testdatabase";
+        CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test");
+        glueCatalog.createDatabase(databaseName, catalogDatabase, false);
+
+        // Act - drop empty database with cascade=false
+        glueCatalog.dropDatabase(databaseName, false, false);
+
+        // Assert
+        assertThat(glueCatalog.databaseExists(databaseName)).isFalse();
+    }
+
+    /**
+     * Test drop empty database with cascade=true should succeed.
+     */
+    @Test
+    public void testDropEmptyDatabaseWithCascade() throws DatabaseAlreadyExistException, DatabaseNotExistException, DatabaseNotEmptyException {
+        // Arrange
+        String databaseName = "testdatabase";
+        CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test");
+        glueCatalog.createDatabase(databaseName, catalogDatabase, false);
+
+        // Act - drop empty database with cascade=true
+        glueCatalog.dropDatabase(databaseName, false, true);
+
+        // Assert
+        assertThat(glueCatalog.databaseExists(databaseName)).isFalse();
+    }
+
+    /**
+     * Test cascade drop with only tables (no views or functions).
+     */
+    @Test
+    public void testDropDatabaseCascadeWithTablesOnly() throws DatabaseAlreadyExistException, TableAlreadyExistException,
+            DatabaseNotExistException, DatabaseNotEmptyException {
+        // Arrange
+        String databaseName = "testdatabase";
+        String tableName1 = "testtable1";
+        String tableName2 = "testtable2";
+
+        // Create database
+        CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test");
+        glueCatalog.createDatabase(databaseName, catalogDatabase, false);
+
+        // Create multiple tables
+        CatalogTable catalogTable = CatalogTable.of(
+                Schema.newBuilder().build(),
+                "test table",
+                Collections.emptyList(),
+                Collections.emptyMap());
+        ResolvedSchema resolvedSchema = ResolvedSchema.of();
+        ResolvedCatalogTable resolvedCatalogTable = new ResolvedCatalogTable(catalogTable, resolvedSchema);
+
+        glueCatalog.createTable(new ObjectPath(databaseName, tableName1), resolvedCatalogTable, false);
+        glueCatalog.createTable(new ObjectPath(databaseName, tableName2), resolvedCatalogTable, false);
+
+        // Verify tables exist
+        assertThat(glueCatalog.tableExists(new ObjectPath(databaseName, tableName1))).isTrue();
+        assertThat(glueCatalog.tableExists(new ObjectPath(databaseName, tableName2))).isTrue();
+
+        // Act - drop database with cascade
+        glueCatalog.dropDatabase(databaseName, false, true);
+
+        // Assert
+        assertThat(glueCatalog.databaseExists(databaseName)).isFalse();
     }
 
     //-------------------------------------------------------------------------
@@ -461,22 +618,6 @@ public class GlueCatalogTest {
     //-------------------------------------------------------------------------
 
     /**
-     * Test name normalization.
-     */
-    @Test
-    public void testNormalize() {
-        // Arrange
-        ObjectPath originalPath = new ObjectPath("testDb", "TestFunction");
-
-        // Act
-        ObjectPath normalizedPath = glueCatalog.normalize(originalPath);
-
-        // Assert
-        assertThat(normalizedPath.getDatabaseName()).isEqualTo("testDb");
-        assertThat(FunctionIdentifier.normalizeName("TestFunction")).isEqualTo(normalizedPath.getObjectName());
-    }
-
-    /**
      * Test function operations.
      */
     @Test
@@ -685,10 +826,6 @@ public class GlueCatalogTest {
 
         assertThatThrownBy(() -> {
             glueCatalog.createTable(new ObjectPath("db", "table"), null, false);
-        }).isInstanceOf(NullPointerException.class);
-
-        assertThatThrownBy(() -> {
-            glueCatalog.normalize(null);
         }).isInstanceOf(NullPointerException.class);
     }
 
