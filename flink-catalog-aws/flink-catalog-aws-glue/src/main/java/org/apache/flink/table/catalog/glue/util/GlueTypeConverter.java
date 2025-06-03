@@ -282,16 +282,22 @@ public class GlueTypeConverter {
         List<String> fields = new ArrayList<>();
         StringBuilder currentField = new StringBuilder();
         int nestedLevel = 0;
+        int parenLevel = 0;
 
-        // Parse the struct fields while handling nested angle brackets.
+        // Parse the struct fields while handling nested angle brackets and parentheses.
         for (char c : structDefinition.toCharArray()) {
             if (c == '<') {
                 nestedLevel++;
             } else if (c == '>') {
                 nestedLevel--;
+            } else if (c == '(') {
+                parenLevel++;
+            } else if (c == ')') {
+                parenLevel--;
             }
 
-            if (c == ',' && nestedLevel == 0) {
+            // Only split on comma if we're not inside any nested structure (angles or parens)
+            if (c == ',' && nestedLevel == 0 && parenLevel == 0) {
                 fields.add(currentField.toString().trim());
                 currentField = new StringBuilder();
             } else {

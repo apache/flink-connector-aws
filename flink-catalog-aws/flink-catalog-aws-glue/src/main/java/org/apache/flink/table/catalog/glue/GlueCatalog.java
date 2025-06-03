@@ -427,7 +427,14 @@ public class GlueCatalog extends AbstractCatalog {
                 "databaseName cannot be null or empty");
 
         validateDatabaseExists(databaseName);
-        return glueTableOperations.listTables(databaseName);
+
+        // Use the proper database name resolution
+        String glueDatabaseName = findGlueDatabaseName(databaseName);
+        if (glueDatabaseName == null) {
+            throw new DatabaseNotExistException(getName(), databaseName);
+        }
+
+        return glueTableOperations.listTables(glueDatabaseName);
     }
 
     /**
@@ -440,10 +447,17 @@ public class GlueCatalog extends AbstractCatalog {
      */
     @Override
     public CatalogBaseTable getTable(ObjectPath objectPath) throws TableNotExistException, CatalogException {
-        String databaseName = objectPath.getDatabaseName();
-        String tableName = objectPath.getObjectName();
+        String originalDatabaseName = objectPath.getDatabaseName();
+        String originalTableName = objectPath.getObjectName();
 
-        Table glueTable = glueTableOperations.getGlueTable(databaseName, tableName);
+        // Convert to Glue storage names - Use proper database resolution
+        String glueDatabaseName = findGlueDatabaseName(originalDatabaseName);
+        if (glueDatabaseName == null) {
+            throw new TableNotExistException(getName(), objectPath);
+        }
+        String glueTableName = originalTableName.toLowerCase();
+
+        Table glueTable = glueTableOperations.getGlueTable(glueDatabaseName, glueTableName);
         return getCatalogBaseTableFromGlueTable(glueTable);
     }
 
@@ -456,11 +470,17 @@ public class GlueCatalog extends AbstractCatalog {
      */
     @Override
     public boolean tableExists(ObjectPath objectPath) throws CatalogException {
-        String databaseName = objectPath.getDatabaseName();
-        String tableName = objectPath.getObjectName();
+        String originalDatabaseName = objectPath.getDatabaseName();
+        String originalTableName = objectPath.getObjectName();
 
-        // Delegate existence check to GlueTableOperations
-        return glueTableOperations.glueTableExists(databaseName, tableName);
+        // Convert to Glue storage names - Use proper database resolution
+        String glueDatabaseName = findGlueDatabaseName(originalDatabaseName);
+        if (glueDatabaseName == null) {
+            return false; // Database doesn't exist, so table can't exist
+        }
+        String glueTableName = originalTableName.toLowerCase();
+
+        return glueTableOperations.glueTableExists(glueDatabaseName, glueTableName);
     }
 
     /**
@@ -473,17 +493,27 @@ public class GlueCatalog extends AbstractCatalog {
      */
     @Override
     public void dropTable(ObjectPath objectPath, boolean ifExists) throws TableNotExistException, CatalogException {
-        String databaseName = objectPath.getDatabaseName();
-        String tableName = objectPath.getObjectName();
+        String originalDatabaseName = objectPath.getDatabaseName();
+        String originalTableName = objectPath.getObjectName();
 
-        if (!glueTableOperations.glueTableExists(databaseName, tableName)) {
+        // Convert to Glue storage names - Use proper database resolution
+        String glueDatabaseName = findGlueDatabaseName(originalDatabaseName);
+        if (glueDatabaseName == null) {
+            if (!ifExists) {
+                throw new TableNotExistException(getName(), objectPath);
+            }
+            return; // Database doesn't exist, so table can't exist
+        }
+        String glueTableName = originalTableName.toLowerCase();
+
+        if (!glueTableOperations.glueTableExists(glueDatabaseName, glueTableName)) {
             if (!ifExists) {
                 throw new TableNotExistException(getName(), objectPath);
             }
             return; // Table doesn't exist, and IF EXISTS is true
         }
 
-        glueTableOperations.dropTable(databaseName, tableName);
+        glueTableOperations.dropTable(glueDatabaseName, glueTableName);
     }
 
     /**
@@ -505,14 +535,14 @@ public class GlueCatalog extends AbstractCatalog {
         Preconditions.checkNotNull(objectPath, "ObjectPath cannot be null");
         Preconditions.checkNotNull(catalogBaseTable, "CatalogBaseTable cannot be null");
 
-        String databaseName = objectPath.getDatabaseName();
-        String tableName = objectPath.getObjectName();
+        String originalDatabaseName = objectPath.getDatabaseName();
+        String originalTableName = objectPath.getObjectName();
 
         // Check if the database exists
-        validateDatabaseExists(databaseName);
+        validateDatabaseExists(originalDatabaseName);
 
         // Check if the table already exists
-        if (glueTableOperations.glueTableExists(databaseName, tableName)) {
+        if (tableExists(objectPath)) {
             if (!ifNotExists) {
                 throw new TableAlreadyExistException(getName(), objectPath);
             }
@@ -531,10 +561,10 @@ public class GlueCatalog extends AbstractCatalog {
             } else {
                 throw new CatalogException("Unsupported table kind: " + catalogBaseTable.getTableKind());
             }
-            LOG.info("Successfully created {}.{} of kind {}", databaseName, tableName, catalogBaseTable.getTableKind());
+            LOG.info("Successfully created {}.{} of kind {}", originalDatabaseName, originalTableName, catalogBaseTable.getTableKind());
         } catch (Exception e) {
             throw new CatalogException(
-                    String.format("Failed to create table %s.%s: %s", databaseName, tableName, e.getMessage()), e);
+                    String.format("Failed to create table %s.%s: %s", originalDatabaseName, originalTableName, e.getMessage()), e);
         }
     }
 
@@ -853,22 +883,22 @@ public class GlueCatalog extends AbstractCatalog {
 
     @Override
     public CatalogTableStatistics getTableStatistics(ObjectPath objectPath) throws TableNotExistException, CatalogException {
-        throw new UnsupportedOperationException("Table statistics are not supported by the Glue Catalog.");
+        return CatalogTableStatistics.UNKNOWN;
     }
 
     @Override
     public CatalogColumnStatistics getTableColumnStatistics(ObjectPath objectPath) throws TableNotExistException, CatalogException {
-        throw new UnsupportedOperationException("Table column statistics are not supported by the Glue Catalog.");
+        return CatalogColumnStatistics.UNKNOWN;
     }
 
     @Override
     public CatalogTableStatistics getPartitionStatistics(ObjectPath objectPath, CatalogPartitionSpec catalogPartitionSpec) throws PartitionNotExistException, CatalogException {
-        throw new UnsupportedOperationException("Partition statistics are not supported by the Glue Catalog.");
+        return CatalogTableStatistics.UNKNOWN;
     }
 
     @Override
     public CatalogColumnStatistics getPartitionColumnStatistics(ObjectPath objectPath, CatalogPartitionSpec catalogPartitionSpec) throws PartitionNotExistException, CatalogException {
-        throw new UnsupportedOperationException("Partition column statistics are not supported by the Glue Catalog.");
+        return CatalogColumnStatistics.UNKNOWN;
     }
 
     @Override
@@ -1020,9 +1050,11 @@ public class GlueCatalog extends AbstractCatalog {
         // Pass original table name to preserve case
         TableInput tableInput = glueTableOperations.buildTableInput(tableName, glueColumns, catalogTable, storageDescriptor, tableProperties);
 
-        // Use Glue storage name for database (for now, assume it's already converted)
-        // TODO: This will be updated when we integrate with database name conversion
-        String glueDatabaseName = databaseName.toLowerCase();
+        // Use proper database name resolution
+        String glueDatabaseName = findGlueDatabaseName(databaseName);
+        if (glueDatabaseName == null) {
+            throw new CatalogException("Database not found: " + databaseName);
+        }
         glueTableOperations.createTable(glueDatabaseName, tableInput);
     }
 
@@ -1054,17 +1086,8 @@ public class GlueCatalog extends AbstractCatalog {
                 .columns(glueColumns)
                 .build();
 
-        // Store lowercase name in Glue (Glue requirement) but preserve original in metadata
+        // Store lowercase name in Glue (Glue requirement)
         String glueTableName = tableName.toLowerCase();
-
-        // Prepare view properties with original name preservation
-        Map<String, String> enhancedProperties = new HashMap<>();
-        if (tableProperties != null) {
-            enhancedProperties.putAll(tableProperties);
-        }
-
-        // Store original table name in metadata
-        enhancedProperties.put(GlueCatalogConstants.ORIGINAL_TABLE_NAME, tableName);
 
         // Create view-specific TableInput
         TableInput viewInput = TableInput.builder()
@@ -1073,13 +1096,87 @@ public class GlueCatalog extends AbstractCatalog {
                 .viewOriginalText(catalogView.getOriginalQuery())
                 .viewExpandedText(catalogView.getExpandedQuery())
                 .storageDescriptor(storageDescriptor)
-                .parameters(enhancedProperties)
+                .parameters(tableProperties)
                 .description(catalogView.getComment())
                 .build();
 
-        // Use Glue storage name for database (for now, assume it's already converted)
-        // TODO: This will be updated when we integrate with database name conversion
-        String glueDatabaseName = databaseName.toLowerCase();
+        // Use proper database name resolution
+        String glueDatabaseName = findGlueDatabaseName(databaseName);
+        if (glueDatabaseName == null) {
+            throw new CatalogException("Database not found: " + databaseName);
+        }
         glueTableOperations.createTable(glueDatabaseName, viewInput);
+    }
+
+    /**
+     * Finds the Glue storage name for a given original database name.
+     *
+     * @param originalDatabaseName The original database name
+     * @return The Glue storage name if found, null if not found
+     * @throws CatalogException if there's an error searching
+     */
+    private String findGlueDatabaseName(String originalDatabaseName) throws CatalogException {
+        try {
+            // First try the direct lowercase match (most common case)
+            String glueName = originalDatabaseName.toLowerCase();
+            if (directDatabaseExists(glueName)) {
+                // Verify this is actually the right database by checking stored original name
+                try {
+                    software.amazon.awssdk.services.glue.model.Database database = glueClient
+                            .getDatabase(software.amazon.awssdk.services.glue.model.GetDatabaseRequest.builder()
+                                    .name(glueName).build()).database();
+                    if (database != null) {
+                        String storedOriginalName = getOriginalDatabaseName(database);
+                        if (storedOriginalName.equals(originalDatabaseName)) {
+                            return glueName;
+                        }
+                    }
+                } catch (Exception e) {
+                    LOG.warn("Error verifying database original name for: {}", glueName, e);
+                }
+            }
+
+            // If direct match failed, search all databases for original name match
+            List<String> allDatabases = glueDatabaseOperations.listDatabases();
+            for (String dbName : allDatabases) {
+                if (dbName.equals(originalDatabaseName)) {
+                    return dbName.toLowerCase(); // Return the Glue storage name
+                }
+            }
+
+            return null; // Database not found
+        } catch (Exception e) {
+            throw new CatalogException("Error searching for database: " + originalDatabaseName, e);
+        }
+    }
+
+    /**
+     * Extracts the original database name from a Glue database object.
+     * Falls back to the stored name if no original name is found.
+     *
+     * @param database The Glue database object
+     * @return The original database name with case preserved
+     */
+    private String getOriginalDatabaseName(software.amazon.awssdk.services.glue.model.Database database) {
+        if (database.parameters() != null &&
+            database.parameters().containsKey(GlueCatalogConstants.ORIGINAL_DATABASE_NAME)) {
+            return database.parameters().get(GlueCatalogConstants.ORIGINAL_DATABASE_NAME);
+        }
+        // Fallback to stored name for backward compatibility
+        return database.name();
+    }
+
+    /**
+     * Direct check if a database exists in Glue by Glue storage name.
+     */
+    private boolean directDatabaseExists(String glueDatabaseName) {
+        try {
+            glueClient.getDatabase(builder -> builder.name(glueDatabaseName));
+            return true;
+        } catch (software.amazon.awssdk.services.glue.model.EntityNotFoundException e) {
+            return false;
+        } catch (Exception e) {
+            throw new CatalogException("Error checking database existence: " + glueDatabaseName, e);
+        }
     }
 }
