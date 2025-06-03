@@ -249,8 +249,13 @@ public class GlueCatalog extends AbstractCatalog {
                 !StringUtils.isNullOrWhitespaceOnly(databaseName),
                 "databaseName cannot be null or empty");
 
-        validateDatabaseExists(databaseName);
-        return glueDatabaseOperations.getDatabase(databaseName);
+        // Use case-insensitive database name resolution
+        String glueDatabaseName = findGlueDatabaseName(databaseName);
+        if (glueDatabaseName == null) {
+            throw new DatabaseNotExistException(getName(), databaseName);
+        }
+
+        return glueDatabaseOperations.getDatabase(glueDatabaseName);
     }
 
     /**
@@ -266,7 +271,8 @@ public class GlueCatalog extends AbstractCatalog {
                 !StringUtils.isNullOrWhitespaceOnly(databaseName),
                 "databaseName cannot be null or empty");
 
-        return glueDatabaseOperations.glueDatabaseExists(databaseName);
+        // Use case-insensitive database name resolution
+        return findGlueDatabaseName(databaseName) != null;
     }
 
     /**
