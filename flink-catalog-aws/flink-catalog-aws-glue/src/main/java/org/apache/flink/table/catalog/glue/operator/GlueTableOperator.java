@@ -43,6 +43,7 @@ import software.amazon.awssdk.services.glue.model.Table;
 import software.amazon.awssdk.services.glue.model.TableInput;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -250,7 +251,7 @@ public class GlueTableOperator extends GlueOperator {
     /**
      * Converts a Flink catalog table to Glue's TableInput object.
      *
-     * @param tableName The table name (will be converted to lowercase for Glue).
+     * @param tableName The original table name (case will be preserved in metadata).
      * @param glueColumns       The list of columns for the table.
      * @param catalogTable      The Flink CatalogTable containing the table schema.
      * @param storageDescriptor The Glue storage descriptor for the table.
@@ -268,10 +269,19 @@ public class GlueTableOperator extends GlueOperator {
         // Store lowercase name in Glue (Glue requirement)
         String glueTableName = toGlueTableName(tableName);
 
+        // Prepare table parameters with original name preservation
+        Map<String, String> tableParameters = new HashMap<>();
+        if (properties != null) {
+            tableParameters.putAll(properties);
+        }
+
+        // Store original table name in metadata
+        tableParameters.put(GlueCatalogConstants.ORIGINAL_TABLE_NAME, tableName);
+
         return TableInput.builder()
                 .name(glueTableName)
                 .storageDescriptor(storageDescriptor)
-                .parameters(properties)
+                .parameters(tableParameters)
                 .tableType(catalogTable.getTableKind().name())
                 .build();
     }
@@ -285,5 +295,160 @@ public class GlueTableOperator extends GlueOperator {
      */
     private String toGlueTableName(String tableName) {
         return tableName.toLowerCase();
+    }
+
+    /**
+     * Extracts the original table name from a Glue table object.
+     * Falls back to the stored name if no original name is found.
+     *
+     * @param table The Glue table object
+     * @return The original table name with case preserved
+     */
+    public String getOriginalTableName(Table table) {
+        if (table.parameters() != null &&
+            table.parameters().containsKey(GlueCatalogConstants.ORIGINAL_TABLE_NAME)) {
+            return table.parameters().get(GlueCatalogConstants.ORIGINAL_TABLE_NAME);
+        }
+        // Fallback to stored name for backward compatibility
+        return table.name();
+    }
+
+    /**
+     * Finds the Glue storage name for a given original table name.
+     * This method handles case-insensitive lookups while preserving original case.
+     *
+     * @param glueDatabaseName The Glue storage name of the database
+     * @param originalTableName The original table name to find
+     * @return The Glue storage name if found, null if not found
+     * @throws CatalogException if there's an error searching
+     */
+    public String findGlueTableName(String glueDatabaseName, String originalTableName) throws CatalogException {
+        try {
+            // First try the direct lowercase match (most common case)
+            String glueTableName = originalTableName.toLowerCase();
+            if (glueTableExists(glueDatabaseName, glueTableName)) {
+                // Verify this is actually the right table by checking stored original name
+                try {
+                    Table table = getGlueTable(glueDatabaseName, glueTableName);
+                    String storedOriginalName = getOriginalTableName(table);
+                    if (storedOriginalName.equals(originalTableName)) {
+                        return glueTableName;
+                    }
+                } catch (Exception e) {
+                    LOG.warn("Error verifying table original name for: {}.{}", glueDatabaseName, glueTableName, e);
+                }
+            }
+
+            // If direct match failed, search all tables for original name match
+            List<String> allTables = listTables(glueDatabaseName);
+            for (String tableStorageName : allTables) {
+                try {
+                    Table table = getGlueTable(glueDatabaseName, tableStorageName);
+                    String storedOriginalName = getOriginalTableName(table);
+                    if (storedOriginalName.equals(originalTableName)) {
+                        return tableStorageName; // Return the Glue storage name
+                    }
+                } catch (Exception e) {
+                    LOG.warn("Error checking table {} during search", tableStorageName, e);
+                    // Continue searching other tables
+                }
+            }
+
+            return null; // Table not found
+        } catch (Exception e) {
+            throw new CatalogException("Error searching for table: " + glueDatabaseName + "." + originalTableName, e);
+        }
+    }
+
+    /**
+     * Lists all tables in a given database, returning original names.
+     * This is the public version that returns original table names with case preserved.
+     *
+     * @param glueDatabaseName The Glue storage name of the database from which to list tables.
+     * @return A list of original table names with case preserved.
+     * @throws CatalogException if there is an error fetching the table list.
+     */
+    public List<String> listTablesWithOriginalNames(String glueDatabaseName) {
+        try {
+            List<String> originalTableNames = new ArrayList<>();
+            String nextToken = null;
+
+            while (true) {
+                GetTablesRequest.Builder requestBuilder = GetTablesRequest.builder()
+                        .databaseName(glueDatabaseName);
+
+                if (nextToken != null) {
+                    requestBuilder.nextToken(nextToken);
+                }
+
+                GetTablesResponse response = glueClient.getTables(requestBuilder.build());
+
+                // Extract original names from table metadata
+                for (Table table : response.tableList()) {
+                    String originalName = getOriginalTableName(table);
+                    originalTableNames.add(originalName);
+                }
+
+                nextToken = response.nextToken();
+
+                if (nextToken == null) {
+                    break;
+                }
+            }
+
+            return originalTableNames;
+        } catch (GlueException e) {
+            throw new CatalogException("Error listing tables: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Checks whether a table exists by original name.
+     *
+     * @param glueDatabaseName The Glue storage name of the database.
+     * @param originalTableName The original table name to check.
+     * @return true if the table exists, false otherwise.
+     */
+    public boolean tableExistsByOriginalName(String glueDatabaseName, String originalTableName) {
+        try {
+            String glueTableName = findGlueTableName(glueDatabaseName, originalTableName);
+            return glueTableName != null;
+        } catch (CatalogException e) {
+            LOG.warn("Error checking table existence for: {}.{}", glueDatabaseName, originalTableName, e);
+            return false;
+        }
+    }
+
+    /**
+     * Retrieves a table by original name.
+     *
+     * @param glueDatabaseName The Glue storage name of the database.
+     * @param originalTableName The original table name.
+     * @return The Table object containing the table details.
+     * @throws TableNotExistException if the table does not exist.
+     * @throws CatalogException if there is an error fetching the table details.
+     */
+    public Table getTableByOriginalName(String glueDatabaseName, String originalTableName) throws TableNotExistException {
+        String glueTableName = findGlueTableName(glueDatabaseName, originalTableName);
+        if (glueTableName == null) {
+            throw new TableNotExistException(catalogName, new ObjectPath(glueDatabaseName, originalTableName));
+        }
+        return getGlueTable(glueDatabaseName, glueTableName);
+    }
+
+    /**
+     * Drops a table by original name.
+     *
+     * @param glueDatabaseName The Glue storage name of the database.
+     * @param originalTableName The original table name.
+     * @throws TableNotExistException if the table does not exist.
+     * @throws CatalogException if there is an error dropping the table.
+     */
+    public void dropTableByOriginalName(String glueDatabaseName, String originalTableName) throws TableNotExistException {
+        String glueTableName = findGlueTableName(glueDatabaseName, originalTableName);
+        if (glueTableName == null) {
+            throw new TableNotExistException(catalogName, new ObjectPath(glueDatabaseName, originalTableName));
+        }
+        dropTable(glueDatabaseName, glueTableName);
     }
 }

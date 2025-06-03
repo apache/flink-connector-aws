@@ -243,12 +243,13 @@ SHOW FUNCTIONS;
 
 ### Understanding Case Handling
 
-AWS Glue handles case sensitivity in a specific way:
+AWS Glue handles case sensitivity in a specific way, but this Flink connector preserves original case for databases, tables, and columns:
 
-1. **Top-level column names** are automatically lowercased in Glue (e.g., `UserProfile` becomes `userprofile`)
-2. **Nested struct field names** preserve their original case in Glue (e.g., inside a struct, `FirstName` stays as `FirstName`)
+1. **Database and table names** are stored lowercase in Glue but original case is preserved in metadata
+2. **Top-level column names** are automatically lowercased in Glue (e.g., `UserProfile` becomes `userprofile`)
+3. **Nested struct field names** preserve their original case in Glue (e.g., inside a struct, `FirstName` stays as `FirstName`)
 
-However, when writing queries in Flink SQL, you should use the **original column names** as defined in your `CREATE TABLE` statement, not how they are stored in Glue.
+However, when writing queries in Flink SQL, you should use the **original names** as defined in your `CREATE DATABASE` and `CREATE TABLE` statements, regardless of how they are stored in Glue.
 
 ### Example with Nested Fields
 
@@ -329,6 +330,32 @@ The connector handles mapping between Flink data types and AWS Glue data types a
 | ROW        | struct        |
 | ARRAY      | array         |
 | MAP        | map           |
+
+### Complex Type Support
+
+The connector fully supports complex nested types including:
+- **Nested structs** with DECIMAL fields (e.g., `struct<salary:decimal(10,2),bonus:decimal(8,2)>`)
+- **Arrays of complex types** 
+- **Maps with complex value types**
+- **Multiple levels of nesting**
+
+Example of supported complex schema:
+```sql
+CREATE TABLE employee_data (
+  employee_id BIGINT,
+  financial_details ROW<
+    base_salary DECIMAL(10,2),
+    bonus_amount DECIMAL(8,2),
+    total_compensation DECIMAL(12,2),
+    tax_rate DECIMAL(5,4)
+  >,
+  work_info ROW<
+    department STRING,
+    job_title STRING,
+    manager_name STRING
+  >
+);
+```
 
 ## Object Name Case Preservation
 
@@ -413,8 +440,22 @@ SELECT UserId, UserName FROM UserProfiles;
 ### Limitations
 
 1. **Functions**: Case preservation not yet implemented for user-defined functions due to AWS Glue API limitations
-2. **External Tools**: Tools that bypass this connector may only see lowercase names in Glue
-3. **Performance**: Initial lookup may require scanning when direct case match fails (rare)
+2. **External Tools**: Tools that bypass this connector may only see lowercase names in Glue for databases and tables
+3. **Performance**: Initial lookup may require scanning when direct case match fails (rare case)
+
+### Case-Insensitive Behavior
+
+This connector implements **SQL-standard case-insensitive identifier handling**:
+- `MyTable`, `mytable`, and `MYTABLE` all refer to the same table
+- Original case is preserved in metadata and returned in listings
+- Queries work regardless of case variations used
+
+### Collision Detection
+
+To prevent conflicts due to Glue's lowercase storage limitation:
+- Creating `MyTable` when `mytable` exists will result in "Table already exists" error
+- Creating `employee_Data` when `Employee_data` exists will result in "Table already exists" error
+- This ensures SQL-standard behavior where identifiers differing only in case are considered identical
 
 ### Migration from Lowercase-Only
 
@@ -446,10 +487,10 @@ Existing catalogs with lowercase-only names will continue to work seamlessly:
 
 ### Common Issues
 
-1. **"Table not found"**: Verify the table exists in the specified Glue database and catalog.
+1. **"Table not found"**: Verify the table exists in the specified Glue database and catalog. Note that table and database names are case-insensitive.
 2. **Authentication errors**: Check AWS credentials and permissions.
-3. **Case sensitivity errors**: Ensure you're using the original column names as defined in your schema.
-4. **Type conversion errors**: Verify that data types are compatible between Flink and Glue.
+3. **Type conversion errors**: Verify that data types are compatible between Flink and Glue.
+4. **Case sensitivity with columns**: Ensure you're using the original column names as defined in your schema for nested struct fields.
 
 ## Additional Resources
 

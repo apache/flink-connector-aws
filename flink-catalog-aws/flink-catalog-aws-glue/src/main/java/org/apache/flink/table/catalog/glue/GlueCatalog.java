@@ -286,15 +286,27 @@ public class GlueCatalog extends AbstractCatalog {
                 "databaseName cannot be null or empty");
         Preconditions.checkNotNull(catalogDatabase, "CatalogDatabase cannot be null");
 
-        boolean exists = databaseExists(databaseName);
-
-        if (exists && !ifNotExists) {
+        // Check for exact case match first
+        boolean exactExists = databaseExists(databaseName);
+        if (exactExists && !ifNotExists) {
             throw new DatabaseAlreadyExistException(getName(), databaseName);
         }
-
-        if (!exists) {
-            glueDatabaseOperations.createDatabase(databaseName, catalogDatabase);
+        if (exactExists) {
+            return; // Database exists with exact case, and IF NOT EXISTS is true
         }
+
+        // Check for case-insensitive collision (Glue limitation)
+        String conflictingDatabase = findCaseInsensitiveConflict(databaseName);
+        if (conflictingDatabase != null) {
+            String message = String.format(
+                "Cannot create database '%s' because it conflicts with existing database '%s'. " +
+                "AWS Glue stores database names in lowercase, so '%s' and '%s' would both be stored as '%s'.",
+                databaseName, conflictingDatabase, databaseName, conflictingDatabase, databaseName.toLowerCase());
+            throw new DatabaseAlreadyExistException(getName(), databaseName, new CatalogException(message));
+        }
+
+        // Safe to create - no exact match and no case conflicts
+        glueDatabaseOperations.createDatabase(databaseName, catalogDatabase);
     }
 
     /**
@@ -434,7 +446,8 @@ public class GlueCatalog extends AbstractCatalog {
             throw new DatabaseNotExistException(getName(), databaseName);
         }
 
-        return glueTableOperations.listTables(glueDatabaseName);
+        // Return original table names with case preserved
+        return glueTableOperations.listTablesWithOriginalNames(glueDatabaseName);
     }
 
     /**
@@ -455,8 +468,14 @@ public class GlueCatalog extends AbstractCatalog {
         if (glueDatabaseName == null) {
             throw new TableNotExistException(getName(), objectPath);
         }
-        String glueTableName = originalTableName.toLowerCase();
 
+        // Use direct lowercase lookup first (like databases), then fall back to complex search
+        String glueTableName = findGlueTableName(glueDatabaseName, originalTableName);
+        if (glueTableName == null) {
+            throw new TableNotExistException(getName(), objectPath);
+        }
+
+        // Get the table using Glue storage names
         Table glueTable = glueTableOperations.getGlueTable(glueDatabaseName, glueTableName);
         return getCatalogBaseTableFromGlueTable(glueTable);
     }
@@ -478,9 +497,10 @@ public class GlueCatalog extends AbstractCatalog {
         if (glueDatabaseName == null) {
             return false; // Database doesn't exist, so table can't exist
         }
-        String glueTableName = originalTableName.toLowerCase();
 
-        return glueTableOperations.glueTableExists(glueDatabaseName, glueTableName);
+        // Use efficient table name resolution
+        String glueTableName = findGlueTableName(glueDatabaseName, originalTableName);
+        return glueTableName != null;
     }
 
     /**
@@ -504,15 +524,17 @@ public class GlueCatalog extends AbstractCatalog {
             }
             return; // Database doesn't exist, so table can't exist
         }
-        String glueTableName = originalTableName.toLowerCase();
 
-        if (!glueTableOperations.glueTableExists(glueDatabaseName, glueTableName)) {
+        // Use efficient table name resolution
+        String glueTableName = findGlueTableName(glueDatabaseName, originalTableName);
+        if (glueTableName == null) {
             if (!ifExists) {
                 throw new TableNotExistException(getName(), objectPath);
             }
             return; // Table doesn't exist, and IF EXISTS is true
         }
 
+        // Drop the table using Glue storage names
         glueTableOperations.dropTable(glueDatabaseName, glueTableName);
     }
 
@@ -541,12 +563,24 @@ public class GlueCatalog extends AbstractCatalog {
         // Check if the database exists
         validateDatabaseExists(originalDatabaseName);
 
-        // Check if the table already exists
-        if (tableExists(objectPath)) {
-            if (!ifNotExists) {
-                throw new TableAlreadyExistException(getName(), objectPath);
-            }
-            return; // Table exists, and IF NOT EXISTS is true
+        // Check for exact case match first
+        boolean exactExists = tableExists(objectPath);
+        if (exactExists && !ifNotExists) {
+            throw new TableAlreadyExistException(getName(), objectPath);
+        }
+        if (exactExists) {
+            return; // Table exists with exact case, and IF NOT EXISTS is true
+        }
+
+        // Check for case-insensitive collision (Glue limitation)
+        String conflictingTable = findCaseInsensitiveTableConflict(objectPath);
+        if (conflictingTable != null) {
+            String message = String.format(
+                "Cannot create table '%s.%s' because it conflicts with existing table '%s.%s'. " +
+                "AWS Glue stores table names in lowercase, so '%s' and '%s' would both be stored as '%s'.",
+                originalDatabaseName, originalTableName, originalDatabaseName, conflictingTable,
+                originalTableName, conflictingTable, originalTableName.toLowerCase());
+            throw new TableAlreadyExistException(getName(), objectPath, new CatalogException(message));
         }
 
         // Get common properties
@@ -585,18 +619,24 @@ public class GlueCatalog extends AbstractCatalog {
         // Check if the database exists before listing views
         validateDatabaseExists(databaseName);
 
+        // Use proper database name resolution
+        String glueDatabaseName = findGlueDatabaseName(databaseName);
+        if (glueDatabaseName == null) {
+            throw new DatabaseNotExistException(getName(), databaseName);
+        }
+
         try {
             // Get all tables in the database
-            List<Table> allTables = glueClient.getTables(builder -> builder.databaseName(databaseName))
+            List<Table> allTables = glueClient.getTables(builder -> builder.databaseName(glueDatabaseName))
                     .tableList();
 
-            // Filter tables to only include those that are of type VIEW
+            // Filter tables to only include those that are of type VIEW, and return original names
             List<String> viewNames = allTables.stream()
                     .filter(table -> {
                         String tableType = table.tableType();
                         return tableType != null && tableType.equalsIgnoreCase(CatalogBaseTable.TableKind.VIEW.name());
                     })
-                    .map(Table::name)
+                    .map(table -> glueTableOperations.getOriginalTableName(table))
                     .collect(Collectors.toList());
 
             return viewNames;
@@ -945,9 +985,16 @@ public class GlueCatalog extends AbstractCatalog {
             // Collect all properties
             Map<String, String> properties = new HashMap<>();
 
-            // Add table parameters
+            // Add table parameters, filtering out internal metadata
             if (glueTable.parameters() != null) {
-                properties.putAll(glueTable.parameters());
+                for (Map.Entry<String, String> entry : glueTable.parameters().entrySet()) {
+                    String key = entry.getKey();
+                    // Filter out our internal metadata parameters
+                    if (!GlueCatalogConstants.ORIGINAL_TABLE_NAME.equals(key) &&
+                        !GlueCatalogConstants.ORIGINAL_DATABASE_NAME.equals(key)) {
+                        properties.put(key, entry.getValue());
+                    }
+                }
             }
 
             // Add owner if present
@@ -1086,17 +1133,22 @@ public class GlueCatalog extends AbstractCatalog {
                 .columns(glueColumns)
                 .build();
 
-        // Store lowercase name in Glue (Glue requirement)
-        String glueTableName = tableName.toLowerCase();
+        // Convert CatalogView to CatalogTable for buildTableInput compatibility
+        CatalogTable tempTable = CatalogTable.of(
+                catalogView.getUnresolvedSchema(),
+                catalogView.getComment(),
+                Collections.emptyList(),
+                tableProperties
+        );
 
-        // Create view-specific TableInput
-        TableInput viewInput = TableInput.builder()
-                .name(glueTableName)
+        // Build table input with proper name preservation
+        TableInput baseTableInput = glueTableOperations.buildTableInput(tableName, glueColumns, tempTable, storageDescriptor, tableProperties);
+
+        // Convert to view-specific TableInput by overriding view-specific fields
+        TableInput viewInput = baseTableInput.toBuilder()
                 .tableType(CatalogBaseTable.TableKind.VIEW.name())
                 .viewOriginalText(catalogView.getOriginalQuery())
                 .viewExpandedText(catalogView.getExpandedQuery())
-                .storageDescriptor(storageDescriptor)
-                .parameters(tableProperties)
                 .description(catalogView.getComment())
                 .build();
 
@@ -1127,7 +1179,7 @@ public class GlueCatalog extends AbstractCatalog {
                                     .name(glueName).build()).database();
                     if (database != null) {
                         String storedOriginalName = getOriginalDatabaseName(database);
-                        if (storedOriginalName.equals(originalDatabaseName)) {
+                        if (storedOriginalName.equalsIgnoreCase(originalDatabaseName)) {
                             return glueName;
                         }
                     }
@@ -1177,6 +1229,121 @@ public class GlueCatalog extends AbstractCatalog {
             return false;
         } catch (Exception e) {
             throw new CatalogException("Error checking database existence: " + glueDatabaseName, e);
+        }
+    }
+
+    /**
+     * Finds a case-insensitive conflict with existing databases in Glue storage.
+     * This prevents creating databases that would conflict due to Glue's lowercase storage.
+     *
+     * @param databaseName the name of the database to check for conflicts
+     * @return the conflicting original database name if found, null if no conflict
+     */
+    private String findCaseInsensitiveConflict(String databaseName) {
+        try {
+            String targetGlueName = databaseName.toLowerCase();
+
+            // Check if any database already uses this Glue storage name
+            if (directDatabaseExists(targetGlueName)) {
+                // Find which original database name is using this Glue storage name
+                try {
+                    software.amazon.awssdk.services.glue.model.Database database = glueClient
+                            .getDatabase(software.amazon.awssdk.services.glue.model.GetDatabaseRequest.builder()
+                                    .name(targetGlueName).build()).database();
+                    if (database != null) {
+                        String existingOriginalName = getOriginalDatabaseName(database);
+                        // Only return conflict if it's a different case variation
+                        if (!existingOriginalName.equals(databaseName)) {
+                            return existingOriginalName;
+                        }
+                    }
+                } catch (Exception e) {
+                    LOG.warn("Error checking database original name for conflict detection: {}", targetGlueName, e);
+                    // If we can't verify the original name, assume conflict to be safe
+                    return targetGlueName;
+                }
+            }
+
+            return null; // No conflict found
+        } catch (Exception e) {
+            throw new CatalogException("Error checking for case-insensitive conflict", e);
+        }
+    }
+
+    /**
+     * Finds a case-insensitive conflict with existing tables in Glue storage.
+     * This prevents creating tables that would conflict due to Glue's lowercase storage.
+     *
+     * @param objectPath the object path of the table to check for conflicts
+     * @return the conflicting original table name if found, null if no conflict
+     */
+    private String findCaseInsensitiveTableConflict(ObjectPath objectPath) {
+        try {
+            String originalDatabaseName = objectPath.getDatabaseName();
+            String originalTableName = objectPath.getObjectName();
+
+            // Convert to Glue storage names - Use proper database resolution
+            String glueDatabaseName = findGlueDatabaseName(originalDatabaseName);
+            if (glueDatabaseName == null) {
+                return null; // Database doesn't exist, so no conflict
+            }
+            String glueTableName = originalTableName.toLowerCase();
+
+            // Check if any table already uses this Glue storage name
+            if (glueTableOperations.glueTableExists(glueDatabaseName, glueTableName)) {
+                // Find which original table name is using this Glue storage name
+                try {
+                    Table table = glueTableOperations.getGlueTable(glueDatabaseName, glueTableName);
+                    String existingOriginalName = glueTableOperations.getOriginalTableName(table);
+                    // Only return conflict if it's a different case variation
+                    if (!existingOriginalName.equals(originalTableName)) {
+                        return existingOriginalName;
+                    }
+                } catch (Exception e) {
+                    LOG.warn("Error checking table original name for conflict detection: {}.{}", glueDatabaseName, glueTableName, e);
+                    // If we can't verify the original name, assume conflict to be safe
+                    return glueTableName;
+                }
+            }
+
+            return null; // No conflict found
+        } catch (Exception e) {
+            throw new CatalogException("Error checking for case-insensitive table conflict", e);
+        }
+    }
+
+    /**
+     * Finds the Glue storage name for a given original table name.
+     * Uses the same efficient pattern as database name resolution.
+     *
+     * @param glueDatabaseName The Glue storage name of the database
+     * @param originalTableName The original table name to find
+     * @return The Glue storage name if found, null if not found
+     * @throws CatalogException if there's an error searching
+     */
+    private String findGlueTableName(String glueDatabaseName, String originalTableName) throws CatalogException {
+        try {
+            // First try the direct lowercase match (most common case)
+            String glueTableName = originalTableName.toLowerCase();
+            if (glueTableOperations.glueTableExists(glueDatabaseName, glueTableName)) {
+                // Verify this is actually the right table by checking stored original name
+                try {
+                    Table table = glueTableOperations.getGlueTable(glueDatabaseName, glueTableName);
+                    String storedOriginalName = glueTableOperations.getOriginalTableName(table);
+
+                    // Use case-insensitive matching since Flink case-folds identifiers
+                    if (storedOriginalName.equalsIgnoreCase(originalTableName)) {
+                        return glueTableName;
+                    }
+                } catch (Exception e) {
+                    LOG.warn("Error verifying table original name for: {}.{}", glueDatabaseName, glueTableName, e);
+                }
+            }
+
+            // If direct match failed, use the existing complex search method
+            return glueTableOperations.findGlueTableName(glueDatabaseName, originalTableName);
+        } catch (Exception e) {
+            throw new CatalogException("Error searching for table: " + glueDatabaseName + "." + originalTableName, e);
         }
     }
 }
