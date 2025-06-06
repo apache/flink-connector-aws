@@ -29,14 +29,10 @@ import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.services.kinesis.model.DescribeStreamConsumerResponse;
 import software.amazon.awssdk.services.kinesis.model.RegisterStreamConsumerResponse;
 import software.amazon.awssdk.services.kinesis.model.ResourceInUseException;
-import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
-
-import java.time.Instant;
 
 import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.ConsumerLifecycle.JOB_MANAGED;
 import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.EFO_CONSUMER_LIFECYCLE;
 import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.EFO_CONSUMER_NAME;
-import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.EFO_DEREGISTER_CONSUMER_TIMEOUT;
 import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.READER_TYPE;
 import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.ReaderType.EFO;
 
@@ -108,39 +104,17 @@ public class StreamConsumerRegistrar {
         }
     }
 
-    /** De-registers stream consumer from specified stream, if needed. */
+    /**
+     * Stream consumer de-registration is intentionally skipped for JOB_MANAGED and SELF_MANAGED
+     * stream consumer lifecycles.
+     *
+     * <p>For the JOB_MANAGED consumer lifecycle, consumer de-registration is skipped to avoid
+     * race-conditions on subsequent application start up (FLINK-37908).
+     * 
+     * <p>For the SELF_MANAGED consumer lifecycle, consumer de-registration is deferred to the user.
+     */
     public void deregisterStreamConsumer() {
-        if (sourceConfig.get(READER_TYPE) == EFO
-                && sourceConfig.get(EFO_CONSUMER_LIFECYCLE) == JOB_MANAGED) {
-            LOG.info("De-registering stream consumer - {}", consumerArn);
-            if (consumerArn == null) {
-                LOG.warn(
-                        "Unable to deregister stream consumer as there was no consumer ARN stored in the StreamConsumerRegistrar. There may be leaked EFO consumers on the Kinesis stream.");
-                return;
-            }
-            kinesisStreamProxy.deregisterStreamConsumer(consumerArn);
-            LOG.info("De-registered stream consumer - {}", consumerArn);
-
-            Instant timeout = Instant.now().plus(sourceConfig.get(EFO_DEREGISTER_CONSUMER_TIMEOUT));
-            String consumerName = getConsumerNameFromArn(consumerArn);
-            while (Instant.now().isBefore(timeout)) {
-                try {
-                    DescribeStreamConsumerResponse response =
-                            kinesisStreamProxy.describeStreamConsumer(streamArn, consumerName);
-                    LOG.info(
-                            "Waiting for stream consumer to be deregistered - {} {} {}",
-                            streamArn,
-                            consumerName,
-                            response.consumerDescription().consumerStatusAsString());
-
-                } catch (ResourceNotFoundException e) {
-                    LOG.info("Stream consumer {} has been deregistered", consumerArn);
-                    return;
-                }
-            }
-            LOG.warn(
-                    "Timed out waiting for stream consumer to be deregistered. There may be leaked EFO consumers on the Kinesis stream.");
-        }
+        // Do nothing.
     }
 
     private String getConsumerNameFromArn(String consumerArn) {
