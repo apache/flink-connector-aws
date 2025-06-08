@@ -15,11 +15,12 @@
  * limitations under the License.
  */
 
-package org.apache.flink.connector.firehose.sink;
+package org.apache.flink.connector.firehose.sink.test;
 
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.connector.aws.testutils.AWSServicesTestUtils;
 import org.apache.flink.connector.aws.testutils.LocalstackContainer;
+import org.apache.flink.connector.firehose.sink.KinesisFirehoseSink;
 import org.apache.flink.connector.firehose.sink.testutils.KinesisFirehoseTestUtils;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.test.junit5.MiniClusterExtension;

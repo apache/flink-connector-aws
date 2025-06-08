@@ -15,12 +15,14 @@
  * limitations under the License.
  */
 
-package org.apache.flink.connector.kinesis.sink;
+package org.apache.flink.connector.kinesis.sink.test;
 
 import org.apache.flink.api.common.serialization.SerializationSchema;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.connector.aws.testutils.AWSServicesTestUtils;
 import org.apache.flink.connector.aws.util.AWSGeneralUtil;
+import org.apache.flink.connector.kinesis.sink.KinesisStreamsSink;
+import org.apache.flink.connector.kinesis.sink.PartitionKeyGenerator;
 import org.apache.flink.connector.kinesis.testutils.AWSEndToEndTestUtils;
 import org.apache.flink.connector.kinesis.testutils.AWSKinesisResourceManager;
 import org.apache.flink.runtime.client.JobExecutionException;
