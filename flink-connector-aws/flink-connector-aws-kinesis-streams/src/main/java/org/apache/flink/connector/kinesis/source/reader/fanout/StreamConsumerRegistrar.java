@@ -110,7 +110,7 @@ public class StreamConsumerRegistrar {
      *
      * <p>For the JOB_MANAGED consumer lifecycle, consumer de-registration is skipped to avoid
      * race-conditions on subsequent application start up (FLINK-37908).
-     * 
+     *
      * <p>For the SELF_MANAGED consumer lifecycle, consumer de-registration is deferred to the user.
      */
     public void deregisterStreamConsumer() {
