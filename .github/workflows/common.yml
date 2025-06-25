@@ -76,10 +76,10 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
-      - name: Set Maven 3.8.5
+      - name: Set Maven 3.8.6
         uses: stCarolas/setup-maven@v4.5
         with:
-          maven-version: 3.8.5
+          maven-version: 3.8.6
 
       - name: Create cache dirs
         run: mkdir -p ${{ env.FLINK_CACHE_DIR }}
