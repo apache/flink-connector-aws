@@ -55,35 +55,14 @@ under the License.
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-connector-kinesis</artifactId>
+            <artifactId>flink-connector-aws-kinesis-streams</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.apache.flink</groupId>
-            <artifactId>flink-connector-kinesis</artifactId>
-            <version>${project.version}</version>
-            <type>test-jar</type>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <systemPropertyVariables>
-                        <!-- Required for Kinesalite. -->
-                        <!-- Including shaded and non-shaded conf to support test running from Maven and IntelliJ -->
-                        <com.amazonaws.sdk.disableCbor>true</com.amazonaws.sdk.disableCbor>
-                        <com.amazonaws.sdk.disableCertChecking>true</com.amazonaws.sdk.disableCertChecking>
-                        <org.apache.flink.kinesis.shaded.com.amazonaws.sdk.disableCbor>true</org.apache.flink.kinesis.shaded.com.amazonaws.sdk.disableCbor>
-                        <org.apache.flink.kinesis.shaded.com.amazonaws.sdk.disableCertChecking>true</org.apache.flink.kinesis.shaded.com.amazonaws.sdk.disableCertChecking>
-                    </systemPropertyVariables>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
 </project>
