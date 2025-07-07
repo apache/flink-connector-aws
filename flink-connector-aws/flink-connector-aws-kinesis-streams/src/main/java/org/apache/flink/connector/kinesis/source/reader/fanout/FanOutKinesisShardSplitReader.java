@@ -5,7 +5,7 @@
  * regarding copyright ownership.  The ASF licenses this file
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
+ * with the License. You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -27,6 +27,8 @@ import org.apache.flink.connector.kinesis.source.reader.KinesisShardSplitReaderB
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplitState;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
 
 import java.time.Duration;
@@ -41,6 +43,8 @@ import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConf
  */
 @Internal
 public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
+    private static final Logger LOG = LoggerFactory.getLogger(FanOutKinesisShardSplitReader.class);
+
     private final AsyncStreamProxy asyncStreamProxy;
     private final String consumerArn;
     private final Duration subscriptionTimeout;
@@ -93,6 +97,18 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
 
     @Override
     public void close() throws Exception {
+        LOG.debug("Closing FanOutKinesisShardSplitReader");
+
+        // Clear all subscriptions - they will be automatically cleaned up
+        // when the AsyncStreamProxy is closed
+        if (!splitSubscriptions.isEmpty()) {
+            LOG.debug("Clearing {} active shard subscriptions", splitSubscriptions.size());
+            splitSubscriptions.clear();
+        }
+
+        // Close the proxy with a graceful timeout
+        LOG.debug("Closing AsyncStreamProxy");
         asyncStreamProxy.close();
+        LOG.debug("FanOutKinesisShardSplitReader closed");
     }
 }

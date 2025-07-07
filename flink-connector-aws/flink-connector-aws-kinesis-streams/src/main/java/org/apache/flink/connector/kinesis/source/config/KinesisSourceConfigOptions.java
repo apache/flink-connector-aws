@@ -138,4 +138,11 @@ public class KinesisSourceConfigOptions {
                     .defaultValue(Duration.ofMillis(10000))
                     .withDescription(
                             "Timeout for consumer deregistration. When timeout is reached, code will continue as per normal.");
+
+    public static final ConfigOption<Duration> CLIENT_SHUTDOWN_TIMEOUT =
+            ConfigOptions.key("source.client.shutdown.timeout")
+                    .durationType()
+                    .defaultValue(Duration.ofMillis(5000))
+                    .withDescription(
+                            "Timeout for graceful shutdown of the Kinesis clients.");
 }
