@@ -5,7 +5,7 @@
  * regarding copyright ownership.  The ASF licenses this file
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
+ * with the License. You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -26,6 +26,8 @@ import org.apache.flink.connector.kinesis.source.proxy.StreamProxy;
 import org.apache.flink.connector.kinesis.source.reader.KinesisShardSplitReaderBase;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplitState;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 
 import java.util.Map;
@@ -36,6 +38,8 @@ import java.util.Map;
  */
 @Internal
 public class PollingKinesisShardSplitReader extends KinesisShardSplitReaderBase {
+    private static final Logger LOG = LoggerFactory.getLogger(PollingKinesisShardSplitReader.class);
+
     private final StreamProxy kinesis;
     private final Configuration configuration;
     private final int maxRecordsToGet;
@@ -65,6 +69,11 @@ public class PollingKinesisShardSplitReader extends KinesisShardSplitReaderBase 
 
     @Override
     public void close() throws Exception {
+        LOG.debug("Closing PollingKinesisShardSplitReader");
+
+        // Close the proxy with a graceful timeout
+        LOG.debug("Closing StreamProxy");
         kinesis.close();
+        LOG.debug("PollingKinesisShardSplitReader closed");
     }
 }

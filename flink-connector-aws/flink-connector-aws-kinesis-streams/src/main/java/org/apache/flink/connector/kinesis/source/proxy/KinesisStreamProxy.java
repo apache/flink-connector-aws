@@ -5,7 +5,7 @@
  * regarding copyright ownership.  The ASF licenses this file
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
+ * with the License. You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -47,21 +47,31 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /** Implementation of the {@link StreamProxy} for Kinesis data streams. */
 @Internal
 public class KinesisStreamProxy implements StreamProxy {
     private static final Logger LOG = LoggerFactory.getLogger(KinesisStreamProxy.class);
+    private static final long DEFAULT_SHUTDOWN_TIMEOUT_MILLIS = 5000;
+    private final long shutdownTimeoutMillis;
 
     private final KinesisClient kinesisClient;
     private final SdkHttpClient httpClient;
     private final Map<String, String> shardIdToIteratorStore;
 
     public KinesisStreamProxy(KinesisClient kinesisClient, SdkHttpClient httpClient) {
+        this(kinesisClient, httpClient, DEFAULT_SHUTDOWN_TIMEOUT_MILLIS);
+    }
+
+    public KinesisStreamProxy(KinesisClient kinesisClient, SdkHttpClient httpClient, long shutdownTimeoutMillis) {
         this.kinesisClient = kinesisClient;
         this.httpClient = httpClient;
         this.shardIdToIteratorStore = new ConcurrentHashMap<>();
+        this.shutdownTimeoutMillis = shutdownTimeoutMillis;
     }
 
     @Override
@@ -201,9 +211,49 @@ public class KinesisStreamProxy implements StreamProxy {
                         .build());
     }
 
+    /**
+     * Gracefully closes the Kinesis clients with a timeout.
+     *
+     * @param timeoutMillis maximum time to wait for clients to close
+     */
+    public void gracefulClose(long timeoutMillis) {
+        try {
+            LOG.debug("Closing Kinesis clients with timeout of {} ms", timeoutMillis);
+
+            // Close the Kinesis client first with half the timeout
+            long kinesisClientTimeout = timeoutMillis / 2;
+            LOG.debug("Closing KinesisClient with timeout of {} ms", kinesisClientTimeout);
+            try {
+                CompletableFuture<Void> kinesisClientFuture = CompletableFuture.runAsync(() -> kinesisClient.close());
+                kinesisClientFuture.get(kinesisClientTimeout, TimeUnit.MILLISECONDS);
+                LOG.debug("Successfully closed KinesisClient");
+            } catch (TimeoutException e) {
+                LOG.warn("Closing KinesisClient timed out after {} ms", kinesisClientTimeout);
+            } catch (Exception e) {
+                LOG.warn("Error while closing KinesisClient", e);
+            }
+
+            // Then close the HTTP client with the remaining timeout
+            long httpClientTimeout = timeoutMillis - kinesisClientTimeout;
+            LOG.debug("Closing SdkHttpClient with timeout of {} ms", httpClientTimeout);
+            try {
+                CompletableFuture<Void> httpClientFuture = CompletableFuture.runAsync(() -> httpClient.close());
+                httpClientFuture.get(httpClientTimeout, TimeUnit.MILLISECONDS);
+                LOG.debug("Successfully closed SdkHttpClient");
+            } catch (TimeoutException e) {
+                LOG.warn("Closing SdkHttpClient timed out after {} ms", httpClientTimeout);
+            } catch (Exception e) {
+                LOG.warn("Error while closing SdkHttpClient", e);
+            }
+
+            LOG.debug("Completed graceful shutdown of Kinesis clients");
+        } catch (Exception e) {
+            LOG.warn("Error during graceful shutdown of Kinesis clients", e);
+        }
+    }
+
     @Override
     public void close() throws IOException {
-        kinesisClient.close();
-        httpClient.close();
+        gracefulClose(shutdownTimeoutMillis);
     }
 }
