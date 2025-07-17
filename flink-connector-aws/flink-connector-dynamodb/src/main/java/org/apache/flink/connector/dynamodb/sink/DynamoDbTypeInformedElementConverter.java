@@ -50,6 +50,7 @@ import java.beans.BeanInfo;
 import java.beans.IntrospectionException;
 import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
+import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -176,7 +177,9 @@ public class DynamoDbTypeInformedElementConverter<T>
                     tableSchemaBuilder,
                     propertyDescriptor.getName(),
                     BeanAttributeGetter.create(
-                            typeInfo.getTypeClass(), propertyDescriptor.getReadMethod()),
+                            typeInfo.getTypeClass(),
+                            propertyDescriptor.getReadMethod(),
+                            MethodHandles.lookup()),
                     fieldInfo);
         }
 

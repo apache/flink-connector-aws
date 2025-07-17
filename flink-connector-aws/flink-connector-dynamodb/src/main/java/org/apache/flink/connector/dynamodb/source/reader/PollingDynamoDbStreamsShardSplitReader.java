@@ -27,11 +27,16 @@ import org.apache.flink.connector.dynamodb.source.proxy.StreamProxy;
 import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplit;
 import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplitState;
 import org.apache.flink.connector.dynamodb.source.split.StartingPosition;
+import org.apache.flink.connector.dynamodb.source.util.ListShardsResult;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.dynamodb.model.GetRecordsResponse;
 import software.amazon.awssdk.services.dynamodb.model.Record;
+import software.amazon.awssdk.services.dynamodb.model.Shard;
+import software.amazon.awssdk.services.dynamodb.model.ShardFilter;
+import software.amazon.awssdk.services.dynamodb.model.ShardFilterType;
+import software.amazon.awssdk.services.dynamodb.model.StreamStatus;
 
 import javax.annotation.Nullable;
 
@@ -43,10 +48,14 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import static java.util.Collections.singleton;
+import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.CHILD_SHARD_DISCOVERY_MAX_DELAY_MS;
+import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.CHILD_SHARD_DISCOVERY_MIN_DELAY_MS;
+import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.MAX_RETRY_ATTEMPTS_FOR_CHILD_SHARDS;
 
 /**
  * An implementation of the SplitReader that periodically polls the DynamoDb stream to retrieve
@@ -64,6 +73,7 @@ public class PollingDynamoDbStreamsShardSplitReader
     private final Duration getRecordsIdlePollingTimeBetweenEmptyPolls;
 
     private final Deque<DynamoDbStreamsShardSplitWithContext> assignedSplits;
+    private final Map<String, List<Shard>> childShardMap;
     private final Map<String, DynamoDbStreamsShardMetrics> shardMetricGroupMap;
     private final Set<String> pausedSplitIds;
     private static final Logger LOG =
@@ -73,6 +83,7 @@ public class PollingDynamoDbStreamsShardSplitReader
             StreamProxy dynamodbStreamsProxy,
             Duration getRecordsIdlePollingTimeBetweenNonEmptyPolls,
             Duration getRecordsIdlePollingTimeBetweenEmptyPolls,
+            Map<String, List<Shard>> childShardMap,
             Map<String, DynamoDbStreamsShardMetrics> shardMetricGroupMap) {
         this.dynamodbStreams = dynamodbStreamsProxy;
         this.getRecordsIdlePollingTimeBetweenNonEmptyPolls =
@@ -80,6 +91,7 @@ public class PollingDynamoDbStreamsShardSplitReader
         this.getRecordsIdlePollingTimeBetweenEmptyPolls =
                 getRecordsIdlePollingTimeBetweenEmptyPolls;
         this.shardMetricGroupMap = shardMetricGroupMap;
+        this.childShardMap = childShardMap;
         this.assignedSplits = new ArrayDeque<>();
         this.pausedSplitIds = new HashSet<>();
     }
@@ -106,6 +118,11 @@ public class PollingDynamoDbStreamsShardSplitReader
         }
 
         long currentTime = System.currentTimeMillis();
+
+        if (splitContext.splitState.isShardEndReached()) {
+            return handleShardEnd(splitContext, currentTime);
+        }
+
         long nextEligibleTime = getNextEligibleTime(splitContext);
 
         LOG.debug(
@@ -132,15 +149,11 @@ public class PollingDynamoDbStreamsShardSplitReader
 
         splitContext.lastPollTimeMillis = currentTime;
         splitContext.wasLastPollEmpty = isEmptyPoll;
+        splitContext.splitState.setShardEndReached(isComplete);
 
+        assignedSplits.add(splitContext);
         if (isEmptyPoll) {
-            if (isComplete) {
-                return new DynamoDbStreamRecordsWithSplitIds(
-                        Collections.emptyIterator(), splitContext.splitState.getSplitId(), true);
-            } else {
-                assignedSplits.add(splitContext);
-                return INCOMPLETE_SHARD_EMPTY_RECORDS;
-            }
+            return INCOMPLETE_SHARD_EMPTY_RECORDS;
         } else {
             DynamoDbStreamsShardMetrics shardMetrics =
                     shardMetricGroupMap.get(splitContext.splitState.getShardId());
@@ -164,13 +177,66 @@ public class PollingDynamoDbStreamsShardSplitReader
                                 .dynamodb()
                                 .sequenceNumber()));
 
-        if (!isComplete) {
-            assignedSplits.add(splitContext);
-        }
         return new DynamoDbStreamRecordsWithSplitIds(
                 getRecordsResponse.records().iterator(),
                 splitContext.splitState.getSplitId(),
-                isComplete);
+                false);
+    }
+
+    private RecordsWithSplitIds<Record> handleShardEnd(
+            DynamoDbStreamsShardSplitWithContext splitContext, long currentTime) {
+        if (!splitContext.hasAttemptedChildShardDiscovery) {
+            splitContext.hasAttemptedChildShardDiscovery = true;
+            splitContext.childShardDiscoveryAttempts = 0;
+        }
+
+        if (splitContext.childShardDiscoveryAttempts < MAX_RETRY_ATTEMPTS_FOR_CHILD_SHARDS) {
+            long nextChildShardDiscoveryEligibleTime =
+                    getNextEligibleTimeForChildDiscovery(splitContext);
+            if (currentTime >= nextChildShardDiscoveryEligibleTime) {
+                ListShardsResult listShardsResult =
+                        dynamodbStreams.listShardsWithFilter(
+                                splitContext.splitState.getStreamArn(),
+                                ShardFilter.builder()
+                                        .shardId(splitContext.splitState.getShardId())
+                                        .type(ShardFilterType.CHILD_SHARDS)
+                                        .build());
+
+                if (!StreamStatus.ENABLED.equals(listShardsResult.getStreamStatus())) {
+                    return new DynamoDbStreamRecordsWithSplitIds(
+                            Collections.emptyIterator(),
+                            splitContext.splitState.getSplitId(),
+                            true);
+                }
+
+                List<Shard> childShards = listShardsResult.getShards();
+                if (!childShards.isEmpty()) {
+                    this.childShardMap.put(splitContext.splitState.getSplitId(), childShards);
+                    return new DynamoDbStreamRecordsWithSplitIds(
+                            Collections.emptyIterator(),
+                            splitContext.splitState.getSplitId(),
+                            true);
+                }
+                splitContext.childShardDiscoveryAttempts++;
+                splitContext.lastChildShardDiscoveryAttemptTime = currentTime;
+            }
+            assignedSplits.add(splitContext);
+            return INCOMPLETE_SHARD_EMPTY_RECORDS;
+        } else {
+            return new DynamoDbStreamRecordsWithSplitIds(
+                    Collections.emptyIterator(), splitContext.splitState.getSplitId(), true);
+        }
+    }
+
+    private long getNextEligibleTimeForChildDiscovery(
+            DynamoDbStreamsShardSplitWithContext splitContext) {
+
+        long exponentialDelay =
+                Math.min(
+                        CHILD_SHARD_DISCOVERY_MIN_DELAY_MS
+                                * (1L << splitContext.childShardDiscoveryAttempts),
+                        CHILD_SHARD_DISCOVERY_MAX_DELAY_MS);
+        return splitContext.lastChildShardDiscoveryAttemptTime + exponentialDelay;
     }
 
     private void sleep(long milliseconds) throws IOException {
@@ -254,11 +320,15 @@ public class PollingDynamoDbStreamsShardSplitReader
         final DynamoDbStreamsShardSplitState splitState;
         long lastPollTimeMillis;
         boolean wasLastPollEmpty;
+        boolean hasAttemptedChildShardDiscovery;
+        int childShardDiscoveryAttempts;
+        long lastChildShardDiscoveryAttemptTime;
 
         DynamoDbStreamsShardSplitWithContext(DynamoDbStreamsShardSplitState splitState) {
             this.splitState = splitState;
             this.lastPollTimeMillis = System.currentTimeMillis();
             this.wasLastPollEmpty = false;
+            hasAttemptedChildShardDiscovery = false;
         }
     }
 }

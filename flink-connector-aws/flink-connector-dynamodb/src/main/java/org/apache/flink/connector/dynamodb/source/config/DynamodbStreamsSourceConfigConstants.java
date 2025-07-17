@@ -91,6 +91,10 @@ public class DynamodbStreamsSourceConfigConstants {
                             .withDescription(
                                     "The default idle time between non-empty polls for DynamoDB Streams GetRecords API");
 
+    public static final int MAX_RETRY_ATTEMPTS_FOR_CHILD_SHARDS = 5;
+    public static final long CHILD_SHARD_DISCOVERY_MIN_DELAY_MS = 100;
+    public static final long CHILD_SHARD_DISCOVERY_MAX_DELAY_MS = 1000;
+
     /** DynamoDb Streams identifier for user agent prefix. */
     public static final String DDB_STREAMS_CLIENT_USER_AGENT_PREFIX =
             "aws.dynamodbstreams.client.user-agent-prefix";
