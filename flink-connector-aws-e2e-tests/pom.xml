@@ -35,12 +35,12 @@ under the License.
 
     <properties>
         <scala.binary.version>2.12</scala.binary.version>
+        <argLine></argLine>
     </properties>
 
     <modules>
         <module>flink-connector-aws-kinesis-firehose-e2e-tests</module>
         <module>flink-connector-aws-kinesis-streams-e2e-tests</module>
-        <module>flink-connector-kinesis-e2e-tests</module>
         <module>flink-connector-aws-sqs-e2e-tests</module>
         <module>flink-formats-avro-glue-schema-registry-e2e-tests</module>
         <module>flink-formats-json-glue-schema-registry-e2e-tests</module>
@@ -67,6 +67,15 @@ under the License.
 
     <profiles>
         <profile>
+            <id>java-9-plus</id>
+            <activation>
+                <jdk>[9,)</jdk>
+            </activation>
+            <properties>
+                <argLine>--add-opens java.base/java.util=ALL-UNNAMED</argLine>
+            </properties>
+        </profile>
+        <profile>
             <id>run-end-to-end-tests</id>
             <build>
                 <plugins>
@@ -90,6 +99,7 @@ under the License.
                                         <moduleDir>${project.basedir}</moduleDir>
                                     </systemPropertyVariables>
                                     <excludedGroups>requires-aws-credentials</excludedGroups>
+                                    <argLine>${argLine}</argLine>
                                 </configuration>
                             </execution>
                         </executions>
@@ -121,6 +131,7 @@ under the License.
                                     <systemPropertyVariables>
                                         <moduleDir>${project.basedir}</moduleDir>
                                     </systemPropertyVariables>
+                                    <argLine>${argLine}</argLine>
                                 </configuration>
                             </execution>
                         </executions>

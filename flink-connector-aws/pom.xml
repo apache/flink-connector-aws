@@ -37,13 +37,11 @@ under the License.
         <module>flink-connector-dynamodb</module>
         <module>flink-connector-aws-kinesis-firehose</module>
         <module>flink-connector-aws-kinesis-streams</module>
-        <module>flink-connector-kinesis</module>
         <module>flink-connector-sqs</module>
 
         <module>flink-sql-connector-dynamodb</module>
         <module>flink-sql-connector-aws-kinesis-firehose</module>
         <module>flink-sql-connector-aws-kinesis-streams</module>
-        <module>flink-sql-connector-kinesis</module>
     </modules>
 
 </project>

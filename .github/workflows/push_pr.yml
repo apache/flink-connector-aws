@@ -26,8 +26,8 @@ jobs:
     uses: ./.github/workflows/common.yml
     strategy:
       matrix:
-        flink: [1.20.0]
-        java: [ '8, 11, 17']
+        flink: [2.0.0]
+        java: ['11, 17, 21']
     with:
       flink_version: ${{ matrix.flink }}
       jdk_version: ${{ matrix.java }}
@@ -35,10 +35,3 @@ jobs:
       cache_flink_binary: true
     secrets: inherit
 
-  python_test:
-    strategy:
-      matrix:
-        flink: [1.20.0]
-    uses: apache/flink-connector-shared-utils/.github/workflows/python_ci.yml@ci_utils
-    with:
-      flink_version: ${{ matrix.flink }}

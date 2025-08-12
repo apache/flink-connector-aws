@@ -19,8 +19,8 @@ package org.apache.flink.connector.firehose.sink;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.common.serialization.SerializationSchema;
-import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.api.connector.sink2.SinkWriter;
+import org.apache.flink.api.connector.sink2.WriterInitContext;
 import org.apache.flink.connector.base.sink.writer.ElementConverter;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
@@ -56,7 +56,7 @@ public class KinesisFirehoseSinkElementConverter<InputT>
     }
 
     @Override
-    public void open(Sink.InitContext context) {
+    public void open(WriterInitContext context) {
         try {
             serializationSchema.open(
                     new SerializationSchema.InitializationContext() {

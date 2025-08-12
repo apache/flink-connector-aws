@@ -18,8 +18,8 @@
 package org.apache.flink.connector.dynamodb.sink;
 
 import org.apache.flink.annotation.PublicEvolving;
-import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.api.connector.sink2.SinkWriter;
+import org.apache.flink.api.connector.sink2.WriterInitContext;
 import org.apache.flink.connector.base.sink.writer.ElementConverter;
 import org.apache.flink.util.Preconditions;
 
@@ -64,7 +64,7 @@ public class DynamoDbBeanElementConverter<InputT>
     }
 
     @Override
-    public void open(Sink.InitContext context) {
+    public void open(WriterInitContext context) {
         tableSchema = createTableSchema(recordType);
     }
 
