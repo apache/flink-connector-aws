@@ -102,6 +102,10 @@ public class SplitTracker {
         addSplitsForLatest(shardsToAdd);
     }
 
+    public void addChildSplits(Collection<Shard> childShardsToAdd) {
+        addSplitsForTrimHorizon(childShardsToAdd);
+    }
+
     private void addSplitsForLatest(Collection<Shard> shardsToAdd) {
         List<Shard> openShards =
                 shardsToAdd.stream()

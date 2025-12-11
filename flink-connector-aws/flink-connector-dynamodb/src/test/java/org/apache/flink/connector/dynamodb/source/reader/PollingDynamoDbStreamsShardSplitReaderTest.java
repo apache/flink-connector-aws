@@ -73,6 +73,7 @@ class PollingDynamoDbStreamsShardSplitReaderTest {
                         testStreamProxy,
                         NON_EMPTY_POLLING_DELAY_MILLIS,
                         EMPTY_POLLING_DELAY_MILLIS,
+                        new ConcurrentHashMap<>(),
                         shardMetricGroupMap);
     }
 
@@ -235,11 +236,19 @@ class PollingDynamoDbStreamsShardSplitReaderTest {
                                 assertThat(retrievedRecords.finishedSplits()).isEmpty();
                                 fetchedRecords.add(retrievedRecords.nextRecordFromSplit());
                             }
-
-                            assertThat(retrievedRecords.nextSplit()).isNull();
-                            assertThat(retrievedRecords.finishedSplits()).contains(split.splitId());
                             assertThat(fetchedRecords)
                                     .containsExactlyInAnyOrderElementsOf(expectedRecords);
+                        });
+
+        // Now wait for the split to be marked as finished after child shard discovery attempts
+        await().pollDelay(NON_EMPTY_POLLING_DELAY_MILLIS)
+                .atMost(Duration.ofSeconds(30)) // Allow enough time for all retry attempts
+                .untilAsserted(
+                        () -> {
+                            RecordsWithSplitIds<Record> retrievedRecords = splitReader.fetch();
+                            // No more records should be returned
+                            assertThat(readAllRecords(retrievedRecords)).isEmpty();
+                            assertThat(retrievedRecords.finishedSplits()).contains(split.splitId());
                         });
     }
 
@@ -400,6 +409,7 @@ class PollingDynamoDbStreamsShardSplitReaderTest {
                         testStreamProxy,
                         NON_EMPTY_POLLING_DELAY_MILLIS,
                         testEmptyPollDelay,
+                        new ConcurrentHashMap<>(),
                         shardMetricGroupMap);
 
         // Immediate second poll - should return empty due to polling delay
