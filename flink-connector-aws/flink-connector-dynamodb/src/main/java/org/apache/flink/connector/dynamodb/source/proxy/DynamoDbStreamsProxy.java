@@ -32,6 +32,7 @@ import software.amazon.awssdk.services.dynamodb.model.GetRecordsRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetRecordsResponse;
 import software.amazon.awssdk.services.dynamodb.model.GetShardIteratorRequest;
 import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
+import software.amazon.awssdk.services.dynamodb.model.ShardFilter;
 import software.amazon.awssdk.services.dynamodb.model.StreamStatus;
 import software.amazon.awssdk.services.dynamodb.model.TrimmedDataAccessException;
 import software.amazon.awssdk.services.dynamodb.streams.DynamoDbStreamsClient;
@@ -85,6 +86,24 @@ public class DynamoDbStreamsProxy implements StreamProxy {
                     describeStreamResponse.streamDescription().shards());
         } while (describeStreamResponse.streamDescription().lastEvaluatedShardId() != null);
 
+        return listShardsResult;
+    }
+
+    @Override
+    public ListShardsResult listShardsWithFilter(String streamArn, ShardFilter shardFilter) {
+        LOG.debug("Child shards with filter called, for shardId: {}", shardFilter.shardId());
+        ListShardsResult listShardsResult = new ListShardsResult();
+
+        try {
+            DescribeStreamResponse describeStreamResponse =
+                    this.describeStream(streamArn, shardFilter);
+            listShardsResult.addShards(describeStreamResponse.streamDescription().shards());
+            listShardsResult.setStreamStatus(
+                    describeStreamResponse.streamDescription().streamStatus());
+        } catch (Exception e) {
+            LOG.warn("DescribeStream with Filter API threw an exception", e);
+        }
+        LOG.info("Child shards returned for shardId: {}", listShardsResult);
         return listShardsResult;
     }
 
@@ -151,6 +170,30 @@ public class DynamoDbStreamsProxy implements StreamProxy {
                 DescribeStreamRequest.builder()
                         .streamArn(streamArn)
                         .exclusiveStartShardId(startShardId)
+                        .build();
+
+        DescribeStreamResponse describeStreamResponse =
+                dynamoDbStreamsClient.describeStream(describeStreamRequest);
+
+        StreamStatus streamStatus = describeStreamResponse.streamDescription().streamStatus();
+        if (streamStatus.equals(StreamStatus.ENABLING)) {
+            if (LOG.isWarnEnabled()) {
+                LOG.warn(
+                        String.format(
+                                "The status of stream %s is %s ; result of the current "
+                                        + "describeStream operation will not contain any shard information.",
+                                streamArn, streamStatus));
+            }
+        }
+
+        return describeStreamResponse;
+    }
+
+    private DescribeStreamResponse describeStream(String streamArn, ShardFilter shardFilter) {
+        final DescribeStreamRequest describeStreamRequest =
+                DescribeStreamRequest.builder()
+                        .streamArn(streamArn)
+                        .shardFilter(shardFilter)
                         .build();
 
         DescribeStreamResponse describeStreamResponse =

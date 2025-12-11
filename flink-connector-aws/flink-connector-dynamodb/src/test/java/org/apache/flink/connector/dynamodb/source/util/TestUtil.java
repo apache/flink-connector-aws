@@ -35,7 +35,10 @@ import software.amazon.awssdk.services.dynamodb.model.StreamRecord;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -45,6 +48,8 @@ public class TestUtil {
     public static final String STREAM_ARN =
             "arn:aws:dynamodb:us-east-1:123456789012:stream/2024-01-01T00:00:00Z";
     public static final String SHARD_ID = "shardId-000000000002";
+    public static final String CHILD_SHARD_ID_1 = "shardId-000000000003";
+    public static final String CHILD_SHARD_ID_2 = "shardId-000000000004";
     public static final SimpleStringSchema STRING_SCHEMA = new SimpleStringSchema();
 
     public static final long MILLIS_BEHIND_LATEST_TEST_VALUE = -1L;
@@ -95,6 +100,15 @@ public class TestUtil {
         return getTestSplit(SHARD_ID);
     }
 
+    public static DynamoDbStreamsShardSplit getTestSplitWithChildShards() {
+        return getTestSplitWithChildShards(SHARD_ID);
+    }
+
+    public static DynamoDbStreamsShardSplit getTestSplitWithChildShards(String shardId) {
+        return getTestSplit(
+                STREAM_ARN, SHARD_ID, Arrays.asList(CHILD_SHARD_ID_1, CHILD_SHARD_ID_2));
+    }
+
     public static DynamoDbStreamsShardSplit getTestSplit(String shardId) {
         return getTestSplit(STREAM_ARN, shardId);
     }
@@ -102,6 +116,27 @@ public class TestUtil {
     public static DynamoDbStreamsShardSplit getTestSplit(String streamArn, String shardId) {
         return new DynamoDbStreamsShardSplit(
                 streamArn, shardId, StartingPosition.fromStart(), null);
+    }
+
+    public static DynamoDbStreamsShardSplit getTestSplit(
+            String streamArn, String shardId, List<String> childShardIds) {
+        return new DynamoDbStreamsShardSplit(
+                streamArn,
+                shardId,
+                StartingPosition.fromStart(),
+                null,
+                childShardIds.stream()
+                        .map(
+                                childShardId ->
+                                        Shard.builder()
+                                                .parentShardId(shardId)
+                                                .shardId(childShardId)
+                                                .sequenceNumberRange(
+                                                        SequenceNumberRange.builder()
+                                                                .startingSequenceNumber("1234")
+                                                                .build())
+                                                .build())
+                        .collect(Collectors.toList()));
     }
 
     public static DynamoDbStreamsShardSplit getTestSplit(StartingPosition startingPosition) {
