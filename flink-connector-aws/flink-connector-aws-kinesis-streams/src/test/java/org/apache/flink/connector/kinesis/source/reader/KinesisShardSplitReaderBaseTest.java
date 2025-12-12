@@ -202,7 +202,8 @@ class KinesisShardSplitReaderBaseTest {
         @Override
         protected RecordBatch fetchRecords(KinesisShardSplitState splitState) {
             super.fetchRecords(splitState);
-            return new RecordBatch(Collections.emptyList(), 0L, false);
+            return new RecordBatch(
+                    Collections.emptyList(), splitState.getKinesisShardSplit(), 0L, false);
         }
     }
 
