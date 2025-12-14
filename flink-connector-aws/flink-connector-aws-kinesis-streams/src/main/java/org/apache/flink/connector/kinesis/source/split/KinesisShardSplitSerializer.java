@@ -22,6 +22,7 @@ import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
 import org.apache.flink.core.io.VersionMismatchException;
+import org.apache.flink.util.function.BiConsumerWithException;
 
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 
@@ -52,100 +53,66 @@ public class KinesisShardSplitSerializer implements SimpleVersionedSerializer<Ki
 
     @Override
     public byte[] serialize(KinesisShardSplit split) throws IOException {
+        return serialize(split, this::serializeV2);
+    }
+
+    @VisibleForTesting
+    byte[] serialize(
+            KinesisShardSplit split,
+            BiConsumerWithException<KinesisShardSplit, DataOutputStream, IOException> serializer)
+            throws IOException {
+
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 DataOutputStream out = new DataOutputStream(baos)) {
 
-            out.writeUTF(split.getStreamArn());
-            out.writeUTF(split.getShardId());
-            out.writeUTF(split.getStartingPosition().getShardIteratorType().toString());
-            if (split.getStartingPosition().getStartingMarker() == null) {
-                out.writeBoolean(false);
-            } else {
-                out.writeBoolean(true);
-                Object startingMarker = split.getStartingPosition().getStartingMarker();
-                out.writeBoolean(startingMarker instanceof Instant);
-                if (startingMarker instanceof Instant) {
-                    out.writeLong(((Instant) startingMarker).toEpochMilli());
-                }
-                out.writeBoolean(startingMarker instanceof String);
-                if (startingMarker instanceof String) {
-                    out.writeUTF((String) startingMarker);
-                }
-            }
-            out.writeInt(split.getParentShardIds().size());
-            for (String parentShardId : split.getParentShardIds()) {
-                out.writeUTF(parentShardId);
-            }
-            out.writeUTF(split.getStartingHashKey());
-            out.writeUTF(split.getEndingHashKey());
-            out.writeBoolean(split.isFinished());
-
+            serializer.accept(split, out);
             out.flush();
+
             return baos.toByteArray();
         }
     }
 
     /** This method used only to test backwards compatibility of deserialization logic. */
     @VisibleForTesting
-    byte[] serializeV0(KinesisShardSplit split) throws IOException {
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                DataOutputStream out = new DataOutputStream(baos)) {
-
-            out.writeUTF(split.getStreamArn());
-            out.writeUTF(split.getShardId());
-            out.writeUTF(split.getStartingPosition().getShardIteratorType().toString());
-            if (split.getStartingPosition().getStartingMarker() == null) {
-                out.writeBoolean(false);
-            } else {
-                out.writeBoolean(true);
-                Object startingMarker = split.getStartingPosition().getStartingMarker();
-                out.writeBoolean(startingMarker instanceof Instant);
-                if (startingMarker instanceof Instant) {
-                    out.writeLong(((Instant) startingMarker).toEpochMilli());
-                }
-                out.writeBoolean(startingMarker instanceof String);
-                if (startingMarker instanceof String) {
-                    out.writeUTF((String) startingMarker);
-                }
+    void serializeV0(KinesisShardSplit split, DataOutputStream out) throws IOException {
+        out.writeUTF(split.getStreamArn());
+        out.writeUTF(split.getShardId());
+        out.writeUTF(split.getStartingPosition().getShardIteratorType().toString());
+        if (split.getStartingPosition().getStartingMarker() == null) {
+            out.writeBoolean(false);
+        } else {
+            out.writeBoolean(true);
+            Object startingMarker = split.getStartingPosition().getStartingMarker();
+            out.writeBoolean(startingMarker instanceof Instant);
+            if (startingMarker instanceof Instant) {
+                out.writeLong(((Instant) startingMarker).toEpochMilli());
             }
-            out.flush();
-            return baos.toByteArray();
+            out.writeBoolean(startingMarker instanceof String);
+            if (startingMarker instanceof String) {
+                out.writeUTF((String) startingMarker);
+            }
         }
     }
 
     /** This method used only to test backwards compatibility of deserialization logic. */
     @VisibleForTesting
-    byte[] serializeV1(KinesisShardSplit split) throws IOException {
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                DataOutputStream out = new DataOutputStream(baos)) {
+    void serializeV1(KinesisShardSplit split, DataOutputStream out) throws IOException {
+        serializeV0(split, out);
 
-            out.writeUTF(split.getStreamArn());
-            out.writeUTF(split.getShardId());
-            out.writeUTF(split.getStartingPosition().getShardIteratorType().toString());
-            if (split.getStartingPosition().getStartingMarker() == null) {
-                out.writeBoolean(false);
-            } else {
-                out.writeBoolean(true);
-                Object startingMarker = split.getStartingPosition().getStartingMarker();
-                out.writeBoolean(startingMarker instanceof Instant);
-                if (startingMarker instanceof Instant) {
-                    out.writeLong(((Instant) startingMarker).toEpochMilli());
-                }
-                out.writeBoolean(startingMarker instanceof String);
-                if (startingMarker instanceof String) {
-                    out.writeUTF((String) startingMarker);
-                }
-            }
-            out.writeInt(split.getParentShardIds().size());
-            for (String parentShardId : split.getParentShardIds()) {
-                out.writeUTF(parentShardId);
-            }
-            out.writeUTF(split.getStartingHashKey());
-            out.writeUTF(split.getEndingHashKey());
-
-            out.flush();
-            return baos.toByteArray();
+        out.writeInt(split.getParentShardIds().size());
+        for (String parentShardId : split.getParentShardIds()) {
+            out.writeUTF(parentShardId);
         }
+        out.writeUTF(split.getStartingHashKey());
+        out.writeUTF(split.getEndingHashKey());
+    }
+
+    /** This method used only to test backwards compatibility of deserialization logic. */
+    @VisibleForTesting
+    void serializeV2(KinesisShardSplit split, DataOutputStream out) throws IOException {
+        serializeV1(split, out);
+
+        out.writeBoolean(split.isFinished());
     }
 
     @Override

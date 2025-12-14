@@ -81,7 +81,7 @@ class KinesisShardSplitSerializerTest {
                         STARTING_HASH_KEY_TEST_VALUE,
                         ENDING_HASH_KEY_TEST_VALUE);
 
-        byte[] oldSerializedState = serializer.serializeV0(initialSplit);
+        byte[] oldSerializedState = serializer.serialize(initialSplit, serializer::serializeV0);
         KinesisShardSplit deserializedSplit = serializer.deserialize(0, oldSerializedState);
 
         assertThat(deserializedSplit)
@@ -152,7 +152,7 @@ class KinesisShardSplitSerializerTest {
                         STARTING_HASH_KEY_TEST_VALUE,
                         ENDING_HASH_KEY_TEST_VALUE);
 
-        byte[] oldSerializedState = serializer.serializeV1(initialSplit);
+        byte[] oldSerializedState = serializer.serialize(initialSplit, serializer::serializeV1);
         KinesisShardSplit deserializedSplit = serializer.deserialize(1, oldSerializedState);
 
         assertThat(deserializedSplit)
