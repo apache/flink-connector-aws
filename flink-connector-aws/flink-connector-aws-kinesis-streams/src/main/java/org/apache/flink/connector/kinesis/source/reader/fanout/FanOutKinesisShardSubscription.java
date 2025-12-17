@@ -138,17 +138,11 @@ public class FanOutKinesisShardSubscription {
         kinesis.subscribeToShard(consumerArn, shardId, startingPosition, responseHandler)
                 .exceptionally(
                         throwable -> {
-                            // If consumer exists and is still activating, we want to countdown.
-                            if (ExceptionUtils.findThrowable(
-                                            throwable, ResourceInUseException.class)
-                                    .isPresent()) {
-                                waitForSubscriptionLatch.countDown();
-                                return null;
-                            }
                             LOG.error(
                                     String.format("Error subscribing to shard %s with starting position %s for consumer %s.", shardId, startingPosition, consumerArn),
                                     throwable);
                             terminateSubscription(throwable);
+                            waitForSubscriptionLatch.countDown();
                             return null;
                         });
 
@@ -159,14 +153,16 @@ public class FanOutKinesisShardSubscription {
                     try {
                         if (waitForSubscriptionLatch.await(
                                 subscriptionTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
-                            LOG.info(
-                                    "Successfully subscribed to shard {} with starting position {} for consumer {}.",
-                                    shardId,
-                                    startingPosition,
-                                    consumerArn);
-                            subscriptionActive.set(true);
-                            // Request first batch of records.
-                            shardSubscriber.requestRecords();
+                            Throwable error = subscriptionException.get();
+                            if (error == null) {
+                                LOG.info(
+                                        "Successfully subscribed to shard {} with starting position {} for consumer {}.",
+                                        shardId,
+                                        startingPosition,
+                                        consumerArn);
+                            } else {
+                                LOG.debug(String.format("Initialization finished with error: %s", error.getMessage()), error);
+                            }
                         } else {
                             String errorMessage =
                                     "Timeout when subscribing to shard "
@@ -207,10 +203,6 @@ public class FanOutKinesisShardSubscription {
     public SubscribeToShardEvent nextEvent() {
         Throwable throwable = subscriptionException.getAndSet(null);
         if (throwable != null) {
-            // If consumer is still activating, we want to wait.
-            if (ExceptionUtils.findThrowable(throwable, ResourceInUseException.class).isPresent()) {
-                return null;
-            }
             // We don't want to wrap ResourceNotFoundExceptions because it is handled via a
             // try-catch loop
             if (throwable instanceof ResourceNotFoundException) {
@@ -260,6 +252,10 @@ public class FanOutKinesisShardSubscription {
         }
 
         public void requestRecords() {
+            if (subscription == null) {
+                LOG.warn("requestRecords() called before subscription is set; ignoring.");
+                return;
+            }
             subscription.request(1);
         }
 
@@ -282,7 +278,9 @@ public class FanOutKinesisShardSubscription {
                     startingPosition,
                     consumerArn);
             this.subscription = subscription;
+            subscriptionActive.set(true);
             subscriptionLatch.countDown();
+            requestRecords();
         }
 
         @Override
