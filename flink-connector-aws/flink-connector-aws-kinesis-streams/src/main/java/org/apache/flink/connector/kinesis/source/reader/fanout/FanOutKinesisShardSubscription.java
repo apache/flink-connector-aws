@@ -85,8 +85,9 @@ public class FanOutKinesisShardSubscription {
 
     // Store the current starting position for this subscription. Will be updated each time new
     // batch of records is consumed
-    private StartingPosition startingPosition;
-    private FanOutShardSubscriber shardSubscriber;
+    // Cross-thread access: written by Netty thread in Subscriber#onNext, read by Flink main thread in kinesis#subscribeToShard.
+    private volatile StartingPosition startingPosition;
+    private volatile FanOutShardSubscriber shardSubscriber;
 
     public FanOutKinesisShardSubscription(
             AsyncStreamProxy kinesis,
