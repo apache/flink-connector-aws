@@ -145,10 +145,7 @@ public class FanOutKinesisShardSubscription {
                                 return null;
                             }
                             LOG.error(
-                                    "Error subscribing to shard {} with starting position {} for consumer {}.",
-                                    shardId,
-                                    startingPosition,
-                                    consumerArn,
+                                    String.format("Error subscribing to shard %s with starting position %s for consumer %s.", shardId, startingPosition, consumerArn),
                                     throwable);
                             terminateSubscription(throwable);
                             return null;
