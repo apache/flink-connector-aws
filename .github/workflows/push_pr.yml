@@ -39,6 +39,8 @@ jobs:
     strategy:
       matrix:
         flink: [1.20.0]
+        java: [ '11' ]
     uses: apache/flink-connector-shared-utils/.github/workflows/python_ci.yml@ci_utils
     with:
       flink_version: ${{ matrix.flink }}
+      jdk_version: ${{ matrix.java }}
