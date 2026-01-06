@@ -79,7 +79,17 @@ def prepare_pyflink_dir():
     connector_version = pom_root.findall(
         "./{http://maven.apache.org/POM/4.0.0}version")[0].text.replace("-SNAPSHOT", ".dev0")
 
-    flink_dependency = "apache-flink>=" + flink_version
+    # Pin to the minor version (e.g., >=1.19.1,<1.20.0) to allow patch updates
+    # but prevent major/minor version upgrades
+    version_parts = flink_version.split('.')
+    if len(version_parts) >= 2:
+        next_minor = str(int(version_parts[1]) + 1)
+        next_version = version_parts[0] + '.' + next_minor + '.0'
+        flink_dependency = "apache-flink>=" + flink_version + ",<" + next_version
+    else:
+        # Fallback to exact match if version format is unexpected
+        print("Falling back to exact match for unexpected version format: " + flink_version)
+        flink_dependency = "apache-flink==" + flink_version
 
     with io.open(VERSION_FILE, 'w', encoding='utf-8') as f:
         f.write('# Generated file, do not edit\n')
@@ -94,8 +104,8 @@ def prepare_pyflink_dir():
 print("Python version used to package: " + sys.version)
 
 # Python version check
-if sys.version_info < (3, 7):
-    print("Python versions prior to 3.7 are not supported for PyFlink.",
+if sys.version_info < (3, 8):
+    print("Python versions prior to 3.8 are not supported for PyFlink.",
           file=sys.stderr)
     sys.exit(-1)
 
@@ -132,7 +142,7 @@ setup(
     license='https://www.apache.org/licenses/LICENSE-2.0',
     author='Apache Software Foundation',
     author_email='dev@flink.apache.org',
-    python_requires='>=3.7',
+    python_requires='>=3.8',
     install_requires=[flink_dependency],
     description='Apache Flink Python AWS Connector API',
     long_description=long_description,
@@ -144,10 +154,10 @@ setup(
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         'License :: OSI Approved :: Apache Software License',
-        'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
-        'Programming Language :: Python :: 3.10']
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11']
 )
 
 print("\nFlink AWS connector package is ready\n")
