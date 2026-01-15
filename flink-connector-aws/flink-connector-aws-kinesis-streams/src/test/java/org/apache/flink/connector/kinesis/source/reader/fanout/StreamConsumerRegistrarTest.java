@@ -7,13 +7,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 
-import java.time.Duration;
-
 import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.ConsumerLifecycle.JOB_MANAGED;
 import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.ConsumerLifecycle.SELF_MANAGED;
 import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.EFO_CONSUMER_LIFECYCLE;
 import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.EFO_CONSUMER_NAME;
-import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.EFO_DEREGISTER_CONSUMER_TIMEOUT;
 import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.READER_TYPE;
 import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.ReaderType.EFO;
 import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.ReaderType.POLLING;
@@ -98,6 +95,25 @@ class StreamConsumerRegistrarTest {
     }
 
     @Test
+    void testRegisterStreamConsumerSkippedWhenEfo() {
+        // Given JOB_MANAGED consumer lifecycle
+        sourceConfiguration.set(READER_TYPE, EFO);
+        sourceConfiguration.set(EFO_CONSUMER_LIFECYCLE, JOB_MANAGED);
+        // And consumer is registered
+        sourceConfiguration.set(EFO_CONSUMER_NAME, CONSUMER_NAME);
+        streamConsumerRegistrar.registerStreamConsumer();
+        assertThat(testKinesisStreamProxy.getRegisteredConsumers(STREAM_ARN))
+                .containsExactly(CONSUMER_NAME);
+
+        // When deregisterStreamConsumer is called
+        // Then we skip deregistration of the consumer
+        assertThatNoException()
+                .isThrownBy(() -> streamConsumerRegistrar.deregisterStreamConsumer());
+        assertThat(testKinesisStreamProxy.getRegisteredConsumers(STREAM_ARN))
+                .containsExactly(CONSUMER_NAME);
+    }
+
+    @Test
     void testRegisterStreamConsumerSkippedWhenSelfManaged() {
         // Given SELF_MANAGED consumer lifecycle
         sourceConfiguration.set(READER_TYPE, EFO);
@@ -175,44 +191,5 @@ class StreamConsumerRegistrarTest {
         // Then consumer is registered
         assertThat(testKinesisStreamProxy.getRegisteredConsumers(STREAM_ARN))
                 .containsExactly(CONSUMER_NAME);
-    }
-
-    @Test
-    void testDeregisterStreamConsumerWhenJobManaged() {
-        // Given JOB_MANAGED consumer lifecycle
-        sourceConfiguration.set(READER_TYPE, EFO);
-        sourceConfiguration.set(EFO_CONSUMER_LIFECYCLE, JOB_MANAGED);
-        // And consumer is registered
-        sourceConfiguration.set(EFO_CONSUMER_NAME, CONSUMER_NAME);
-        streamConsumerRegistrar.registerStreamConsumer();
-        assertThat(testKinesisStreamProxy.getRegisteredConsumers(STREAM_ARN))
-                .containsExactly(CONSUMER_NAME);
-
-        // When deregisterStreamConsumer is called
-        streamConsumerRegistrar.deregisterStreamConsumer();
-
-        // Then consumer is deregistered
-        assertThat(testKinesisStreamProxy.getRegisteredConsumers(STREAM_ARN)).hasSize(0);
-    }
-
-    @Test
-    void testDeregisterStreamConsumerProceedsWhenTimeoutDeregistering() {
-        // Given JOB_MANAGED consumer lifecycle
-        sourceConfiguration.set(READER_TYPE, EFO);
-        sourceConfiguration.set(EFO_CONSUMER_LIFECYCLE, JOB_MANAGED);
-        sourceConfiguration.set(EFO_DEREGISTER_CONSUMER_TIMEOUT, Duration.ofMillis(50));
-        // And consumer is registered
-        sourceConfiguration.set(EFO_CONSUMER_NAME, CONSUMER_NAME);
-        streamConsumerRegistrar.registerStreamConsumer();
-        assertThat(testKinesisStreamProxy.getRegisteredConsumers(STREAM_ARN))
-                .containsExactly(CONSUMER_NAME);
-        // And consumer is stuck in DELETING
-        testKinesisStreamProxy.setConsumersCurrentlyDeleting(CONSUMER_NAME);
-
-        // When deregisterStreamConsumer is called
-        streamConsumerRegistrar.deregisterStreamConsumer();
-
-        // Then consumer is deregistered
-        assertThat(testKinesisStreamProxy.getRegisteredConsumers(STREAM_ARN)).hasSize(0);
     }
 }
