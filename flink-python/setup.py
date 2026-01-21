@@ -32,7 +32,7 @@ POM_FILE = os.path.join(CURRENT_DIR, '../pom.xml')
 README_FILE = os.path.join(CURRENT_DIR, 'README.txt')
 
 # Generated files and directories
-VERSION_FILE = os.path.join(CURRENT_DIR, 'pyflink/datastream/connectors/kinesis.py')
+VERSION_FILE = os.path.join(CURRENT_DIR, 'pyflink/datastream/connectors/aws_connector_version.py')
 DEPENDENCY_FILE = os.path.join(CURRENT_DIR, 'dev/dev-requirements.txt')
 
 
