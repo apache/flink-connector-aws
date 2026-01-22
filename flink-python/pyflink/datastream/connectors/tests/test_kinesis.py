@@ -15,8 +15,8 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 ################################################################################
-from pyflink.common import SimpleStringSchema, Types
-from pyflink.datastream.connectors.kinesis import PartitionKeyGenerator, FlinkKinesisConsumer, \
+from pyflink.common import SimpleStringSchema, Types, WatermarkStrategy
+from pyflink.datastream.connectors.kinesis import PartitionKeyGenerator, KinesisStreamsSource, \
     KinesisStreamsSink, KinesisFirehoseSink
 from pyflink.testing.test_case_utils import PyFlinkUTTestCase
 from pyflink.util.java_utils import get_field_value
@@ -25,21 +25,19 @@ from pyflink.util.java_utils import get_field_value
 class FlinkKinesisTest(PyFlinkUTTestCase):
 
     def test_kinesis_source(self):
-        consumer_config = {
-            'aws.region': 'us-east-1',
-            'aws.credentials.provider.basic.accesskeyid': 'aws_access_key_id',
-            'aws.credentials.provider.basic.secretkey': 'aws_secret_access_key',
-            'flink.stream.initpos': 'LATEST'
-        }
+        source = KinesisStreamsSource.builder() \
+            .set_stream_arn("arn:aws:kinesis:us-east-1:123456789012:stream/stream-1") \
+            .set_deserialization_schema(SimpleStringSchema()) \
+            .build()
 
-        kinesis_source = FlinkKinesisConsumer("stream-1", SimpleStringSchema(), consumer_config)
-
-        ds = self.env.add_source(source_func=kinesis_source, source_name="kinesis source")
+        ds = self.env.from_source(source, WatermarkStrategy.no_watermarks(),
+                                  source_name="kinesis source", type_info=Types.STRING())
         ds.print()
         plan = eval(self.env.get_execution_plan())
         self.assertEqual('Source: kinesis source', plan['nodes'][0]['type'])
         self.assertEqual(
-            get_field_value(kinesis_source.get_java_function(), 'streams')[0], 'stream-1')
+            get_field_value(source.get_java_function(), 'streamArn'),
+            'arn:aws:kinesis:us-east-1:123456789012:stream/stream-1')
 
     def test_kinesis_streams_sink(self):
         sink_properties = {
