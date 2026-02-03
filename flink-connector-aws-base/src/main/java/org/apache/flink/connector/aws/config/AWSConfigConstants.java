@@ -154,6 +154,54 @@ public class AWSConfigConstants {
     /** Read Request timeout for {@link SdkAsyncHttpClient}. */
     public static final String HTTP_CLIENT_READ_TIMEOUT_MILLIS = "aws.http-client.read-timeout";
 
+    /**
+     * The type of {@link software.amazon.awssdk.http.SdkHttpClient}. If set, all AWS clients will
+     * use this specified HTTP client. If not set, HTTP_CLIENT_TYPE_DEFAULT will be used. For
+     * specific types supported, see HTTP_CLIENT_TYPE_* defined below.
+     */
+    public static final String HTTP_CLIENT_TYPE = "http-client.type";
+
+    // ---- glue configs
+
+    /**
+     * Used to configure the connection timeout in milliseconds for {@link
+     * software.amazon.awssdk.http.apache.ApacheHttpClient.Builder}. This flag only works when
+     * {@link #HTTP_CLIENT_TYPE} is set to HTTP_CLIENT_TYPE_APACHE
+     *
+     * <p>For more details, see <a
+     * href="https://sdk.amazonaws.com/java/api/latest/software/amazon/awssdk/http/apache/ApacheHttpClient.Builder.html">...</a>
+     */
+    public static final String HTTP_CLIENT_CONNECTION_TIMEOUT_MS =
+            "http-client.connection-timeout-ms";
+
+    /**
+     * Used to configure the max connections number for {@link
+     * software.amazon.awssdk.http.apache.ApacheHttpClient.Builder}. This flag only works when
+     * {@link #HTTP_CLIENT_TYPE} is set to HTTP_CLIENT_TYPE_APACHE
+     *
+     * <p>For more details, see <a
+     * href="https://sdk.amazonaws.com/java/api/latest/software/amazon/awssdk/http/apache/ApacheHttpClient.Builder.html">...</a>
+     */
+    public static final String HTTP_CLIENT_APACHE_MAX_CONNECTIONS =
+            "http-client.apache.max-connections";
+
+    /**
+     * Used to configure the socket timeout in milliseconds for {@link
+     * software.amazon.awssdk.http.apache.ApacheHttpClient.Builder}. This flag only works when
+     * {@link #HTTP_CLIENT_TYPE} is set to HTTP_CLIENT_TYPE_APACHE
+     *
+     * <p>For more details, see <a
+     * href="https://sdk.amazonaws.com/java/api/latest/software/amazon/awssdk/http/apache/ApacheHttpClient.Builder.html">...</a>
+     */
+    public static final String HTTP_CLIENT_SOCKET_TIMEOUT_MS = "http-client.socket-timeout-ms";
+
+    public static final String CLIENT_TYPE_URLCONNECTION = "urlconnection";
+
+    /**
+     * {@link software.amazon.awssdk.http.apache.ApacheHttpClient} will be used as the HTTP Client.
+     */
+    public static final String CLIENT_TYPE_APACHE = "apache";
+
     public static String accessKeyId(String prefix) {
         return prefix + ".basic.accesskeyid";
     }
