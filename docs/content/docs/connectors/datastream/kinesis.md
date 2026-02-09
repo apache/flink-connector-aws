@@ -99,6 +99,7 @@ val kinesisEvents = env.fromSource(kdsSource, WatermarkStrategy.forMonotonousTim
             .uid("custom-uid")
 ```
 {{< /tab >}}
+{{< /tabs >}}
 
 The above is a simple example of using the `KinesisStreamsSource`.
 - The Kinesis stream being read from is specified using the Kinesis Stream ARN.
