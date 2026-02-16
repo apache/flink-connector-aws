@@ -29,6 +29,7 @@ import java.util.stream.Stream;
 import static org.apache.flink.connector.dynamodb.source.util.TestUtil.SHARD_ID;
 import static org.apache.flink.connector.dynamodb.source.util.TestUtil.STREAM_ARN;
 import static org.apache.flink.connector.dynamodb.source.util.TestUtil.getTestSplit;
+import static org.apache.flink.connector.dynamodb.source.util.TestUtil.getTestSplitWithChildShards;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatExceptionOfType;
 
@@ -37,6 +38,19 @@ class DynamoDbStreamsShardSplitSerializerTest {
     @Test
     void testSerializeAndDeserializeEverythingSpecified() throws Exception {
         final DynamoDbStreamsShardSplit initialSplit = getTestSplit();
+
+        DynamoDbStreamsShardSplitSerializer serializer = new DynamoDbStreamsShardSplitSerializer();
+
+        byte[] serialized = serializer.serialize(initialSplit);
+        DynamoDbStreamsShardSplit deserializedSplit =
+                serializer.deserialize(serializer.getVersion(), serialized);
+
+        assertThat(deserializedSplit).usingRecursiveComparison().isEqualTo(initialSplit);
+    }
+
+    @Test
+    void testSerializeAndDeserializeWithChildSplits() throws Exception {
+        final DynamoDbStreamsShardSplit initialSplit = getTestSplitWithChildShards();
 
         DynamoDbStreamsShardSplitSerializer serializer = new DynamoDbStreamsShardSplitSerializer();
 

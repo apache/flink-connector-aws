@@ -22,6 +22,7 @@ import org.apache.flink.api.connector.source.SourceEvent;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.base.source.reader.fetcher.SingleThreadFetcherManager;
 import org.apache.flink.connector.dynamodb.source.enumerator.event.SplitsFinishedEvent;
+import org.apache.flink.connector.dynamodb.source.enumerator.event.SplitsFinishedEventContext;
 import org.apache.flink.connector.dynamodb.source.metrics.DynamoDbStreamsShardMetrics;
 import org.apache.flink.connector.dynamodb.source.proxy.StreamProxy;
 import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplit;
@@ -37,6 +38,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -73,6 +75,7 @@ class DynamoDbStreamsSourceReaderTest {
                                 testStreamProxy,
                                 NON_EMPTY_POLLING_DELAY_MILLIS,
                                 EMPTY_POLLING_DELAY_MILLIS,
+                                new ConcurrentHashMap<>(),
                                 shardMetricGroupMap);
 
         testingReaderContext =
@@ -84,6 +87,7 @@ class DynamoDbStreamsSourceReaderTest {
                         new DynamoDbStreamsRecordEmitter<>(null),
                         new Configuration(),
                         testingReaderContext,
+                        new ConcurrentHashMap<>(),
                         shardMetricGroupMap);
     }
 
@@ -122,12 +126,14 @@ class DynamoDbStreamsSourceReaderTest {
 
         List<SourceEvent> events = testingReaderContext.getSentEvents();
 
-        Set<String> expectedSplitIds = Collections.singleton(split.splitId());
+        Set<SplitsFinishedEventContext> expectedFinishedSplits =
+                Collections.singleton(
+                        new SplitsFinishedEventContext(split.splitId(), new ArrayList<>()));
         assertThat(events)
                 .singleElement()
                 .isInstanceOf(SplitsFinishedEvent.class)
                 .usingRecursiveComparison()
-                .isEqualTo(new SplitsFinishedEvent(expectedSplitIds));
+                .isEqualTo(new SplitsFinishedEvent(expectedFinishedSplits));
     }
 
     @Test
@@ -225,8 +231,10 @@ class DynamoDbStreamsSourceReaderTest {
                 .allSatisfy(
                         e -> {
                             SplitsFinishedEvent event = (SplitsFinishedEvent) e;
-                            assertThat(event.getFinishedSplitIds()).hasSize(1);
-                            assertThat(event.getFinishedSplitIds())
+                            assertThat(event.getFinishedSplits()).hasSize(1);
+                            assertThat(
+                                            event.getFinishedSplits().stream()
+                                                    .map(SplitsFinishedEventContext::getSplitId))
                                     .containsAnyOf("finished-split-1", "finished-split-2");
                         });
 

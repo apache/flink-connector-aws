@@ -44,7 +44,8 @@ public class UniformShardAssigner implements KinesisShardAssigner {
     public int assign(KinesisShardSplit split, Context context) {
         Preconditions.checkArgument(
                 !context.getRegisteredReaders().isEmpty(),
-                "Expected at least one registered reader. Unable to assign split.");
+                "Expected at least one registered reader. Unable to assign split with id: %s.",
+                split.splitId());
         BigInteger hashKeyStart = new BigInteger(split.getStartingHashKey());
         BigInteger hashKeyEnd = new BigInteger(split.getEndingHashKey());
         BigInteger hashKeyMid = hashKeyStart.add(hashKeyEnd).divide(TWO);

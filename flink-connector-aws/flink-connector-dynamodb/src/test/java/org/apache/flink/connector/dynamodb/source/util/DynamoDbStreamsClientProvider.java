@@ -26,12 +26,18 @@ import software.amazon.awssdk.services.dynamodb.model.GetRecordsRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetRecordsResponse;
 import software.amazon.awssdk.services.dynamodb.model.GetShardIteratorRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetShardIteratorResponse;
+import software.amazon.awssdk.services.dynamodb.model.Shard;
+import software.amazon.awssdk.services.dynamodb.model.ShardFilter;
+import software.amazon.awssdk.services.dynamodb.model.ShardFilterType;
+import software.amazon.awssdk.services.dynamodb.model.StreamDescription;
 import software.amazon.awssdk.services.dynamodb.streams.DynamoDbStreamsClient;
 import software.amazon.awssdk.services.dynamodb.streams.DynamoDbStreamsServiceClientConfiguration;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.List;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 /** Provides {@link DynamoDbStreamsClient} with mocked DynamoDbStreams behavior. */
 public class DynamoDbStreamsClientProvider {
@@ -84,6 +90,29 @@ public class DynamoDbStreamsClientProvider {
                 throws AwsServiceException, SdkClientException {
 
             describeStreamValidation.accept(describeStreamRequest);
+            ShardFilter shardFilter = describeStreamRequest.shardFilter();
+            if (shardFilter != null && ShardFilterType.CHILD_SHARDS.equals(shardFilter.type())) {
+                List<Shard> shards = describeStreamResponse.streamDescription().shards();
+                List<Shard> childShards =
+                        shards.stream()
+                                .filter(
+                                        shard ->
+                                                shard.parentShardId() != null
+                                                        && shard.parentShardId()
+                                                                .equals(shardFilter.shardId()))
+                                .collect(Collectors.toList());
+                return DescribeStreamResponse.builder()
+                        .streamDescription(
+                                StreamDescription.builder()
+                                        .shards(childShards)
+                                        .streamArn(describeStreamRequest.streamArn())
+                                        .streamStatus(
+                                                describeStreamResponse
+                                                        .streamDescription()
+                                                        .streamStatus())
+                                        .build())
+                        .build();
+            }
             return describeStreamResponse;
         }
 

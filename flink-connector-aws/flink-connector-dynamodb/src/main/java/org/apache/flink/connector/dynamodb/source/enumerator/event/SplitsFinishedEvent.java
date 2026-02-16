@@ -22,26 +22,27 @@ import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.connector.source.SourceEvent;
 
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /** Source event used by source reader to communicate that splits are finished to enumerator. */
 @Internal
 public class SplitsFinishedEvent implements SourceEvent {
     private static final long serialVersionUID = 1;
-    private final Set<String> finishedSplitIds;
+    private final Set<SplitsFinishedEventContext> finishedSplits;
 
-    public SplitsFinishedEvent(Set<String> finishedSplitIds) {
-        this.finishedSplitIds = finishedSplitIds;
+    public SplitsFinishedEvent(Set<SplitsFinishedEventContext> finishedSplits) {
+        this.finishedSplits = finishedSplits;
     }
 
-    public Set<String> getFinishedSplitIds() {
-        return finishedSplitIds;
+    public Set<SplitsFinishedEventContext> getFinishedSplits() {
+        return finishedSplits;
     }
 
     @Override
     public String toString() {
         return "SplitsFinishedEvent{"
-                + "finishedSplitIds=["
-                + String.join(",", finishedSplitIds)
+                + "finishedSplit=["
+                + finishedSplits.stream().map(Object::toString).collect(Collectors.joining(","))
                 + "]}";
     }
 }

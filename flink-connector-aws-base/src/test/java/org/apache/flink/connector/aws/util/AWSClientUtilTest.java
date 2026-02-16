@@ -194,8 +194,10 @@ class AWSClientUtilTest {
 
         ClientOverrideConfiguration resultOverrideConfiguration =
                 s3Client.serviceClientConfiguration().overrideConfiguration();
-        assertThat(resultOverrideConfiguration.retryStrategy())
-                .isEqualTo(Optional.of(overrideRetryStrategy));
+        assertThat(resultOverrideConfiguration.retryStrategy()).isPresent();
+        RetryStrategy resultStrategy = resultOverrideConfiguration.retryStrategy().get();
+        assertThat(resultStrategy.maxAttempts()).isEqualTo(10);
+
         assertThat(resultOverrideConfiguration.retryPolicy()).isEqualTo(Optional.empty());
         assertThat(resultOverrideConfiguration.retryMode()).isEqualTo(Optional.empty());
         assertThat(resultOverrideConfiguration.retryStrategyConfigurator())
