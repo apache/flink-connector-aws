@@ -25,12 +25,12 @@ jobs:
   compile_and_test:
     strategy:
       matrix:
-        flink: [2.0.0]
-        java: ['11, 17, 21']
+        flink: &flink_versions [ 2.0.1 ]
+        jdk: [ '11, 17, 21' ]
     uses: ./.github/workflows/common.yml
     with:
       flink_version: ${{ matrix.flink }}
-      jdk_version: ${{ matrix.java }}
+      jdk_version: ${{ matrix.jdk }}
       flink_url: https://archive.apache.org/dist/flink/flink-${{ matrix.flink }}/flink-${{ matrix.flink }}-bin-scala_2.12.tgz
       cache_flink_binary: true
     secrets: inherit
@@ -38,7 +38,7 @@ jobs:
   python_test:
     strategy:
       matrix:
-        flink: [2.0.0]
+        flink: *flink_versions
     uses: apache/flink-connector-shared-utils/.github/workflows/python_ci.yml@ci_utils
     with:
       flink_version: ${{ matrix.flink }}

@@ -32,6 +32,10 @@ on:
         required: false
         default: 11, 17
         type: string
+      connector_branch:
+        description: "Branch that need to be checked out."
+        required: false
+        type: string
       cache_flink_binary:
         description: "Whether to cache the Flink binary. Should be false for SNAPSHOT URLs, true otherwise."
         required: true
@@ -67,10 +71,12 @@ jobs:
       - run: echo "Running CI pipeline for JDK version ${{ matrix.jdk }}"
 
       - name: Check out repository code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          ref: "${{ inputs.connector_branch }}"
 
       - name: Set JDK
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           java-version: ${{ matrix.jdk }}
           distribution: 'temurin'
