@@ -336,7 +336,12 @@ public class DynamoDbDynamicSinkFactoryTest {
                 Column.physical("some_timestamp_array", DataTypes.ARRAY(DataTypes.TIMESTAMP())),
                 Column.physical(
                         "some_timestamp_ltz_array", DataTypes.ARRAY(DataTypes.TIMESTAMP_LTZ())),
-                Column.physical("some_map", DataTypes.MAP(DataTypes.STRING(), DataTypes.BIGINT())));
+                Column.physical("some_map", DataTypes.MAP(DataTypes.STRING(), DataTypes.BIGINT())),
+                Column.physical(
+                        "some_row",
+                        DataTypes.ROW(
+                                DataTypes.FIELD("inner_string", DataTypes.STRING()),
+                                DataTypes.FIELD("inner_int", DataTypes.INT()))));
     }
 
     private ResolvedSchema defaultSinkSchema() {

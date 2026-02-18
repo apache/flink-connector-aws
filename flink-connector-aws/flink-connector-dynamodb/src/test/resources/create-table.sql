@@ -15,6 +15,7 @@ CREATE TABLE dynamo_db_table (
     `some_time` TIME,
     `some_timestamp` TIMESTAMP(3),
     `some_timestamp_ltz` TIMESTAMP_LTZ(5),
+    `some_row` ROW<myField INT, myOtherField String>,
     `some_char_array` ARRAY<CHAR>,
     `some_varchar_array` ARRAY<VARCHAR>,
     `some_string_array` ARRAY<STRING>,
@@ -29,6 +30,7 @@ CREATE TABLE dynamo_db_table (
     `some_time_array` ARRAY<TIME>,
     `some_timestamp_array` ARRAY<TIMESTAMP(3)>,
     `some_timestamp_ltz_array` ARRAY<TIMESTAMP_LTZ(5)>,
+    `some_rows_array` ARRAY<ROW<myField INT, myOtherField STRING>>,
     `some_string_map` MAP<STRING,STRING>,
     `some_boolean_map` MAP<STRING,BOOLEAN>
 ) PARTITIONED BY ( partition_key )
