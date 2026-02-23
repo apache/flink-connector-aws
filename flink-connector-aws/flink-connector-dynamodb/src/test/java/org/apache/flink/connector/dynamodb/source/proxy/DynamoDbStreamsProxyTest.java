@@ -38,6 +38,8 @@ import software.amazon.awssdk.services.dynamodb.model.GetShardIteratorRequest;
 import software.amazon.awssdk.services.dynamodb.model.Record;
 import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.dynamodb.model.Shard;
+import software.amazon.awssdk.services.dynamodb.model.ShardFilter;
+import software.amazon.awssdk.services.dynamodb.model.ShardFilterType;
 import software.amazon.awssdk.services.dynamodb.model.ShardIteratorType;
 import software.amazon.awssdk.services.dynamodb.model.StreamDescription;
 import software.amazon.awssdk.services.dynamodb.model.StreamStatus;
@@ -50,8 +52,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 import static org.apache.flink.connector.dynamodb.source.util.TestUtil.generateShardId;
-import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
-import static org.assertj.core.api.AssertionsForClassTypes.assertThatNoException;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 
 /** Tests to validate {@link DynamoDbStreamsProxy}. */
 public class DynamoDbStreamsProxyTest {
@@ -86,6 +88,86 @@ public class DynamoDbStreamsProxyTest {
 
         assertThat(dynamoDbStreamsProxy.listShards(streamArn, lastSeenShardId))
                 .isEqualTo(expectedListShardsResult);
+    }
+
+    @Test
+    void testListShardsWithFilterForChildShards() {
+        final String streamArn =
+                "arn:aws:dynamodb:us-east-1:1231231230:table/test/stream/2024-01-01T00:00:00.826";
+        final String parentShardId = "shardId-000000000001";
+
+        // Create child shards that we expect to be returned
+        final List<Shard> childShards =
+                List.of(
+                        Shard.builder()
+                                .shardId("shardId-000000000002")
+                                .parentShardId(parentShardId)
+                                .build(),
+                        Shard.builder()
+                                .shardId("shardId-000000000003")
+                                .parentShardId(parentShardId)
+                                .build());
+
+        // Create some other shards that should not be returned
+        final List<Shard> otherShards =
+                List.of(
+                        Shard.builder()
+                                .shardId("shardId-000000000004")
+                                .parentShardId("different-parent")
+                                .build(),
+                        Shard.builder().shardId("shardId-000000000005").build());
+
+        // Set up the expected response
+        final ListShardsResult expectedResult = new ListShardsResult();
+        expectedResult.addShards(childShards);
+        expectedResult.setStreamStatus(StreamStatus.ENABLED);
+
+        // Create describe stream response with all shards
+        List<Shard> allShards = new ArrayList<>();
+        allShards.addAll(childShards);
+        allShards.addAll(otherShards);
+
+        DescribeStreamResponse describeStreamResponse =
+                DescribeStreamResponse.builder()
+                        .streamDescription(
+                                StreamDescription.builder()
+                                        .shards(allShards)
+                                        .streamStatus(StreamStatus.ENABLED)
+                                        .lastEvaluatedShardId(null)
+                                        .build())
+                        .build();
+
+        TestingDynamoDbStreamsClient testingDynamoDbStreamsClient =
+                new TestingDynamoDbStreamsClient();
+
+        // Verify the correct request is made
+        testingDynamoDbStreamsClient.setDescribeStreamValidation(
+                request -> {
+                    assertThat(request.streamArn()).isEqualTo(streamArn);
+                    assertThat(request.shardFilter()).isNotNull();
+                    assertThat(request.shardFilter().type())
+                            .isEqualTo(ShardFilterType.CHILD_SHARDS);
+                    assertThat(request.shardFilter().shardId()).isEqualTo(parentShardId);
+                });
+
+        testingDynamoDbStreamsClient.setDescribeStreamResponse(describeStreamResponse);
+
+        DynamoDbStreamsProxy dynamoDbStreamsProxy =
+                new DynamoDbStreamsProxy(testingDynamoDbStreamsClient, HTTP_CLIENT);
+
+        // Create the filter for child shards
+        ShardFilter childShardFilter =
+                ShardFilter.builder()
+                        .type(ShardFilterType.CHILD_SHARDS)
+                        .shardId(parentShardId)
+                        .build();
+
+        // Execute the method and verify results
+        ListShardsResult result =
+                dynamoDbStreamsProxy.listShardsWithFilter(streamArn, childShardFilter);
+
+        assertThat(result.getShards()).hasSize(2).containsExactlyInAnyOrderElementsOf(childShards);
+        assertThat(result.getStreamStatus()).isEqualTo(StreamStatus.ENABLED);
     }
 
     @Test

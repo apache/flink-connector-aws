@@ -36,14 +36,18 @@ import org.apache.flink.metrics.testutils.MetricListener;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static org.apache.flink.connector.kinesis.source.util.KinesisStreamProxyProvider.getTestStreamProxy;
+import static org.apache.flink.connector.kinesis.source.util.TestUtil.getFinishedTestSplit;
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.getTestSplit;
 import static org.apache.flink.connector.kinesis.source.util.TestUtil.getTestSplitState;
 import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
@@ -146,5 +150,121 @@ class KinesisStreamsSourceReaderTest {
 
         TestUtil.assertMillisBehindLatest(
                 split, TestUtil.MILLIS_BEHIND_LATEST_TEST_VALUE, metricListener);
+    }
+
+    @Test
+    void testSnapshotStateWithFinishedSplits() throws Exception {
+        // Create and add a split
+        KinesisShardSplit split = getTestSplit();
+        List<KinesisShardSplit> splits = Collections.singletonList(split);
+        sourceReader.addSplits(splits);
+
+        // Set checkpoint ID by taking initial snapshot
+        List<KinesisShardSplit> initialSnapshot = sourceReader.snapshotState(1L);
+        assertThat(initialSnapshot).hasSize(1).containsExactly(split);
+
+        // Simulate split finishing
+        Map<String, KinesisShardSplitState> finishedSplits = new HashMap<>();
+        finishedSplits.put(split.splitId(), new KinesisShardSplitState(split));
+        sourceReader.onSplitFinished(finishedSplits);
+
+        // Take another snapshot
+        List<KinesisShardSplit> snapshotSplits = sourceReader.snapshotState(2L);
+        List<KinesisShardSplit> snapshotFinishedSplits =
+                snapshotSplits.stream()
+                        .filter(KinesisShardSplit::isFinished)
+                        .collect(Collectors.toList());
+        // Verify we have 2 splits - the original split and the finished split
+        assertThat(snapshotSplits).hasSize(2);
+        assertThat(snapshotFinishedSplits)
+                .hasSize(1)
+                .allSatisfy(
+                        s -> {
+                            assertThat(s.splitId()).isEqualTo(split.splitId());
+                        });
+    }
+
+    @Test
+    void testAddSplitsWithStateRestoration() throws Exception {
+        KinesisShardSplit finishedSplit1 = getFinishedTestSplit("finished-split-1");
+        KinesisShardSplit finishedSplit2 = getFinishedTestSplit("finished-split-2");
+
+        // Create active split
+        KinesisShardSplit activeSplit = getTestSplit();
+
+        List<KinesisShardSplit> allSplits =
+                Arrays.asList(finishedSplit1, finishedSplit2, activeSplit);
+
+        // Clear any previous events
+        testingReaderContext.clearSentEvents();
+
+        // Add splits
+        sourceReader.addSplits(allSplits);
+
+        // Verify finished events were sent
+        List<SourceEvent> events = testingReaderContext.getSentEvents();
+        assertThat(events)
+                .hasSize(2)
+                .allMatch(e -> e instanceof SplitsFinishedEvent)
+                .satisfiesExactlyInAnyOrder(
+                        e ->
+                                assertThat(((SplitsFinishedEvent) e).getFinishedSplitIds())
+                                        .containsExactly("finished-split-1"),
+                        e ->
+                                assertThat(((SplitsFinishedEvent) e).getFinishedSplitIds())
+                                        .containsExactly("finished-split-2"));
+
+        // Verify metrics registered only for active split
+        assertThat(shardMetricGroupMap).hasSize(1).containsKey(activeSplit.splitId());
+    }
+
+    @Test
+    void testNotifyCheckpointCompleteRemovesFinishedSplits() throws Exception {
+        KinesisShardSplit split = getTestSplit();
+        List<KinesisShardSplit> splits = Collections.singletonList(split);
+
+        sourceReader.addSplits(splits);
+
+        // Simulate splits finishing at different checkpoints
+        Map<String, KinesisShardSplitState> finishedSplits1 = new HashMap<>();
+        KinesisShardSplit finishedSplit1 = getFinishedTestSplit("split-1");
+        finishedSplits1.put("split-1", new KinesisShardSplitState(finishedSplit1));
+        sourceReader.snapshotState(1L); // Set checkpoint ID
+        sourceReader.onSplitFinished(finishedSplits1);
+
+        Map<String, KinesisShardSplitState> finishedSplits2 = new HashMap<>();
+        KinesisShardSplit finishedSplit2 = getFinishedTestSplit("split-2");
+        finishedSplits2.put("split-2", new KinesisShardSplitState(finishedSplit2));
+        sourceReader.snapshotState(2L); // Set checkpoint ID
+        sourceReader.onSplitFinished(finishedSplits2);
+
+        // Take snapshot to verify initial state
+        List<KinesisShardSplit> snapshotSplits = sourceReader.snapshotState(3L);
+
+        assertThat(snapshotSplits).hasSize(3);
+        assertThat(
+                        snapshotSplits.stream()
+                                .filter(KinesisShardSplit::isFinished)
+                                .map(KinesisShardSplit::splitId)
+                                .collect(Collectors.toList()))
+                .hasSize(2)
+                .containsExactlyInAnyOrder("split-1", "split-2");
+
+        // Complete checkpoint 1
+        sourceReader.notifyCheckpointComplete(1L);
+
+        // Take another snapshot to verify state after completion
+        snapshotSplits = sourceReader.snapshotState(4L);
+
+        // Verify checkpoint 1 splits were removed
+        assertThat(snapshotSplits).hasSize(2);
+        assertThat(
+                        snapshotSplits.stream()
+                                .filter(KinesisShardSplit::isFinished)
+                                .map(KinesisShardSplit::splitId)
+                                .collect(Collectors.toList()))
+                .hasSize(1)
+                .first()
+                .isEqualTo("split-2");
     }
 }

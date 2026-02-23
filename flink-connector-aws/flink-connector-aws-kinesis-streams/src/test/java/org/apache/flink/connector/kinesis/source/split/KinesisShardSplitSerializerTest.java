@@ -81,7 +81,7 @@ class KinesisShardSplitSerializerTest {
                         STARTING_HASH_KEY_TEST_VALUE,
                         ENDING_HASH_KEY_TEST_VALUE);
 
-        byte[] oldSerializedState = serializer.serializeV0(initialSplit);
+        byte[] oldSerializedState = serializer.serialize(initialSplit, serializer::serializeV0);
         KinesisShardSplit deserializedSplit = serializer.deserialize(0, oldSerializedState);
 
         assertThat(deserializedSplit)
@@ -115,6 +115,53 @@ class KinesisShardSplitSerializerTest {
                         "Trying to deserialize KinesisShardSplit serialized with unsupported version ")
                 .withMessageContaining(String.valueOf(serializer.getVersion()))
                 .withMessageContaining(String.valueOf(wrongVersionSerializer.getVersion()));
+    }
+
+    @Test
+    void testSerializeAndDeserializeWithFinishedSplits() throws Exception {
+        final KinesisShardSplit initialSplit =
+                new KinesisShardSplit(
+                        STREAM_ARN,
+                        generateShardId(10),
+                        StartingPosition.continueFromSequenceNumber("some-sequence-number"),
+                        new HashSet<>(Arrays.asList(generateShardId(2), generateShardId(5))),
+                        STARTING_HASH_KEY_TEST_VALUE,
+                        ENDING_HASH_KEY_TEST_VALUE,
+                        true);
+
+        KinesisShardSplitSerializer serializer = new KinesisShardSplitSerializer();
+
+        byte[] serialized = serializer.serialize(initialSplit);
+        KinesisShardSplit deserializedSplit =
+                serializer.deserialize(serializer.getVersion(), serialized);
+
+        assertThat(deserializedSplit).usingRecursiveComparison().isEqualTo(initialSplit);
+        assertThat(deserializedSplit.isFinished()).isTrue();
+    }
+
+    @Test
+    void testDeserializeVersion1() throws Exception {
+        final KinesisShardSplitSerializer serializer = new KinesisShardSplitSerializer();
+
+        final KinesisShardSplit initialSplit =
+                new KinesisShardSplit(
+                        STREAM_ARN,
+                        generateShardId(10),
+                        StartingPosition.continueFromSequenceNumber("some-sequence-number"),
+                        new HashSet<>(Arrays.asList(generateShardId(2), generateShardId(5))),
+                        STARTING_HASH_KEY_TEST_VALUE,
+                        ENDING_HASH_KEY_TEST_VALUE);
+
+        byte[] oldSerializedState = serializer.serialize(initialSplit, serializer::serializeV1);
+        KinesisShardSplit deserializedSplit = serializer.deserialize(1, oldSerializedState);
+
+        assertThat(deserializedSplit)
+                .usingRecursiveComparison(
+                        RecursiveComparisonConfiguration.builder()
+                                .withIgnoredFields("finished")
+                                .build())
+                .isEqualTo(initialSplit);
+        assertThat(deserializedSplit.isFinished()).isEqualTo(false);
     }
 
     private static class WrongVersionSerializer extends KinesisShardSplitSerializer {

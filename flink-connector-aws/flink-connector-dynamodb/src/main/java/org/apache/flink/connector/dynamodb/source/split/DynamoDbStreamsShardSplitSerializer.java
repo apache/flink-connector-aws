@@ -22,6 +22,8 @@ import org.apache.flink.annotation.Internal;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
 import org.apache.flink.core.io.VersionMismatchException;
 
+import software.amazon.awssdk.services.dynamodb.model.SequenceNumberRange;
+import software.amazon.awssdk.services.dynamodb.model.Shard;
 import software.amazon.awssdk.services.dynamodb.model.ShardIteratorType;
 
 import java.io.ByteArrayInputStream;
@@ -29,8 +31,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -41,8 +45,8 @@ import java.util.Set;
 public class DynamoDbStreamsShardSplitSerializer
         implements SimpleVersionedSerializer<DynamoDbStreamsShardSplit> {
 
-    private static final Set<Integer> COMPATIBLE_VERSIONS = new HashSet<>(Arrays.asList(0, 1));
-    private static final int CURRENT_VERSION = 1;
+    private static final Set<Integer> COMPATIBLE_VERSIONS = new HashSet<>(Arrays.asList(0, 1, 2));
+    private static final int CURRENT_VERSION = 2;
 
     @Override
     public int getVersion() {
@@ -74,6 +78,18 @@ public class DynamoDbStreamsShardSplitSerializer
                 out.writeUTF(split.getParentShardId());
             }
             out.writeBoolean(split.isFinished());
+            out.writeInt(split.getChildSplits().size());
+            for (Shard childSplit : split.getChildSplits()) {
+                out.writeUTF(childSplit.shardId());
+                out.writeUTF(childSplit.parentShardId());
+                out.writeUTF(childSplit.sequenceNumberRange().startingSequenceNumber());
+                if (childSplit.sequenceNumberRange().endingSequenceNumber() == null) {
+                    out.writeBoolean(false);
+                } else {
+                    out.writeBoolean(true);
+                    out.writeUTF(childSplit.sequenceNumberRange().endingSequenceNumber());
+                }
+            }
 
             out.flush();
             return baos.toByteArray();
@@ -116,11 +132,40 @@ public class DynamoDbStreamsShardSplitSerializer
                 isFinished = in.readBoolean();
             }
 
+            int childSplitSize = 0;
+            List<Shard> childSplits = new ArrayList<>();
+            if (version > 1) {
+                childSplitSize = in.readInt();
+                if (childSplitSize > 0) {
+                    for (int i = 0; i < childSplitSize; i++) {
+                        String splitId = in.readUTF();
+                        String parentSplitId = in.readUTF();
+                        String startingSequenceNumber = in.readUTF();
+                        String endingSequenceNumber = null;
+                        if (in.readBoolean()) {
+                            endingSequenceNumber = in.readUTF();
+                        }
+                        childSplits.add(
+                                Shard.builder()
+                                        .shardId(splitId)
+                                        .parentShardId(parentSplitId)
+                                        .sequenceNumberRange(
+                                                SequenceNumberRange.builder()
+                                                        .startingSequenceNumber(
+                                                                startingSequenceNumber)
+                                                        .endingSequenceNumber(endingSequenceNumber)
+                                                        .build())
+                                        .build());
+                    }
+                }
+            }
+
             return new DynamoDbStreamsShardSplit(
                     streamArn,
                     shardId,
                     new StartingPosition(shardIteratorType, startingMarker),
                     parentShardId,
+                    childSplits,
                     isFinished);
         }
     }

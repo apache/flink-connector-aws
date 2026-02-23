@@ -21,6 +21,8 @@ package org.apache.flink.connector.dynamodb.sink;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.api.connector.sink2.StatefulSinkWriter;
+import org.apache.flink.api.connector.sink2.WriterInitContext;
 import org.apache.flink.connector.base.sink.AsyncSinkBase;
 import org.apache.flink.connector.base.sink.writer.BufferedRequestState;
 import org.apache.flink.connector.base.sink.writer.ElementConverter;
@@ -135,14 +137,14 @@ public class DynamoDbSink<InputT> extends AsyncSinkBase<InputT, DynamoDbWriteReq
     @Internal
     @Override
     public StatefulSinkWriter<InputT, BufferedRequestState<DynamoDbWriteRequest>> createWriter(
-            InitContext context) throws IOException {
+            WriterInitContext context) throws IOException {
         return restoreWriter(context, Collections.emptyList());
     }
 
     @Internal
     @Override
     public StatefulSinkWriter<InputT, BufferedRequestState<DynamoDbWriteRequest>> restoreWriter(
-            InitContext context,
+            WriterInitContext context,
             Collection<BufferedRequestState<DynamoDbWriteRequest>> recoveredState)
             throws IOException {
         return new DynamoDbSinkWriter<>(

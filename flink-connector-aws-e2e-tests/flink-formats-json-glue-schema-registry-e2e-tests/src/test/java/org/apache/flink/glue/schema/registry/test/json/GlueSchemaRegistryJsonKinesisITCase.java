@@ -17,15 +17,21 @@
 
 package org.apache.flink.glue.schema.registry.test.json;
 
+import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.time.Deadline;
-import org.apache.flink.connectors.kinesis.testutils.KinesaliteContainer;
+import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.connector.aws.testutils.AWSServicesTestUtils;
+import org.apache.flink.connector.aws.testutils.LocalstackContainer;
+import org.apache.flink.connector.aws.util.AWSGeneralUtil;
+import org.apache.flink.connector.kinesis.sink.KinesisStreamsSink;
+import org.apache.flink.connector.kinesis.sink.PartitionKeyGenerator;
+import org.apache.flink.connector.kinesis.source.KinesisStreamsSource;
+import org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions;
 import org.apache.flink.formats.json.glue.schema.registry.GlueSchemaRegistryJsonDeserializationSchema;
 import org.apache.flink.formats.json.glue.schema.registry.GlueSchemaRegistryJsonSerializationSchema;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.connectors.kinesis.FlinkKinesisConsumer;
-import org.apache.flink.streaming.connectors.kinesis.FlinkKinesisProducer;
-import org.apache.flink.streaming.connectors.kinesis.config.ConsumerConfigConstants;
 import org.apache.flink.util.StringUtils;
 import org.apache.flink.util.TestLogger;
 
@@ -36,48 +42,65 @@ import org.junit.Assume;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
-import org.junit.rules.Timeout;
-import org.testcontainers.containers.Network;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testcontainers.utility.DockerImageName;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.SdkSystemSetting;
+import software.amazon.awssdk.http.SdkHttpClient;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.kinesis.KinesisClient;
 
-import java.net.URL;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.TimeUnit;
 
-import static org.apache.flink.streaming.connectors.kinesis.config.ConsumerConfigConstants.STREAM_INITIAL_POSITION;
+import static org.apache.flink.connector.aws.config.AWSConfigConstants.AWS_ACCESS_KEY_ID;
+import static org.apache.flink.connector.aws.config.AWSConfigConstants.AWS_ENDPOINT;
+import static org.apache.flink.connector.aws.config.AWSConfigConstants.AWS_REGION;
+import static org.apache.flink.connector.aws.config.AWSConfigConstants.AWS_SECRET_ACCESS_KEY;
+import static org.apache.flink.connector.aws.config.AWSConfigConstants.HTTP_PROTOCOL_VERSION;
+import static org.apache.flink.connector.aws.config.AWSConfigConstants.TRUST_ALL_CERTIFICATES;
+import static org.apache.flink.connector.aws.testutils.AWSServicesTestUtils.createConfig;
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** End-to-end test for Glue Schema Registry Json format using Kinesalite. */
+/** End-to-end test for Glue Schema Registry Json format using Localstack. */
 public class GlueSchemaRegistryJsonKinesisITCase extends TestLogger {
+    private static final Logger LOGGER =
+            LoggerFactory.getLogger(GlueSchemaRegistryJsonKinesisITCase.class);
+
     private static final String INPUT_STREAM = "gsr_json_input_stream";
     private static final String OUTPUT_STREAM = "gsr_json_output_stream";
-    private static final String INTER_CONTAINER_KINESALITE_ALIAS = "kinesalite";
+    private static final String INPUT_STREAM_ARN =
+            "arn:aws:kinesis:ap-southeast-1:000000000000:stream/gsr_json_input_stream";
+    private static final String OUTPUT_STREAM_ARN =
+            "arn:aws:kinesis:ap-southeast-1:000000000000:stream/gsr_json_output_stream";
+
+    private static final String PARTITION_KEY = "fakePartitionKey";
+
     private static final String ACCESS_KEY = System.getenv("IT_CASE_GLUE_SCHEMA_ACCESS_KEY");
     private static final String SECRET_KEY = System.getenv("IT_CASE_GLUE_SCHEMA_SECRET_KEY");
 
-    private static final Network network = Network.newNetwork();
+    private static final String LOCALSTACK_DOCKER_IMAGE_VERSION = "localstack/localstack:3.7.2";
 
-    @ClassRule public static final Timeout TIMEOUT = new Timeout(10, TimeUnit.MINUTES);
+    private StreamExecutionEnvironment env;
+    private SdkHttpClient httpClient;
+    private KinesisClient kinesisClient;
+    private GSRKinesisPubsubClient gsrKinesisPubsubClient;
 
     @ClassRule
-    public static final KinesaliteContainer KINESALITE =
-            new KinesaliteContainer(
-                            DockerImageName.parse("instructure/kinesalite").withTag("latest"))
-                    .withNetwork(network)
-                    .withNetworkAliases(INTER_CONTAINER_KINESALITE_ALIAS);
-
-    private GSRKinesisPubsubClient kinesisClient;
+    public static LocalstackContainer mockKinesisContainer =
+            new LocalstackContainer(DockerImageName.parse(LOCALSTACK_DOCKER_IMAGE_VERSION))
+                    .withNetworkAliases("localstack");
 
     @Before
-    public void setUp() throws Exception {
+    public void setup() throws Exception {
+        System.setProperty(SdkSystemSetting.CBOR_ENABLED.property(), "false");
+
         Assume.assumeTrue(
                 "Access key not configured, skipping test...",
                 !StringUtils.isNullOrWhitespaceOnly(ACCESS_KEY));
@@ -89,18 +112,24 @@ public class GlueSchemaRegistryJsonKinesisITCase extends TestLogger {
                 StaticCredentialsProvider.create(
                         AwsBasicCredentials.create(ACCESS_KEY, SECRET_KEY));
 
-        Properties properties = KINESALITE.getContainerProperties();
+        httpClient = AWSServicesTestUtils.createHttpClient();
+        kinesisClient =
+                AWSServicesTestUtils.createAwsSyncClient(
+                        mockKinesisContainer.getEndpoint(), httpClient, KinesisClient.builder());
+        env = StreamExecutionEnvironment.getExecutionEnvironment();
 
-        kinesisClient = new GSRKinesisPubsubClient(properties, gsrCredentialsProvider);
-        kinesisClient.createStream(INPUT_STREAM, 2, properties);
-        kinesisClient.createStream(OUTPUT_STREAM, 2, properties);
+        gsrKinesisPubsubClient = new GSRKinesisPubsubClient(kinesisClient, gsrCredentialsProvider);
 
-        System.setProperty(SdkSystemSetting.CBOR_ENABLED.property(), "false");
+        gsrKinesisPubsubClient.prepareStream(INPUT_STREAM);
+        gsrKinesisPubsubClient.prepareStream(OUTPUT_STREAM);
+
+        LOGGER.info("Done setting up the localstack.");
     }
 
     @After
     public void teardown() {
         System.clearProperty(SdkSystemSetting.CBOR_ENABLED.property());
+        AWSGeneralUtil.closeResources(httpClient, kinesisClient);
     }
 
     @Test
@@ -108,69 +137,70 @@ public class GlueSchemaRegistryJsonKinesisITCase extends TestLogger {
 
         List<JsonDataWithSchema> messages = getGenericRecords();
         for (JsonDataWithSchema msg : messages) {
-            kinesisClient.sendMessage(msg.getSchema(), INPUT_STREAM, msg);
+            gsrKinesisPubsubClient.sendMessage(msg.getSchema(), INPUT_STREAM, msg);
         }
         log.info("generated records");
 
-        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setParallelism(1);
+        DataStream<JsonDataWithSchema> input =
+                env.fromSource(createSource(), WatermarkStrategy.noWatermarks(), "source")
+                        .returns(TypeInformation.of(JsonDataWithSchema.class));
 
-        DataStream<JsonDataWithSchema> input = env.addSource(createSource());
-        input.addSink(createSink());
+        input.sinkTo(createSink());
         env.executeAsync();
 
         Deadline deadline = Deadline.fromNow(Duration.ofSeconds(60));
-        List<Object> results = kinesisClient.readAllMessages(OUTPUT_STREAM);
+        List<Object> results =
+                gsrKinesisPubsubClient.readAllMessages(OUTPUT_STREAM, OUTPUT_STREAM_ARN);
         while (deadline.hasTimeLeft() && results.size() < messages.size()) {
             log.info("waiting for results..");
             Thread.sleep(1000);
-            results = kinesisClient.readAllMessages(OUTPUT_STREAM);
+            results = gsrKinesisPubsubClient.readAllMessages(OUTPUT_STREAM, OUTPUT_STREAM_ARN);
         }
         log.info("results: {}", results);
 
         assertThat(results).containsExactlyInAnyOrderElementsOf(messages);
     }
 
-    private FlinkKinesisConsumer<JsonDataWithSchema> createSource() {
-        Properties properties = KINESALITE.getContainerProperties();
-        properties.setProperty(
-                STREAM_INITIAL_POSITION,
-                ConsumerConfigConstants.InitialPosition.TRIM_HORIZON.name());
+    private KinesisStreamsSource<JsonDataWithSchema> createSource() {
+        Configuration sourceConfig = new Configuration();
 
-        return new FlinkKinesisConsumer<>(
-                INPUT_STREAM,
-                new GlueSchemaRegistryJsonDeserializationSchema<>(
-                        JsonDataWithSchema.class, INPUT_STREAM, getConfigs()),
-                properties);
+        sourceConfig.setString(AWS_ENDPOINT, mockKinesisContainer.getEndpoint());
+        sourceConfig.setString(AWS_ACCESS_KEY_ID, "accessKeyId");
+        sourceConfig.setString(AWS_SECRET_ACCESS_KEY, "secretAccessKey");
+        sourceConfig.setString(AWS_REGION, Region.AP_SOUTHEAST_1.toString());
+        sourceConfig.setString(TRUST_ALL_CERTIFICATES, "true");
+        sourceConfig.setString(HTTP_PROTOCOL_VERSION, "HTTP1_1");
+        sourceConfig.set(
+                KinesisSourceConfigOptions.STREAM_INITIAL_POSITION,
+                KinesisSourceConfigOptions.InitialPosition
+                        .TRIM_HORIZON); // This is optional, by default connector will read from
+        // LATEST
+
+        return KinesisStreamsSource.<JsonDataWithSchema>builder()
+                .setStreamArn(INPUT_STREAM_ARN)
+                .setSourceConfig(sourceConfig)
+                .setDeserializationSchema(
+                        new GlueSchemaRegistryJsonDeserializationSchema<>(
+                                JsonDataWithSchema.class, INPUT_STREAM, getConfigs()))
+                .build();
     }
 
-    private FlinkKinesisProducer<JsonDataWithSchema> createSink() throws Exception {
-        FlinkKinesisProducer<JsonDataWithSchema> producer =
-                new FlinkKinesisProducer<>(
+    private KinesisStreamsSink<JsonDataWithSchema> createSink() {
+        Properties properties = createConfig(mockKinesisContainer.getEndpoint());
+
+        properties.setProperty(TRUST_ALL_CERTIFICATES, "true");
+        properties.setProperty(HTTP_PROTOCOL_VERSION, "HTTP1_1");
+
+        return KinesisStreamsSink.<JsonDataWithSchema>builder()
+                .setStreamArn(OUTPUT_STREAM_ARN)
+                .setSerializationSchema(
                         new GlueSchemaRegistryJsonSerializationSchema<>(
-                                OUTPUT_STREAM, getConfigs()),
-                        getProducerProperties());
-        producer.setDefaultStream(OUTPUT_STREAM);
-        producer.setDefaultPartition("fakePartition");
-        return producer;
-    }
-
-    private Properties getProducerProperties() throws Exception {
-        Properties producerProperties = KINESALITE.getContainerProperties();
-        // producer needs region even when URL is specified
-        producerProperties.put(ConsumerConfigConstants.AWS_REGION, "ca-central-1");
-        // test driver does not deaggregate
-        producerProperties.put("AggregationEnabled", String.valueOf(false));
-
-        // KPL does not recognize endpoint URL..
-        String kinesisUrl = producerProperties.getProperty(ConsumerConfigConstants.AWS_ENDPOINT);
-        if (kinesisUrl != null) {
-            URL url = new URL(kinesisUrl);
-            producerProperties.put("KinesisEndpoint", url.getHost());
-            producerProperties.put("KinesisPort", Integer.toString(url.getPort()));
-            producerProperties.put("VerifyCertificate", "false");
-        }
-        return producerProperties;
+                                OUTPUT_STREAM, getConfigs()))
+                .setKinesisClientProperties(properties)
+                .setPartitionKeyGenerator(
+                        (PartitionKeyGenerator<JsonDataWithSchema>)
+                                jsonDataWithSchema -> PARTITION_KEY)
+                .build();
     }
 
     private List<JsonDataWithSchema> getGenericRecords() {

@@ -27,6 +27,7 @@ import org.apache.flink.api.connector.source.SplitsAssignment;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.InitialPosition;
 import org.apache.flink.connector.dynamodb.source.enumerator.event.SplitsFinishedEvent;
+import org.apache.flink.connector.dynamodb.source.enumerator.event.SplitsFinishedEventContext;
 import org.apache.flink.connector.dynamodb.source.enumerator.tracker.SplitGraphInconsistencyTracker;
 import org.apache.flink.connector.dynamodb.source.enumerator.tracker.SplitTracker;
 import org.apache.flink.connector.dynamodb.source.exception.DynamoDbStreamsSourceException;
@@ -138,7 +139,22 @@ public class DynamoDbStreamsSourceEnumerator
 
     /** When we mark a split as finished, we will only assign its child splits to the subtasks. */
     private void handleFinishedSplits(int subtaskId, SplitsFinishedEvent splitsFinishedEvent) {
-        splitTracker.markAsFinished(splitsFinishedEvent.getFinishedSplitIds());
+        Set<String> finishedSplitIds =
+                splitsFinishedEvent.getFinishedSplits().stream()
+                        .map(SplitsFinishedEventContext::getSplitId)
+                        .collect(Collectors.toSet());
+        splitTracker.markAsFinished(finishedSplitIds);
+        List<Shard> childrenOfFinishedSplits = new ArrayList<>();
+        splitsFinishedEvent
+                .getFinishedSplits()
+                .forEach(
+                        finishedSplitEvent ->
+                                childrenOfFinishedSplits.addAll(
+                                        finishedSplitEvent.getChildSplits()));
+        LOG.debug(
+                "Adding Children of finishedSplits to splitTracker: {}", childrenOfFinishedSplits);
+        LOG.info("Added {} child splits to splitTracker", childrenOfFinishedSplits.size());
+        splitTracker.addChildSplits(childrenOfFinishedSplits);
 
         Set<DynamoDbStreamsShardSplit> splitsAssignment = splitAssignment.get(subtaskId);
         // during recovery, splitAssignment may return null since there might be no split assigned
@@ -152,13 +168,12 @@ public class DynamoDbStreamsSourceEnumerator
                             + "Child shard discovery might be delayed until we have enough readers."
                             + "Finished split ids: {}",
                     subtaskId,
-                    splitsFinishedEvent.getFinishedSplitIds());
+                    finishedSplitIds);
             return;
         }
 
-        splitsAssignment.removeIf(
-                split -> splitsFinishedEvent.getFinishedSplitIds().contains(split.splitId()));
-        assignChildSplits(splitsFinishedEvent.getFinishedSplitIds());
+        splitsAssignment.removeIf(split -> finishedSplitIds.contains(split.splitId()));
+        assignChildSplits(finishedSplitIds);
     }
 
     private void processDiscoveredSplits(ListShardsResult discoveredSplits, Throwable throwable) {
@@ -230,6 +245,7 @@ public class DynamoDbStreamsSourceEnumerator
     private void assignChildSplits(Set<String> finishedSplitIds) {
         List<DynamoDbStreamsShardSplit> splitsAvailableForAssignment =
                 splitTracker.getUnassignedChildSplits(finishedSplitIds);
+        LOG.info("Unassigned child splits: {}", splitsAvailableForAssignment);
         assignSplits(splitsAvailableForAssignment);
     }
 

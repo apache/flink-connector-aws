@@ -216,7 +216,7 @@ public class RowDataToAttributeValueConverterTest {
         Map<String, AttributeValue> actualResult =
                 rowDataToAttributeValueConverter.convertRowData(createElement(value));
         Map<String, AttributeValue> expectedResult =
-                singletonMap(key, AttributeValue.builder().n("1.23456791E17").build());
+                singletonMap(key, AttributeValue.builder().n(String.valueOf(value)).build());
 
         assertThat(actualResult).containsAllEntriesOf(expectedResult);
     }

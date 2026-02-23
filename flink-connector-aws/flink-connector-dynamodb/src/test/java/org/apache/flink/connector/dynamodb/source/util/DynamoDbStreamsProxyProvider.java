@@ -26,6 +26,8 @@ import org.apache.commons.lang3.builder.HashCodeBuilder;
 import software.amazon.awssdk.services.dynamodb.model.GetRecordsResponse;
 import software.amazon.awssdk.services.dynamodb.model.Record;
 import software.amazon.awssdk.services.dynamodb.model.Shard;
+import software.amazon.awssdk.services.dynamodb.model.ShardFilter;
+import software.amazon.awssdk.services.dynamodb.model.ShardFilterType;
 
 import javax.annotation.Nullable;
 
@@ -81,6 +83,27 @@ public class DynamoDbStreamsProxyProvider {
             ListShardsResult listShardsResult = new ListShardsResult();
             List<Shard> results = new ArrayList<>(shards);
             listShardsResult.addShards(results);
+            return listShardsResult;
+        }
+
+        @Override
+        public ListShardsResult listShardsWithFilter(String streamArn, ShardFilter shardFilter) {
+            if (!ShardFilterType.CHILD_SHARDS.equals(shardFilter.type())) {
+                throw new UnsupportedOperationException(
+                        String.format(
+                                "ShardFilterType %s not supported", shardFilter.type().name()));
+            }
+
+            ListShardsResult listShardsResult = new ListShardsResult();
+            List<Shard> childShards =
+                    shards.stream()
+                            .filter(
+                                    shard ->
+                                            shard.parentShardId() != null
+                                                    && shard.parentShardId()
+                                                            .equals(shardFilter.shardId()))
+                            .collect(Collectors.toList());
+            listShardsResult.addShards(childShards);
             return listShardsResult;
         }
 

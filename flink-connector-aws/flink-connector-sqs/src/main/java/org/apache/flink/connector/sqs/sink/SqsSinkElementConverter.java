@@ -19,8 +19,8 @@ package org.apache.flink.connector.sqs.sink;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.common.serialization.SerializationSchema;
-import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.api.connector.sink2.SinkWriter;
+import org.apache.flink.api.connector.sink2.WriterInitContext;
 import org.apache.flink.connector.base.sink.writer.ElementConverter;
 import org.apache.flink.util.FlinkRuntimeException;
 import org.apache.flink.util.Preconditions;
@@ -56,7 +56,7 @@ public class SqsSinkElementConverter<InputT>
     }
 
     @Override
-    public void open(Sink.InitContext context) {
+    public void open(WriterInitContext context) {
         try {
             serializationSchema.open(context.asSerializationSchemaInitializationContext());
         } catch (Exception e) {
