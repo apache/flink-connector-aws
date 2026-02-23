@@ -229,11 +229,12 @@ public class GlueCatalogTest {
         glueCatalog.createDatabase(databaseName, catalogDatabase, false);
 
         // Create table in database
-        CatalogTable catalogTable = CatalogTable.of(
-                Schema.newBuilder().build(),
-                "test table",
-                Collections.emptyList(),
-                Collections.emptyMap());
+        CatalogTable catalogTable = CatalogTable.newBuilder()
+                .schema(Schema.newBuilder().build())
+                .comment("test table")
+                .partitionKeys(Collections.emptyList())
+                .options(Collections.emptyMap())
+                .build();
         ResolvedSchema resolvedSchema = ResolvedSchema.of();
         ResolvedCatalogTable resolvedCatalogTable = new ResolvedCatalogTable(catalogTable, resolvedSchema);
         glueCatalog.createTable(new ObjectPath(databaseName, tableName), resolvedCatalogTable, false);
@@ -265,11 +266,12 @@ public class GlueCatalogTest {
         glueCatalog.createDatabase(databaseName, catalogDatabase, false);
 
         // Create table in database
-        CatalogTable catalogTable = CatalogTable.of(
-                Schema.newBuilder().build(),
-                "test table",
-                Collections.emptyList(),
-                Collections.emptyMap());
+        CatalogTable catalogTable = CatalogTable.newBuilder()
+                .schema(Schema.newBuilder().build())
+                .comment("test table")
+                .partitionKeys(Collections.emptyList())
+                .options(Collections.emptyMap())
+                .build();
         ResolvedSchema resolvedSchema = ResolvedSchema.of();
         ResolvedCatalogTable resolvedCatalogTable = new ResolvedCatalogTable(catalogTable, resolvedSchema);
         glueCatalog.createTable(new ObjectPath(databaseName, tableName), resolvedCatalogTable, false);
@@ -351,11 +353,12 @@ public class GlueCatalogTest {
         glueCatalog.createDatabase(databaseName, catalogDatabase, false);
 
         // Create multiple tables
-        CatalogTable catalogTable = CatalogTable.of(
-                Schema.newBuilder().build(),
-                "test table",
-                Collections.emptyList(),
-                Collections.emptyMap());
+        CatalogTable catalogTable = CatalogTable.newBuilder()
+                .schema(Schema.newBuilder().build())
+                .comment("test table")
+                .partitionKeys(Collections.emptyList())
+                .options(Collections.emptyMap())
+                .build();
         ResolvedSchema resolvedSchema = ResolvedSchema.of();
         ResolvedCatalogTable resolvedCatalogTable = new ResolvedCatalogTable(catalogTable, resolvedSchema);
 
@@ -386,11 +389,12 @@ public class GlueCatalogTest {
         String databaseName = "testdatabase";
         String tableName = "testtable";
 
-        CatalogTable catalogTable = CatalogTable.of(
-                Schema.newBuilder().build(),
-                "test table",
-                Collections.emptyList(),
-                Collections.emptyMap());
+        CatalogTable catalogTable = CatalogTable.newBuilder()
+                .schema(Schema.newBuilder().build())
+                .comment("test table")
+                .partitionKeys(Collections.emptyList())
+                .options(Collections.emptyMap())
+                .build();
         ResolvedSchema resolvedSchema =  ResolvedSchema.of();
         ResolvedCatalogTable resolvedCatalogTable = new ResolvedCatalogTable(catalogTable, resolvedSchema);
 
@@ -415,11 +419,12 @@ public class GlueCatalogTest {
         String databaseName = "testdatabase";
         String tableName = "testtable";
 
-        CatalogTable catalogTable = CatalogTable.of(
-                Schema.newBuilder().build(),
-                "test table",
-                Collections.emptyList(),
-                Collections.emptyMap());
+        CatalogTable catalogTable = CatalogTable.newBuilder()
+                .schema(Schema.newBuilder().build())
+                .comment("test table")
+                .partitionKeys(Collections.emptyList())
+                .options(Collections.emptyMap())
+                .build();
         ResolvedSchema resolvedSchema = ResolvedSchema.of();
         ResolvedCatalogTable resolvedCatalogTable = new ResolvedCatalogTable(catalogTable, resolvedSchema);
 
@@ -443,11 +448,12 @@ public class GlueCatalogTest {
         String databaseName = "testdatabase";
         String tableName = "testtable";
 
-        CatalogTable catalogTable = CatalogTable.of(
-                Schema.newBuilder().build(),
-                "test table",
-                Collections.emptyList(),
-                Collections.emptyMap());
+        CatalogTable catalogTable = CatalogTable.newBuilder()
+                .schema(Schema.newBuilder().build())
+                .comment("test table")
+                .partitionKeys(Collections.emptyList())
+                .options(Collections.emptyMap())
+                .build();
         ResolvedSchema resolvedSchema =  ResolvedSchema.of();
         ResolvedCatalogTable resolvedCatalogTable = new ResolvedCatalogTable(catalogTable, resolvedSchema);
 
@@ -489,11 +495,12 @@ public class GlueCatalogTest {
         String databaseName = "testdatabase";
         String tableName = "testtable";
 
-        CatalogTable catalogTable = CatalogTable.of(
-                Schema.newBuilder().build(),
-                "test table",
-                Collections.emptyList(),
-                Collections.emptyMap());
+        CatalogTable catalogTable = CatalogTable.newBuilder()
+                .schema(Schema.newBuilder().build())
+                .comment("test table")
+                .partitionKeys(Collections.emptyList())
+                .options(Collections.emptyMap())
+                .build();
         ResolvedSchema resolvedSchema =  ResolvedSchema.of();
         ResolvedCatalogTable resolvedCatalogTable = new ResolvedCatalogTable(catalogTable, resolvedSchema);
 
@@ -536,11 +543,12 @@ public class GlueCatalogTest {
         String databaseName = "nonexistingdatabase";
         String tableName = "testtable";
 
-        CatalogTable catalogTable = CatalogTable.of(
-                Schema.newBuilder().build(),
-                "test table",
-                Collections.emptyList(),
-                Collections.emptyMap());
+        CatalogTable catalogTable = CatalogTable.newBuilder()
+                .schema(Schema.newBuilder().build())
+                .comment("test table")
+                .partitionKeys(Collections.emptyList())
+                .options(Collections.emptyMap())
+                .build();
         ResolvedSchema resolvedSchema = ResolvedSchema.of();
         ResolvedCatalogTable resolvedCatalogTable = new ResolvedCatalogTable(catalogTable, resolvedSchema);
 
@@ -889,12 +897,12 @@ public class GlueCatalogTest {
                 .column("id", DataTypes.INT())
                 .column("name", DataTypes.STRING())
                 .build();
-        CatalogTable catalogTable = CatalogTable.of(
-                schema,
-                "Test table for case sensitivity",
-                Collections.emptyList(),
-                Collections.emptyMap()
-        );
+        CatalogTable catalogTable = CatalogTable.newBuilder()
+                .schema(schema)
+                .comment("Test table for case sensitivity")
+                .partitionKeys(Collections.emptyList())
+                .options(Collections.emptyMap())
+                .build();
         ResolvedSchema resolvedSchema = ResolvedSchema.of();
         return new ResolvedCatalogTable(catalogTable, resolvedSchema);
     }

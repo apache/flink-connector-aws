@@ -25,7 +25,7 @@ under the License.
     <parent>
         <groupId>org.apache.flink</groupId>
         <artifactId>flink-catalog-aws-parent</artifactId>
-        <version>5.1-SNAPSHOT</version>
+        <version>6.0-SNAPSHOT</version>
         <relativePath>..</relativePath>
     </parent>
 
@@ -37,9 +37,9 @@ under the License.
         <!-- Flink dependencies specific to Glue module -->
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-table-planner_${scala.binary.version}</artifactId>
+            <artifactId>flink-table-planner-loader</artifactId>
             <version>${flink.version}</version>
-            <scope>test</scope>
+            <scope>provided</scope>
         </dependency>
         
         <!-- AWS dependencies specific to Glue -->

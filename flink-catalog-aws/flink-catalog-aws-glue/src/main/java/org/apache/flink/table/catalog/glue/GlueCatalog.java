@@ -1036,11 +1036,12 @@ public class GlueCatalog extends AbstractCatalog {
             }
 
             if (tableType.equalsIgnoreCase(CatalogBaseTable.TableKind.TABLE.name())) {
-                return CatalogTable.of(
-                        schemaInfo,
-                        glueTable.description(),
-                        partitionKeys,
-                        properties);
+                return CatalogTable.newBuilder()
+                        .schema(schemaInfo)
+                        .comment(glueTable.description())
+                        .partitionKeys(partitionKeys)
+                        .options(properties)
+                        .build();
             } else if (tableType.equalsIgnoreCase(CatalogBaseTable.TableKind.VIEW.name())) {
                 String originalQuery = glueTable.viewOriginalText();
                 String expandedQuery = glueTable.viewExpandedText();
@@ -1140,12 +1141,12 @@ public class GlueCatalog extends AbstractCatalog {
                 .build();
 
         // Convert CatalogView to CatalogTable for buildTableInput compatibility
-        CatalogTable tempTable = CatalogTable.of(
-                catalogView.getUnresolvedSchema(),
-                catalogView.getComment(),
-                Collections.emptyList(),
-                tableProperties
-        );
+        CatalogTable tempTable = CatalogTable.newBuilder()
+                .schema(catalogView.getUnresolvedSchema())
+                .comment(catalogView.getComment())
+                .partitionKeys(Collections.emptyList())
+                .options(tableProperties)
+                .build();
 
         // Build table input with proper name preservation
         TableInput baseTableInput = glueTableOperations.buildTableInput(tableName, glueColumns, tempTable, storageDescriptor, tableProperties);
