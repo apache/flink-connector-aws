@@ -21,6 +21,6 @@ jobs:
           server-id: github
           
       - name: Build and publish
-        run: mvn clean deploy -DskipTests -pl flink-connector-aws-base,flink-connector-aws/flink-connector-aws-kinesis-streams,flink-connector-aws/flink-connector-dynamodb,flink-connector-aws/flink-connector-sqs -am -Dxml.skip=true -DaltDeploymentRepository=github::default::https://maven.pkg.github.com/mviningas/flink-connector-aws
+        run: mvn clean deploy -DskipTests -pl '!flink-python' -Dxml.skip=true -DaltDeploymentRepository=github::default::https://maven.pkg.github.com/mviningas/flink-connector-aws
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
