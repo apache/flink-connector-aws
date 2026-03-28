@@ -32,6 +32,7 @@ import org.apache.flink.connector.dynamodb.util.PrimaryKeyBuilder;
 import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.groups.SinkWriterMetricGroup;
 import org.apache.flink.util.CollectionUtil;
+import org.apache.flink.util.concurrent.FutureUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,10 +40,13 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse;
 import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException;
+import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.DeleteRequest;
 import software.amazon.awssdk.services.dynamodb.model.DynamoDbException;
+import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.PutRequest;
 import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
+import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.WriteRequest;
 
 import java.util.ArrayList;
@@ -51,6 +55,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.Collections.singletonMap;
 import static org.apache.flink.connector.aws.util.AWSCredentialFatalExceptionClassifiers.getInvalidCredentialsExceptionClassifier;
@@ -164,6 +170,59 @@ class DynamoDbSinkWriter<InputT> extends AsyncSinkWriter<InputT, DynamoDbWriteRe
             List<DynamoDbWriteRequest> requestEntries,
             ResultHandler<DynamoDbWriteRequest> resultHandler) {
 
+        List<DynamoDbWriteRequest> batchRequests = new ArrayList<>();
+        List<DynamoDbWriteRequest> singleRequests = new ArrayList<>();
+
+        for (DynamoDbWriteRequest request : requestEntries) {
+            if (isSingleRequest(request)) {
+                singleRequests.add(request);
+            } else {
+                batchRequests.add(request);
+            }
+        }
+
+        // Shared state to collect results from concurrent batch and single paths.
+        // ResultHandler is called exactly once in whenComplete after both paths finish.
+        ConcurrentLinkedQueue<DynamoDbWriteRequest> retryableFailures =
+                new ConcurrentLinkedQueue<>();
+        AtomicReference<Exception> fatalException = new AtomicReference<>();
+
+        CompletableFuture<Void> batchFuture =
+                submitBatchRequests(
+                        batchRequests, retryableFailures, fatalException);
+
+        CompletableFuture<Void> singleFuture =
+                submitSingleRequests(
+                        singleRequests, retryableFailures, fatalException);
+
+        CompletableFuture.allOf(batchFuture, singleFuture)
+                .whenComplete(
+                        (ignored, err) -> {
+                            if (fatalException.get() != null) {
+                                resultHandler.completeExceptionally(fatalException.get());
+                            } else if (!retryableFailures.isEmpty()) {
+                                resultHandler.retryForEntries(
+                                        new ArrayList<>(retryableFailures));
+                            } else {
+                                resultHandler.complete();
+                            }
+                        });
+    }
+
+    private boolean isSingleRequest(DynamoDbWriteRequest request) {
+        return request.getType() == DynamoDbWriteRequestType.UPDATE
+                || request.getConditionExpression() != null;
+    }
+
+    private CompletableFuture<Void> submitBatchRequests(
+            List<DynamoDbWriteRequest> requestEntries,
+            ConcurrentLinkedQueue<DynamoDbWriteRequest> retryableFailures,
+            AtomicReference<Exception> fatalException) {
+
+        if (requestEntries.isEmpty()) {
+            return FutureUtils.completedVoidFuture();
+        }
+
         List<WriteRequest> items = new ArrayList<>();
 
         if (CollectionUtil.isNullOrEmpty(overwriteByPartitionKeys)) {
@@ -181,28 +240,32 @@ class DynamoDbSinkWriter<InputT> extends AsyncSinkWriter<InputT, DynamoDbWriteRe
             items.addAll(container.values());
         }
 
-        CompletableFuture<BatchWriteItemResponse> future =
-                clientProvider
-                        .getClient()
-                        .batchWriteItem(
-                                BatchWriteItemRequest.builder()
-                                        .requestItems(singletonMap(tableName, items))
-                                        .build());
-
-        future.whenComplete(
-                (response, err) -> {
-                    if (err != null) {
-                        handleFullyFailedRequest(err, requestEntries, resultHandler);
-                    } else if (!CollectionUtil.isNullOrEmpty(response.unprocessedItems())) {
-                        handlePartiallyUnprocessedRequest(response, resultHandler);
-                    } else {
-                        resultHandler.complete();
-                    }
-                });
+        return clientProvider
+                .getClient()
+                .batchWriteItem(
+                        BatchWriteItemRequest.builder()
+                                .requestItems(singletonMap(tableName, items))
+                                .build())
+                .handle(
+                        (response, err) -> {
+                            if (err != null) {
+                                handleFullyFailedRequest(
+                                        err,
+                                        requestEntries,
+                                        retryableFailures,
+                                        fatalException);
+                            } else if (!CollectionUtil.isNullOrEmpty(
+                                    response.unprocessedItems())) {
+                                handlePartiallyUnprocessedRequest(
+                                        response, retryableFailures);
+                            }
+                            return null;
+                        });
     }
 
     private void handlePartiallyUnprocessedRequest(
-            BatchWriteItemResponse response, ResultHandler<DynamoDbWriteRequest> resultHandler) {
+            BatchWriteItemResponse response,
+            ConcurrentLinkedQueue<DynamoDbWriteRequest> retryableFailures) {
         List<DynamoDbWriteRequest> unprocessed = new ArrayList<>();
 
         for (WriteRequest writeRequest : response.unprocessedItems().get(tableName)) {
@@ -213,37 +276,95 @@ class DynamoDbSinkWriter<InputT> extends AsyncSinkWriter<InputT, DynamoDbWriteRe
         numRecordsSendErrorsCounter.inc(unprocessed.size());
         numRecordsSendPartialFailure.inc(unprocessed.size());
 
-        resultHandler.retryForEntries(unprocessed);
+        retryableFailures.addAll(unprocessed);
     }
 
     private void handleFullyFailedRequest(
             Throwable err,
             List<DynamoDbWriteRequest> requestEntries,
-            ResultHandler<DynamoDbWriteRequest> resultHandler) {
+            ConcurrentLinkedQueue<DynamoDbWriteRequest> retryableFailures,
+            AtomicReference<Exception> fatalException) {
         LOG.warn(
                 "DynamoDB Sink failed to persist and will retry {} entries.",
                 requestEntries.size(),
                 err);
         numRecordsSendErrorsCounter.inc(requestEntries.size());
 
-        if (isRetryable(err.getCause(), resultHandler)) {
-            resultHandler.retryForEntries(requestEntries);
+        if (isRetryable(err.getCause(), fatalException)) {
+            retryableFailures.addAll(requestEntries);
         }
     }
 
-    private boolean isRetryable(Throwable err, ResultHandler<DynamoDbWriteRequest> resultHandler) {
+    private boolean isRetryable(Throwable err, AtomicReference<Exception> fatalException) {
         // isFatal() is really isNotFatal()
         if (!DYNAMODB_FATAL_EXCEPTION_CLASSIFIER.isFatal(
-                err, resultHandler::completeExceptionally)) {
+                err, ex -> fatalException.compareAndSet(null, ex))) {
             return false;
         }
         if (failOnError) {
-            resultHandler.completeExceptionally(
-                    new DynamoDbSinkException.DynamoDbSinkFailFastException(err));
+            fatalException.compareAndSet(
+                    null, new DynamoDbSinkException.DynamoDbSinkFailFastException(err));
             return false;
         }
 
         return true;
+    }
+
+    private CompletableFuture<Void> submitSingleRequests(
+            List<DynamoDbWriteRequest> singleRequests,
+            ConcurrentLinkedQueue<DynamoDbWriteRequest> retryableFailures,
+            AtomicReference<Exception> fatalException) {
+
+        if (singleRequests.isEmpty()) {
+            return FutureUtils.completedVoidFuture();
+        }
+
+        CompletableFuture<?>[] futures =
+                singleRequests.stream()
+                        .map(
+                                request ->
+                                        submitSingleRequest(request)
+                                                .handle(
+                                                        (response, err) -> {
+                                                            if (err != null) {
+                                                                handleSingleRequestError(
+                                                                        err,
+                                                                        request,
+                                                                        retryableFailures,
+                                                                        fatalException);
+                                                            }
+                                                            return null;
+                                                        }))
+                        .toArray(CompletableFuture[]::new);
+
+        return CompletableFuture.allOf(futures);
+    }
+
+    private CompletableFuture<?> submitSingleRequest(DynamoDbWriteRequest request) {
+        switch (request.getType()) {
+            case PUT:
+                return clientProvider.getClient().putItem(convertToPutItemRequest(request));
+            case DELETE:
+                return clientProvider.getClient().deleteItem(convertToDeleteItemRequest(request));
+            case UPDATE:
+                return clientProvider.getClient().updateItem(convertToUpdateItemRequest(request));
+            default:
+                throw new IllegalArgumentException(
+                        "Unsupported DynamoDb Write Request Type: " + request.getType());
+        }
+    }
+
+    private void handleSingleRequestError(
+            Throwable err,
+            DynamoDbWriteRequest request,
+            ConcurrentLinkedQueue<DynamoDbWriteRequest> retryableFailures,
+            AtomicReference<Exception> fatalException) {
+        LOG.warn("DynamoDB Sink single write failed for {} request.", request.getType(), err);
+        numRecordsSendErrorsCounter.inc();
+
+        if (isRetryable(err.getCause(), fatalException)) {
+            retryableFailures.add(request);
+        }
     }
 
     @Override
@@ -290,5 +411,53 @@ class DynamoDbSinkWriter<InputT> extends AsyncSinkWriter<InputT, DynamoDbWriteRe
             throw new IllegalArgumentException(
                     "Unsupported Write Request, consider updating the convertToDynamoDbWriteRequest method");
         }
+    }
+
+    private PutItemRequest convertToPutItemRequest(DynamoDbWriteRequest request) {
+        PutItemRequest.Builder builder =
+                PutItemRequest.builder().tableName(tableName).item(request.getItem());
+        if (request.getConditionExpression() != null) {
+            builder.conditionExpression(request.getConditionExpression());
+        }
+        if (request.getExpressionAttributeNames() != null) {
+            builder.expressionAttributeNames(request.getExpressionAttributeNames());
+        }
+        if (request.getExpressionAttributeValues() != null) {
+            builder.expressionAttributeValues(request.getExpressionAttributeValues());
+        }
+        return builder.build();
+    }
+
+    private DeleteItemRequest convertToDeleteItemRequest(DynamoDbWriteRequest request) {
+        DeleteItemRequest.Builder builder =
+                DeleteItemRequest.builder().tableName(tableName).key(request.getItem());
+        if (request.getConditionExpression() != null) {
+            builder.conditionExpression(request.getConditionExpression());
+        }
+        if (request.getExpressionAttributeNames() != null) {
+            builder.expressionAttributeNames(request.getExpressionAttributeNames());
+        }
+        if (request.getExpressionAttributeValues() != null) {
+            builder.expressionAttributeValues(request.getExpressionAttributeValues());
+        }
+        return builder.build();
+    }
+
+    private UpdateItemRequest convertToUpdateItemRequest(DynamoDbWriteRequest request) {
+        UpdateItemRequest.Builder builder =
+                UpdateItemRequest.builder()
+                        .tableName(tableName)
+                        .key(request.getItem())
+                        .updateExpression(request.getUpdateExpression());
+        if (request.getConditionExpression() != null) {
+            builder.conditionExpression(request.getConditionExpression());
+        }
+        if (request.getExpressionAttributeNames() != null) {
+            builder.expressionAttributeNames(request.getExpressionAttributeNames());
+        }
+        if (request.getExpressionAttributeValues() != null) {
+            builder.expressionAttributeValues(request.getExpressionAttributeValues());
+        }
+        return builder.build();
     }
 }
