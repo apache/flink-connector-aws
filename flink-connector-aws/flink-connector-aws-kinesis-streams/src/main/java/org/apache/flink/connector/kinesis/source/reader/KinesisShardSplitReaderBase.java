@@ -65,6 +65,7 @@ public abstract class KinesisShardSplitReaderBase
     private final Map<String, KinesisShardMetrics> shardMetricGroupMap;
 
     private final long emptyRecordsIntervalMillis;
+    private final long getRecordsIntervalMillis;
 
     private final Map<KinesisShardSplitState, Long> scheduledFetchTimes = new WeakHashMap<>();
 
@@ -75,6 +76,8 @@ public abstract class KinesisShardSplitReaderBase
                 configuration
                         .get(KinesisSourceConfigOptions.READER_EMPTY_RECORDS_FETCH_INTERVAL)
                         .toMillis();
+        this.getRecordsIntervalMillis =
+                configuration.get(KinesisSourceConfigOptions.SHARD_GET_RECORDS_INTERVAL).toMillis();
     }
 
     @Override
@@ -181,11 +184,12 @@ public abstract class KinesisShardSplitReaderBase
     /**
      * Schedules next fetch time, to be called immediately on the result of a fetchRecords() call.
      *
-     * <p>If recordBatch does not contain records, next fetchRecords() is scheduled. Before
-     * scheduled time, fetcher thread will skip fetching (and have small sleep) for the split.
+     * <p>If recordBatch does not contain records, next fetchRecords() is scheduled using the
+     * empty-records interval. Before scheduled time, fetcher thread will skip fetching (and have
+     * small sleep) for the split.
      *
-     * <p>If recordBatch is not empty, next fetchRecords() time is not scheduled resulting in next
-     * fetch on the split is performed at first opportunity.
+     * <p>If recordBatch is not empty, next fetchRecords() is scheduled using the get-records
+     * interval to respect the Kinesis per-shard rate limit of 5 GetRecords calls per second.
      *
      * @param splitState splitState on which the fetchRecords() was called on
      * @param recordBatch recordBatch returned by fetchRecords()
@@ -201,6 +205,10 @@ public abstract class KinesisShardSplitReaderBase
                         splitState.getSplitId(),
                         new Date(scheduledGetRecordTimeMillis).toInstant());
             }
+        } else if (getRecordsIntervalMillis > 0) {
+            long scheduledGetRecordTimeMillis =
+                    System.currentTimeMillis() + getRecordsIntervalMillis;
+            this.scheduledFetchTimes.put(splitState, scheduledGetRecordTimeMillis);
         }
     }
 
