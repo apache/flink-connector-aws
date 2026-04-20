@@ -331,7 +331,6 @@ public class FanOutKinesisShardSubscription {
         public void onComplete() {
             LOG.info("Subscription complete - {} ({})", shardId, consumerArn);
             cancel();
-            activateSubscription();
         }
     }
 }
