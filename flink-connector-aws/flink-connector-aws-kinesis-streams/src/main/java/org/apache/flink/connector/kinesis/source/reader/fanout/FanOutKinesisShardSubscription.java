@@ -330,7 +330,6 @@ public class FanOutKinesisShardSubscription {
         @Override
         public void onComplete() {
             LOG.info("Subscription complete - {} ({})", shardId, consumerArn);
-            cancel();
         }
     }
 }
