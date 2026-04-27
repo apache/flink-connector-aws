@@ -80,7 +80,6 @@ public class FanOutKinesisShardSubscription {
     // Queue is meant for eager retrieval of records from the Kinesis stream. We will always have 2
     // record batches available on next read.
     private final BlockingQueue<SubscribeToShardEvent> eventQueue = new LinkedBlockingQueue<>(2);
-    private final AtomicBoolean subscriptionActive = new AtomicBoolean(false);
     private final AtomicReference<Throwable> subscriptionException = new AtomicReference<>();
 
     // Store the current starting position for this subscription. Will be updated each time new
@@ -108,7 +107,7 @@ public class FanOutKinesisShardSubscription {
                 shardId,
                 startingPosition,
                 consumerArn);
-        if (subscriptionActive.get()) {
+        if (shardSubscriber != null && shardSubscriber.getSubscriptionState() == SubscriptionState.SUBSCRIBED) {
             LOG.warn("Skipping activation of subscription since it is already active.");
             return;
         }
@@ -166,9 +165,9 @@ public class FanOutKinesisShardSubscription {
                                     shardId,
                                     startingPosition,
                                     consumerArn);
-                            subscriptionActive.set(true);
                             // Request first batch of records.
                             shardSubscriber.requestRecords();
+
                         } else {
                             String errorMessage =
                                     "Timeout when subscribing to shard "
@@ -237,11 +236,25 @@ public class FanOutKinesisShardSubscription {
                     "Subscription encountered unrecoverable exception.", throwable);
         }
 
-        if (!subscriptionActive.get()) {
+        if (shardSubscriber == null || shardSubscriber.getSubscriptionState() == SubscriptionState.NOT_STARTED) {
             LOG.debug(
                     "Subscription to shard {} for consumer {} is not yet active. Skipping.",
                     shardId,
                     consumerArn);
+            return null;
+        } else if (shardSubscriber.getSubscriptionState() == SubscriptionState.COMPLETED &&
+                shardSubscriber.reachedShardEnd.get()) {
+            LOG.info("Subscription reached SHARD_END for shard {} for consumer {}. No more records coming in.",
+                    shardId,
+                    consumerArn);
+            return null;
+        } else if (shardSubscriber.getSubscriptionState() == SubscriptionState.COMPLETED &&
+                !shardSubscriber.reachedShardEnd.get()) {
+            LOG.info("Subscription expired to shard {} for consumer {} but we have not reached SHARD_END. " +
+                            "Restarting subscription.",
+                    shardId,
+                    consumerArn);
+            activateSubscription();
             return null;
         }
 
@@ -254,11 +267,18 @@ public class FanOutKinesisShardSubscription {
      */
     private class FanOutShardSubscriber implements Subscriber<SubscribeToShardEventStream> {
         private final CountDownLatch subscriptionLatch;
-
         private Subscription subscription;
+
+        private final AtomicReference<SubscriptionState> subscriptionState =
+                new AtomicReference<>(SubscriptionState.NOT_STARTED);
+        private final AtomicBoolean reachedShardEnd = new AtomicBoolean(false);
 
         private FanOutShardSubscriber(CountDownLatch subscriptionLatch) {
             this.subscriptionLatch = subscriptionLatch;
+        }
+
+        public SubscriptionState getSubscriptionState() {
+            return subscriptionState.get();
         }
 
         public void requestRecords() {
@@ -266,14 +286,15 @@ public class FanOutKinesisShardSubscription {
         }
 
         public void cancel() {
-            if (!subscriptionActive.get()) {
+            if (this.subscriptionState.get() == SubscriptionState.COMPLETED) {
                 LOG.warn("Trying to cancel inactive subscription. Ignoring.");
                 return;
             }
-            subscriptionActive.set(false);
+
             if (subscription != null) {
                 subscription.cancel();
             }
+            this.subscriptionState.set(SubscriptionState.COMPLETED);
         }
 
         @Override
@@ -284,6 +305,7 @@ public class FanOutKinesisShardSubscription {
                     startingPosition,
                     consumerArn);
             this.subscription = subscription;
+            this.subscriptionState.set(SubscriptionState.SUBSCRIBED);
             subscriptionLatch.countDown();
         }
 
@@ -299,6 +321,11 @@ public class FanOutKinesisShardSubscription {
                                         event.getClass().getSimpleName(),
                                         event);
                                 eventQueue.put(event);
+
+                                if (event.continuationSequenceNumber() == null) {
+                                    reachedShardEnd.set(true);
+                                    return;
+                                }
 
                                 // Update the starting position in case we have to recreate the
                                 // subscription
@@ -330,6 +357,13 @@ public class FanOutKinesisShardSubscription {
         @Override
         public void onComplete() {
             LOG.info("Subscription complete - {} ({})", shardId, consumerArn);
+            this.subscriptionState.set(SubscriptionState.COMPLETED);
         }
+    }
+
+    private enum SubscriptionState {
+        NOT_STARTED,
+        SUBSCRIBED,
+        COMPLETED
     }
 }

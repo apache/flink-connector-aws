@@ -156,7 +156,7 @@ class FanOutKinesisShardSubscriptionTest {
     }
 
     @Test
-    void testOnCompleteDoesNotResubscribe() throws Exception {
+    void testExpiredSubscriptionResubscribes() throws Exception {
         AtomicInteger subscribeCount = new AtomicInteger(0);
         AsyncStreamProxy proxy =
                 new AsyncStreamProxy() {
@@ -177,6 +177,7 @@ class FanOutKinesisShardSubscriptionTest {
                                                         new Subscription() {
                                                             @Override
                                                             public void request(long n) {
+                                                                // Complete without sending any events (simulates 5-min expiry)
                                                                 subscriber.onComplete();
                                                             }
 
@@ -201,14 +202,84 @@ class FanOutKinesisShardSubscriptionTest {
                         SUBSCRIPTION_TIMEOUT);
 
         subscription.activateSubscription();
-
-        // Wait for the async subscription to activate and complete
         Thread.sleep(500);
 
-        // Verify subscribeToShard was called exactly once - onComplete must not re-subscribe
-        assertThat(subscribeCount.get()).isEqualTo(1);
+        // nextEvent() should detect COMPLETED without shard-end and trigger resubscription
+        subscription.nextEvent();
+        Thread.sleep(500);
 
-        // Subscription should be inactive after onComplete
+        assertThat(subscribeCount.get()).isEqualTo(2);
+    }
+
+    @Test
+    void testShardEndDoesNotResubscribe() throws Exception {
+        AtomicInteger subscribeCount = new AtomicInteger(0);
+        AsyncStreamProxy proxy =
+                new AsyncStreamProxy() {
+                    @Override
+                    public CompletableFuture<Void> subscribeToShard(
+                            String consumerArn,
+                            String shardId,
+                            StartingPosition startingPosition,
+                            SubscribeToShardResponseHandler responseHandler) {
+                        subscribeCount.incrementAndGet();
+                        return CompletableFuture.supplyAsync(
+                                () -> {
+                                    responseHandler.responseReceived(
+                                            SubscribeToShardResponse.builder().build());
+                                    responseHandler.onEventStream(
+                                            subscriber -> {
+                                                subscriber.onSubscribe(
+                                                        new Subscription() {
+                                                            private boolean sent = false;
+
+                                                            @Override
+                                                            public void request(long n) {
+                                                                if (!sent) {
+                                                                    sent = true;
+                                                                    // Send event with null continuation (shard end)
+                                                                    subscriber.onNext(
+                                                                            SubscribeToShardEvent
+                                                                                    .builder()
+                                                                                    .millisBehindLatest(
+                                                                                            0L)
+                                                                                    .continuationSequenceNumber(
+                                                                                            null)
+                                                                                    .build());
+                                                                } else {
+                                                                    subscriber.onComplete();
+                                                                }
+                                                            }
+
+                                                            @Override
+                                                            public void cancel() {}
+                                                        });
+                                            });
+                                    return null;
+                                });
+                    }
+
+                    @Override
+                    public void close() {}
+                };
+
+        FanOutKinesisShardSubscription subscription =
+                new FanOutKinesisShardSubscription(
+                        proxy,
+                        CONSUMER_ARN,
+                        TEST_SHARD_ID,
+                        StartingPosition.fromStart(),
+                        SUBSCRIPTION_TIMEOUT);
+
+        subscription.activateSubscription();
+        Thread.sleep(500);
+
+        // Drain the shard-end event from the queue
+        subscription.nextEvent();
+        Thread.sleep(500);
+
+        // Should not have resubscribed — shard has ended
+        assertThat(subscribeCount.get()).isEqualTo(1);
         assertThat(subscription.nextEvent()).isNull();
     }
 }
