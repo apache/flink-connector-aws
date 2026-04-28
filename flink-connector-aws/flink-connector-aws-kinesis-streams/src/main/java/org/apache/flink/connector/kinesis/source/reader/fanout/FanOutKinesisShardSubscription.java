@@ -235,30 +235,30 @@ public class FanOutKinesisShardSubscription {
             throw new KinesisStreamsSourceException(
                     "Subscription encountered unrecoverable exception.", throwable);
         }
+        final SubscriptionState state = Optional.ofNullable(shardSubscriber)
+                .map(FanOutShardSubscriber::getSubscriptionState)
+                .orElse(SubscriptionState.NOT_STARTED);
 
-        if (shardSubscriber == null || shardSubscriber.getSubscriptionState() == SubscriptionState.NOT_STARTED) {
-            LOG.debug(
-                    "Subscription to shard {} for consumer {} is not yet active. Skipping.",
-                    shardId,
-                    consumerArn);
-            return null;
-        } else if (shardSubscriber.getSubscriptionState() == SubscriptionState.COMPLETED &&
-                shardSubscriber.reachedShardEnd.get()) {
-            LOG.info("Subscription reached SHARD_END for shard {} for consumer {}. No more records coming in.",
-                    shardId,
-                    consumerArn);
-            return null;
-        } else if (shardSubscriber.getSubscriptionState() == SubscriptionState.COMPLETED &&
-                !shardSubscriber.reachedShardEnd.get()) {
-            LOG.info("Subscription expired to shard {} for consumer {} but we have not reached SHARD_END. " +
-                            "Restarting subscription.",
-                    shardId,
-                    consumerArn);
-            activateSubscription();
-            return null;
+        switch (state) {
+            case NOT_STARTED:
+                LOG.debug("Subscription to shard {} for consumer {} is not yet active. Skipping.",
+                        shardId, consumerArn);
+                return null;
+            case COMPLETED:
+                if (shardSubscriber.isShardEndReached()) {
+                    LOG.info("Subscription reached SHARD_END for shard {} for consumer {}.",
+                            shardId, consumerArn);
+                    return null;
+                }
+                LOG.info("Subscription expired to shard {} for consumer {}. Restarting.",
+                        shardId, consumerArn);
+                activateSubscription();
+                return null;
+            case SUBSCRIBED:
+                return eventQueue.poll();
+            default:
+                throw new IllegalStateException("Unknown subscription state: " + state);
         }
-
-        return eventQueue.poll();
     }
 
     /**
@@ -271,14 +271,26 @@ public class FanOutKinesisShardSubscription {
 
         private final AtomicReference<SubscriptionState> subscriptionState =
                 new AtomicReference<>(SubscriptionState.NOT_STARTED);
-        private final AtomicBoolean reachedShardEnd = new AtomicBoolean(false);
+        private final AtomicBoolean isShardEnd = new AtomicBoolean(false);
 
         private FanOutShardSubscriber(CountDownLatch subscriptionLatch) {
             this.subscriptionLatch = subscriptionLatch;
         }
 
+        /**
+         * Fetch the state that the subscriber is in.
+         * @return Subscription state for the subscriber.
+         */
         public SubscriptionState getSubscriptionState() {
             return subscriptionState.get();
+        }
+
+        /**
+         * Boolean whether this subscriber has reached the end of a shard.
+         * @return True if ShardEnd. false otherwise.
+         */
+        public boolean isShardEndReached() {
+            return isShardEnd.get();
         }
 
         public void requestRecords() {
@@ -323,7 +335,7 @@ public class FanOutKinesisShardSubscription {
                                 eventQueue.put(event);
 
                                 if (event.continuationSequenceNumber() == null) {
-                                    reachedShardEnd.set(true);
+                                    isShardEnd.set(true);
                                     return;
                                 }
 
@@ -361,6 +373,9 @@ public class FanOutKinesisShardSubscription {
         }
     }
 
+    /**
+     * States that the {@code FanOutShardSubscriber} may be in.
+     */
     private enum SubscriptionState {
         NOT_STARTED,
         SUBSCRIBED,

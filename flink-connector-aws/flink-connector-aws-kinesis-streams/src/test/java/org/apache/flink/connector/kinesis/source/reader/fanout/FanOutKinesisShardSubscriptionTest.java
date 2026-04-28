@@ -60,7 +60,7 @@ class FanOutKinesisShardSubscriptionTest {
     }
 
     @Test
-    void testResourceNotFoundExceptionThrown() throws Exception {
+    void testResourceNotFoundExceptionThrown() {
         AsyncStreamProxy proxy =
                 FakeKinesisFanOutBehaviorsFactory.resourceNotFoundWhenObtainingSubscription();
         FanOutKinesisShardSubscription subscription =
