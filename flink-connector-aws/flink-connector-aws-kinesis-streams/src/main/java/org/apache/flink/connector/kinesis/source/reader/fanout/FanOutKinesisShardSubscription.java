@@ -107,7 +107,8 @@ public class FanOutKinesisShardSubscription {
                 shardId,
                 startingPosition,
                 consumerArn);
-        if (shardSubscriber != null && shardSubscriber.getSubscriptionState() == SubscriptionState.SUBSCRIBED) {
+        if (shardSubscriber != null
+                && shardSubscriber.getSubscriptionState() == SubscriptionState.SUBSCRIBED) {
             LOG.warn("Skipping activation of subscription since it is already active.");
             return;
         }
@@ -235,23 +236,30 @@ public class FanOutKinesisShardSubscription {
             throw new KinesisStreamsSourceException(
                     "Subscription encountered unrecoverable exception.", throwable);
         }
-        final SubscriptionState state = Optional.ofNullable(shardSubscriber)
-                .map(FanOutShardSubscriber::getSubscriptionState)
-                .orElse(SubscriptionState.NOT_STARTED);
+        final SubscriptionState state =
+                Optional.ofNullable(shardSubscriber)
+                        .map(FanOutShardSubscriber::getSubscriptionState)
+                        .orElse(SubscriptionState.NOT_STARTED);
 
         switch (state) {
             case NOT_STARTED:
-                LOG.debug("Subscription to shard {} for consumer {} is not yet active. Skipping.",
-                        shardId, consumerArn);
+                LOG.debug(
+                        "Subscription to shard {} for consumer {} is not yet active. Skipping.",
+                        shardId,
+                        consumerArn);
                 return null;
             case COMPLETED:
                 if (shardSubscriber.isShardEndReached()) {
-                    LOG.info("Subscription reached SHARD_END for shard {} for consumer {}.",
-                            shardId, consumerArn);
+                    LOG.info(
+                            "Subscription reached SHARD_END for shard {} for consumer {}.",
+                            shardId,
+                            consumerArn);
                     return null;
                 }
-                LOG.info("Subscription expired to shard {} for consumer {}. Restarting.",
-                        shardId, consumerArn);
+                LOG.info(
+                        "Subscription expired to shard {} for consumer {}. Restarting.",
+                        shardId,
+                        consumerArn);
                 activateSubscription();
                 return null;
             case SUBSCRIBED:
@@ -279,6 +287,7 @@ public class FanOutKinesisShardSubscription {
 
         /**
          * Fetch the state that the subscriber is in.
+         *
          * @return Subscription state for the subscriber.
          */
         public SubscriptionState getSubscriptionState() {
@@ -287,6 +296,7 @@ public class FanOutKinesisShardSubscription {
 
         /**
          * Boolean whether this subscriber has reached the end of a shard.
+         *
          * @return True if ShardEnd. false otherwise.
          */
         public boolean isShardEndReached() {
@@ -373,9 +383,7 @@ public class FanOutKinesisShardSubscription {
         }
     }
 
-    /**
-     * States that the {@code FanOutShardSubscriber} may be in.
-     */
+    /** States that the {@code FanOutShardSubscriber} may be in. */
     private enum SubscriptionState {
         NOT_STARTED,
         SUBSCRIBED,

@@ -177,7 +177,8 @@ class FanOutKinesisShardSubscriptionTest {
                                                         new Subscription() {
                                                             @Override
                                                             public void request(long n) {
-                                                                // Complete without sending any events (simulates 5-min expiry)
+                                                                // Complete without sending any
+                                                                // events (simulates 5-min expiry)
                                                                 subscriber.onComplete();
                                                             }
 
@@ -237,7 +238,8 @@ class FanOutKinesisShardSubscriptionTest {
                                                             public void request(long n) {
                                                                 if (!sent) {
                                                                     sent = true;
-                                                                    // Send event with null continuation (shard end)
+                                                                    // Send event with null
+                                                                    // continuation (shard end)
                                                                     subscriber.onNext(
                                                                             SubscribeToShardEvent
                                                                                     .builder()
