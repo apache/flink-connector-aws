@@ -25,7 +25,6 @@ import org.apache.flink.connector.testframe.container.TestcontainersSettings;
 import org.apache.flink.test.resources.ResourceTestUtils;
 import org.apache.flink.test.util.SQLJobSubmission;
 import org.apache.flink.util.DockerImageVersions;
-import org.apache.flink.util.TestLogger;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -35,16 +34,17 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.assertj.core.api.Assertions;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.ClassRule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.Network;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 import software.amazon.awssdk.core.SdkSystemSetting;
 import software.amazon.awssdk.http.SdkHttpClient;
@@ -74,7 +74,9 @@ import static org.apache.flink.connector.firehose.sink.testutils.KinesisFirehose
 import static org.apache.flink.connector.firehose.sink.testutils.KinesisFirehoseTestUtils.createFirehoseClient;
 
 /** End to End test for Kinesis Firehose Table sink API. */
-public class KinesisFirehoseTableITTest extends TestLogger {
+@Testcontainers
+@Timeout(value = 10, unit = TimeUnit.MINUTES)
+public class KinesisFirehoseTableITTest {
 
     private static final Logger LOG = LoggerFactory.getLogger(KinesisFirehoseTableITTest.class);
 
@@ -95,9 +97,7 @@ public class KinesisFirehoseTableITTest extends TestLogger {
     private static final int NUM_ELEMENTS = 5;
     private static final Network network = Network.newNetwork();
 
-    @ClassRule public static final Timeout TIMEOUT = new Timeout(10, TimeUnit.MINUTES);
-
-    @ClassRule
+    @Container
     public static LocalstackContainer mockFirehoseContainer =
             new LocalstackContainer(DockerImageName.parse(DockerImageVersions.LOCALSTACK))
                     .withNetwork(network)
@@ -117,7 +117,7 @@ public class KinesisFirehoseTableITTest extends TestLogger {
     public static final FlinkContainers FLINK =
             FlinkContainers.builder().withTestcontainersSettings(TESTCONTAINERS_SETTINGS).build();
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         System.setProperty(SdkSystemSetting.CBOR_ENABLED.property(), "false");
 
@@ -139,17 +139,17 @@ public class KinesisFirehoseTableITTest extends TestLogger {
         LOG.info("Done setting up the localstack.");
     }
 
-    @BeforeClass
+    @BeforeAll
     public static void setupFlink() throws Exception {
         FLINK.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void stopFlink() {
         FLINK.stop();
     }
 
-    @After
+    @AfterEach
     public void teardown() {
         System.clearProperty(SdkSystemSetting.CBOR_ENABLED.property());
 

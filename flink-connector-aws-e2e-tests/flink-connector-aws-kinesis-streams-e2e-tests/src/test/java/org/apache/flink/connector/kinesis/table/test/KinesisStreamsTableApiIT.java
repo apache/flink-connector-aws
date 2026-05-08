@@ -36,14 +36,13 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.google.common.collect.ImmutableList;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.ClassRule;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.rules.Timeout;
 import org.rnorth.ducttape.ratelimits.RateLimiter;
 import org.rnorth.ducttape.ratelimits.RateLimiterBuilder;
 import org.slf4j.Logger;
@@ -79,6 +78,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** End-to-end test for Kinesis Streams Table API Sink using Kinesalite. */
 @Testcontainers
 @ExtendWith(MiniClusterExtension.class)
+@Timeout(value = 10, unit = TimeUnit.MINUTES)
 public class KinesisStreamsTableApiIT {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(KinesisStreamsTableApiIT.class);
@@ -95,8 +95,6 @@ public class KinesisStreamsTableApiIT {
     private final Path sqlConnectorKinesisJar =
             ResourceTestUtils.getResource(".*kinesis-streams.jar");
     private static final Network network = Network.newNetwork();
-
-    @ClassRule public static final Timeout TIMEOUT = new Timeout(10, TimeUnit.MINUTES);
 
     @Container
     public static final LocalstackContainer LOCALSTACK_CONTAINER =
@@ -123,17 +121,17 @@ public class KinesisStreamsTableApiIT {
     public static final FlinkContainers FLINK =
             FlinkContainers.builder().withTestcontainersSettings(TESTCONTAINERS_SETTINGS).build();
 
-    @BeforeClass
+    @BeforeAll
     public static void setupFlink() throws Exception {
         FLINK.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void stopFlink() {
         FLINK.stop();
     }
 
-    @Before
+    @BeforeEach
     public void setUp() throws Exception {
         System.setProperty(SdkSystemSetting.CBOR_ENABLED.property(), "false");
         httpClient = AWSServicesTestUtils.createHttpClient();
@@ -144,7 +142,7 @@ public class KinesisStreamsTableApiIT {
         prepareStream(LARGE_ORDERS_STREAM);
     }
 
-    @After
+    @AfterEach
     public void teardown() {
         System.clearProperty(SdkSystemSetting.CBOR_ENABLED.property());
         AWSGeneralUtil.closeResources(httpClient, kinesisClient);

@@ -28,18 +28,18 @@ import org.apache.flink.connector.testframe.container.FlinkContainers;
 import org.apache.flink.connector.testframe.container.TestcontainersSettings;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.util.DockerImageVersions;
-import org.apache.flink.util.TestLogger;
 
 import org.assertj.core.api.Assertions;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.ClassRule;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.Network;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 import software.amazon.awssdk.core.SdkSystemSetting;
 import software.amazon.awssdk.http.SdkHttpClient;
@@ -55,7 +55,8 @@ import static org.apache.flink.connector.sqs.sink.testutils.SqsTestUtils.createS
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /** End to End test for SQS sink API. */
-public class SqsSinkITTest extends TestLogger {
+@Testcontainers
+public class SqsSinkITTest {
 
     private static final Logger LOG = LoggerFactory.getLogger(SqsSinkITTest.class);
 
@@ -65,7 +66,7 @@ public class SqsSinkITTest extends TestLogger {
     private SqsClient sqsClient;
     private static final Network network = Network.newNetwork();
 
-    @ClassRule
+    @Container
     public static LocalstackContainer mockSqsContainer =
             new LocalstackContainer(DockerImageName.parse(DockerImageVersions.LOCALSTACK))
                     .withNetwork(network)
@@ -85,7 +86,7 @@ public class SqsSinkITTest extends TestLogger {
     public static final FlinkContainers FLINK =
             FlinkContainers.builder().withTestcontainersSettings(TESTCONTAINERS_SETTINGS).build();
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         httpClient = AWSServicesTestUtils.createHttpClient();
         sqsClient = createSqsClient(mockSqsContainer.getEndpoint(), httpClient);
@@ -94,17 +95,17 @@ public class SqsSinkITTest extends TestLogger {
         LOG.info("Done setting up the localstack.");
     }
 
-    @BeforeClass
+    @BeforeAll
     public static void setupFlink() throws Exception {
         FLINK.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void stopFlink() {
         FLINK.stop();
     }
 
-    @After
+    @AfterEach
     public void teardown() {
         System.clearProperty(SdkSystemSetting.CBOR_ENABLED.property());
         httpClient.close();
