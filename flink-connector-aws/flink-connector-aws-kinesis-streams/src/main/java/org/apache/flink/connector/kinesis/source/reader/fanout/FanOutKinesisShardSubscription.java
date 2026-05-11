@@ -109,7 +109,7 @@ public class FanOutKinesisShardSubscription {
                 consumerArn);
         if (shardSubscriber != null
                 && shardSubscriber.getSubscriptionState() == SubscriptionState.SUBSCRIBED) {
-            LOG.warn("Skipping activation of subscription since it is already active.");
+            LOG.warn("Skipping activation of subscription since it is active & subscribed.");
             return;
         }
 
@@ -243,23 +243,29 @@ public class FanOutKinesisShardSubscription {
 
         switch (state) {
             case NOT_STARTED:
-                LOG.debug(
-                        "Subscription to shard {} for consumer {} is not yet active. Skipping.",
-                        shardId,
-                        consumerArn);
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug(
+                            "Subscription to shard {} for consumer {} is not yet active. Skipping.",
+                            shardId,
+                            consumerArn);
+                }
                 return null;
             case COMPLETED:
                 if (shardSubscriber.isShardEndReached()) {
-                    LOG.info(
-                            "Subscription reached SHARD_END for shard {} for consumer {}.",
-                            shardId,
-                            consumerArn);
+                    if (LOG.isInfoEnabled()) {
+                        LOG.info(
+                                "Subscription reached SHARD_END for shard {} for consumer {}.",
+                                shardId,
+                                consumerArn);
+                    }
                     return null;
                 }
-                LOG.info(
-                        "Subscription expired to shard {} for consumer {}. Restarting.",
-                        shardId,
-                        consumerArn);
+                if (LOG.isInfoEnabled()) {
+                    LOG.info(
+                            "Subscription expired to shard {} for consumer {}. Restarting.",
+                            shardId,
+                            consumerArn);
+                }
                 activateSubscription();
                 return null;
             case SUBSCRIBED:
@@ -309,7 +315,7 @@ public class FanOutKinesisShardSubscription {
 
         public void cancel() {
             if (this.subscriptionState.get() == SubscriptionState.COMPLETED) {
-                LOG.warn("Trying to cancel inactive subscription. Ignoring.");
+                LOG.warn("Subscription is already completed. Ignoring request to cancel.");
                 return;
             }
 
@@ -345,6 +351,10 @@ public class FanOutKinesisShardSubscription {
                                 eventQueue.put(event);
 
                                 if (event.continuationSequenceNumber() == null) {
+                                    if (LOG.isDebugEnabled()) {
+                                        LOG.debug("continuationSequenceNumber is null. " +
+                                                "Reached ShardEnd for shard: {}", shardId);
+                                    }
                                     isShardEnd.set(true);
                                     return;
                                 }
