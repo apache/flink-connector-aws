@@ -93,6 +93,7 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
 
     @Override
     public void close() throws Exception {
+        splitSubscriptions.values().forEach(FanOutKinesisShardSubscription::close);
         asyncStreamProxy.close();
     }
 }
