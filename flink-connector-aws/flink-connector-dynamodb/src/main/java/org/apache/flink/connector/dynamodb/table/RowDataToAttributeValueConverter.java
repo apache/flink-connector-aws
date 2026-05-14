@@ -110,8 +110,7 @@ public class RowDataToAttributeValueConverter {
 
     private java.util.Optional<AttributeConverter> buildRowAttributeConverter(DataType dataType) {
         if (LogicalTypeRoot.ROW.equals(dataType.getLogicalType().getTypeRoot())) {
-            return java.util.Optional.of(
-                    createRowDocumentConverter(buildRowTableSchema(dataType)));
+            return java.util.Optional.of(createRowDocumentConverter(buildRowTableSchema(dataType)));
         }
         if (dataType instanceof CollectionDataType) {
             DataType elementDataType = ((CollectionDataType) dataType).getElementDataType();
