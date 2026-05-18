@@ -127,7 +127,7 @@ public class RowDataToAttributeValueConverter {
 
     private static AttributeConverter<Row> createRowDocumentConverter(
             TableSchema<Row> tableSchema) {
-        return new AttributeConverter<>() {
+        return new AttributeConverter<Row>() {
             @Override
             public AttributeValue transformFrom(Row input) {
                 return AttributeValue.builder().m(tableSchema.itemToMap(input, false)).build();
