@@ -49,8 +49,7 @@ import static org.awaitility.Awaitility.await;
  * Tests for {@link FanOutKinesisShardSubscription}.
  *
  * <p>These tests focus on the concurrent lifecycle of a subscription: activation guards, error
- * disposal, timeout handling, and the identity-based cleanup that prevents the connection-leak
- * bug.
+ * disposal, timeout handling, and the identity-based cleanup that prevents the connection-leak bug.
  */
 class FanOutKinesisShardSubscriptionTest {
 
@@ -114,8 +113,8 @@ class FanOutKinesisShardSubscriptionTest {
         ScriptedSubscription s2 = proxy.awaitSubscription();
         assertThat(proxy.subscribeCallCount()).isEqualTo(2);
         // The new activation should resume from where s1 left off
-        assertThat(s2.startingPosition).isEqualTo(
-                StartingPosition.continueFromSequenceNumber("cont-1"));
+        assertThat(s2.startingPosition)
+                .isEqualTo(StartingPosition.continueFromSequenceNumber("cont-1"));
     }
 
     @Test
@@ -231,8 +230,7 @@ class FanOutKinesisShardSubscriptionTest {
 
         s1.completeExceptionally(ResourceNotFoundException.builder().message("gone").build());
 
-        assertThatThrownBy(subscription::nextEvent)
-                .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(subscription::nextEvent).isInstanceOf(ResourceNotFoundException.class);
     }
 
     // ----- Dual error path dedup (disposeIfActive identity check) -----
@@ -277,14 +275,16 @@ class FanOutKinesisShardSubscriptionTest {
         // Deliberately do NOT call s1.onSubscribeDelivered() — the latch will time out
 
         // Wait for the timeout to fire and queue a TimeoutException
-        await().atMost(Duration.ofSeconds(2)).untilAsserted(
-                () -> {
-                    SubscribeToShardEvent e = subscription.nextEvent();
-                    // After the timeout, nextEvent should drain the exception and fire a retry.
-                    // Keep polling until the retry shows up.
-                    assertThat(proxy.subscribeCallCount()).isGreaterThanOrEqualTo(2);
-                    assertThat(e).isNull();
-                });
+        await().atMost(Duration.ofSeconds(2))
+                .untilAsserted(
+                        () -> {
+                            SubscribeToShardEvent e = subscription.nextEvent();
+                            // After the timeout, nextEvent should drain the exception and fire a
+                            // retry.
+                            // Keep polling until the retry shows up.
+                            assertThat(proxy.subscribeCallCount()).isGreaterThanOrEqualTo(2);
+                            assertThat(e).isNull();
+                        });
     }
 
     // ----- Stale onSubscribe (race: timeout before onSubscribe) -----
@@ -299,8 +299,7 @@ class FanOutKinesisShardSubscriptionTest {
         ScriptedSubscription s1 = proxy.awaitSubscription();
         // Let the timeout fire (no onSubscribe)
         await().atMost(Duration.ofSeconds(2))
-                .until(() -> subscription.nextEvent() == null
-                        && proxy.subscribeCallCount() >= 2);
+                .until(() -> subscription.nextEvent() == null && proxy.subscribeCallCount() >= 2);
 
         // Now s1 is stale; a new subscription s2 has been created
         ScriptedSubscription s2 = proxy.latestSubscription();
@@ -434,7 +433,8 @@ class FanOutKinesisShardSubscriptionTest {
         assertThat(s1.subscription.getRequestedCount()).isEqualTo(priming);
     }
 
-    // ----- Reactivation invariant: onSubscribe must not re-prime if queue has leftover events -----
+    // ----- Reactivation invariant: onSubscribe must not re-prime if queue has leftover events
+    // -----
 
     @Test
     void onSubscribeWithBufferedEventFromPreviousSubscriberDoesNotPrimeRequest() throws Exception {
@@ -600,8 +600,7 @@ class FanOutKinesisShardSubscriptionTest {
     }
 
     private static SubscribeToShardEvent pollEvent(FanOutKinesisShardSubscription subscription) {
-        return await().atMost(Duration.ofSeconds(2))
-                .until(subscription::nextEvent, e -> e != null);
+        return await().atMost(Duration.ofSeconds(2)).until(subscription::nextEvent, e -> e != null);
     }
 
     private static void waitShort() throws InterruptedException {
@@ -617,7 +616,8 @@ class FanOutKinesisShardSubscriptionTest {
      * {@link ScriptedSubscription} handle for the test to drive events and errors.
      */
     private static final class ScriptedProxy implements AsyncStreamProxy {
-        private final ConcurrentLinkedQueue<ScriptedSubscription> calls = new ConcurrentLinkedQueue<>();
+        private final ConcurrentLinkedQueue<ScriptedSubscription> calls =
+                new ConcurrentLinkedQueue<>();
 
         @Override
         public CompletableFuture<Void> subscribeToShard(
@@ -625,8 +625,7 @@ class FanOutKinesisShardSubscriptionTest {
                 String shardId,
                 StartingPosition startingPosition,
                 SubscribeToShardResponseHandler responseHandler) {
-            ScriptedSubscription call =
-                    new ScriptedSubscription(startingPosition, responseHandler);
+            ScriptedSubscription call = new ScriptedSubscription(startingPosition, responseHandler);
             calls.add(call);
             return call.future;
         }
@@ -671,8 +670,8 @@ class FanOutKinesisShardSubscriptionTest {
         final TestSubscription subscription = new TestSubscription();
         volatile boolean observed = false;
 
-        private final AtomicReference<Subscriber<? super SubscribeToShardEventStream>> subscriberRef =
-                new AtomicReference<>();
+        private final AtomicReference<Subscriber<? super SubscribeToShardEventStream>>
+                subscriberRef = new AtomicReference<>();
 
         ScriptedSubscription(
                 StartingPosition startingPosition, SubscribeToShardResponseHandler handler) {

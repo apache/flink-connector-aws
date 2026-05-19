@@ -85,13 +85,14 @@ public class FanOutKinesisShardSubscription {
     private final Duration subscriptionTimeout;
 
     /**
-     * Number of events to keep in flight per subscriber. Pipelining the fetch overlaps the
-     * server's next-event work with the consumer's drain work. Must match the capacity of
-     * {@link #eventQueue}.
+     * Number of events to keep in flight per subscriber. Pipelining the fetch overlaps the server's
+     * next-event work with the consumer's drain work. Must match the capacity of {@link
+     * #eventQueue}.
      */
     private static final int PREFETCH = 2;
 
-    private final BlockingQueue<SubscribeToShardEvent> eventQueue = new LinkedBlockingQueue<>(PREFETCH);
+    private final BlockingQueue<SubscribeToShardEvent> eventQueue =
+            new LinkedBlockingQueue<>(PREFETCH);
     private final AtomicReference<Throwable> subscriptionException = new AtomicReference<>();
 
     // All fields below are guarded by lockObject
@@ -119,9 +120,7 @@ public class FanOutKinesisShardSubscription {
     public void activateSubscription() {
         synchronized (lockObject) {
             if (closed) {
-                LOG.info(
-                        "Subscription for shard {} is closed; skipping activation.",
-                        shardId);
+                LOG.info("Subscription for shard {} is closed; skipping activation.", shardId);
                 return;
             }
             if (startingPosition == null) {
