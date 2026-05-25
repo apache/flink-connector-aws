@@ -32,6 +32,7 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 
 import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.EFO_CONSUMER_SUBSCRIPTION_TIMEOUT;
 
@@ -44,6 +45,7 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
     private final AsyncStreamProxy asyncStreamProxy;
     private final String consumerArn;
     private final Duration subscriptionTimeout;
+    private final ScheduledThreadPoolExecutor timeoutScheduler;
 
     private final Map<String, FanOutKinesisShardSubscription> splitSubscriptions = new HashMap<>();
 
@@ -56,6 +58,15 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
         this.asyncStreamProxy = asyncStreamProxy;
         this.consumerArn = consumerArn;
         this.subscriptionTimeout = configuration.get(EFO_CONSUMER_SUBSCRIPTION_TIMEOUT);
+        this.timeoutScheduler =
+                new ScheduledThreadPoolExecutor(
+                        1,
+                        r -> {
+                            Thread t = new Thread(r, "subscription-timeout-scheduler");
+                            t.setDaemon(true);
+                            return t;
+                        });
+        this.timeoutScheduler.setRemoveOnCancelPolicy(true);
     }
 
     @Override
@@ -71,6 +82,7 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
         boolean shardCompleted = event.continuationSequenceNumber() == null;
         if (shardCompleted) {
             splitSubscriptions.remove(splitState.getShardId());
+            subscription.close();
         }
         return new RecordBatch(event.records(), event.millisBehindLatest(), shardCompleted);
     }
@@ -85,7 +97,8 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
                             consumerArn,
                             split.getShardId(),
                             split.getStartingPosition(),
-                            subscriptionTimeout);
+                            subscriptionTimeout,
+                            timeoutScheduler);
             subscription.activateSubscription();
             splitSubscriptions.put(split.splitId(), subscription);
         }
@@ -94,6 +107,7 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
     @Override
     public void close() throws Exception {
         splitSubscriptions.values().forEach(FanOutKinesisShardSubscription::close);
+        timeoutScheduler.shutdownNow();
         asyncStreamProxy.close();
     }
 }

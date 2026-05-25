@@ -35,6 +35,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -585,14 +586,49 @@ class FanOutKinesisShardSubscriptionTest {
         assertThat(got.continuationSequenceNumber()).isEqualTo("live-cont");
     }
 
-    private static FanOutKinesisShardSubscription newSubscription(AsyncStreamProxy proxy) {
+    @Test
+    void onCompleteFromStaleSubscriberDoesNotDisposeActiveSubscriber() throws Exception {
+        ScriptedProxy proxy = new ScriptedProxy();
+        FanOutKinesisShardSubscription subscription = newSubscription(proxy, LONG_TIMEOUT);
+
+        subscription.activateSubscription();
+        ScriptedSubscription s1 = proxy.awaitSubscription();
+        s1.onSubscribeDelivered();
+
+        s1.fireHandlerError(new IOException("dispose s1"));
+        assertThat(subscription.nextEvent()).isNull();
+        ScriptedSubscription s2 = proxy.awaitSubscription();
+        s2.onSubscribeDelivered();
+
+        s1.onComplete();
+
+        waitShort();
+        assertThat(proxy.subscribeCallCount()).isEqualTo(2);
+
+        s2.deliverEvent(
+                SubscribeToShardEvent.builder()
+                        .records(record("live"))
+                        .continuationSequenceNumber("live-cont")
+                        .build());
+        SubscribeToShardEvent got = pollEvent(subscription);
+        assertThat(got.continuationSequenceNumber()).isEqualTo("live-cont");
+    }
+
+    private FanOutKinesisShardSubscription newSubscription(AsyncStreamProxy proxy) {
         return newSubscription(proxy, DEFAULT_TIMEOUT);
     }
 
-    private static FanOutKinesisShardSubscription newSubscription(
+    private FanOutKinesisShardSubscription newSubscription(
             AsyncStreamProxy proxy, Duration subscriptionTimeout) {
+        ScheduledThreadPoolExecutor timeoutScheduler = new ScheduledThreadPoolExecutor(1);
+        timeoutScheduler.setRemoveOnCancelPolicy(true);
         return new FanOutKinesisShardSubscription(
-                proxy, CONSUMER_ARN, SHARD_ID, StartingPosition.fromStart(), subscriptionTimeout);
+                proxy,
+                CONSUMER_ARN,
+                SHARD_ID,
+                StartingPosition.fromStart(),
+                subscriptionTimeout,
+                timeoutScheduler);
     }
 
     private static Record record(String sequenceNumber) {

@@ -47,7 +47,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -70,15 +69,7 @@ public class FanOutKinesisShardSubscription {
                     TimeoutException.class,
                     IOException.class,
                     LimitExceededException.class);
-    private static final ScheduledExecutorService TIMEOUT_SCHEDULER =
-            new ScheduledThreadPoolExecutor(
-                    1,
-                    r -> {
-                        Thread t = new Thread(r, "subscription-timeout-scheduler");
-                        t.setDaemon(true);
-                        return t;
-                    });
-
+    private final ScheduledExecutorService timeoutScheduler;
     private final AsyncStreamProxy kinesis;
     private final String consumerArn;
     private final String shardId;
@@ -100,20 +91,21 @@ public class FanOutKinesisShardSubscription {
     private ScheduledFuture<?> timeoutFuture;
     private FanOutShardSubscriber shardSubscriber;
     private boolean closed = false;
-
-    private volatile StartingPosition startingPosition;
+    private StartingPosition startingPosition;
 
     public FanOutKinesisShardSubscription(
             AsyncStreamProxy kinesis,
             String consumerArn,
             String shardId,
             StartingPosition startingPosition,
-            Duration subscriptionTimeout) {
+            Duration subscriptionTimeout,
+            ScheduledExecutorService timeoutScheduler) {
         this.kinesis = kinesis;
         this.consumerArn = consumerArn;
         this.shardId = shardId;
         this.startingPosition = startingPosition;
         this.subscriptionTimeout = subscriptionTimeout;
+        this.timeoutScheduler = timeoutScheduler;
     }
 
     /** Method to allow eager activation of the subscription. */
@@ -168,7 +160,7 @@ public class FanOutKinesisShardSubscription {
 
             cancelTimeoutFuture();
             timeoutFuture =
-                    TIMEOUT_SCHEDULER.schedule(
+                    timeoutScheduler.schedule(
                             () -> {
                                 String errorMessage =
                                         "Timeout when subscribing to shard "
@@ -423,6 +415,12 @@ public class FanOutKinesisShardSubscription {
         @Override
         public void onComplete() {
             synchronized (lockObject) {
+                if (shardSubscriber != this) {
+                    LOG.warn(
+                            "Ignoring late onComplete for shard {} from a disposed subscriber.",
+                            shardId);
+                    return;
+                }
                 LOG.info("Subscription complete - {} ({})", shardId, consumerArn);
                 shardSubscriber = null;
             }
