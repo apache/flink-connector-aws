@@ -115,7 +115,7 @@ public class RowDataToAttributeValueConverter {
         }
         if (dataType instanceof CollectionDataType) {
             DataType elementDataType = ((CollectionDataType) dataType).getElementDataType();
-            if (LogicalTypeRoot.ROW.equals(elementDataType.getLogicalType().getTypeRoot())) {
+            if (LogicalTypeRoot.ROW == elementDataType.getLogicalType().getTypeRoot()) {
                 AttributeConverter<Row> elementConverter =
                         createRowDocumentConverter(buildRowTableSchema(elementDataType));
                 return Optional.of(
@@ -157,7 +157,7 @@ public class RowDataToAttributeValueConverter {
                     EnhancedType.mapOf(
                             getEnhancedType(((KeyValueDataType) dataType).getKeyDataType()),
                             getEnhancedType(((KeyValueDataType) dataType).getValueDataType()));
-        } else if (LogicalTypeRoot.ROW.equals(dataType.getLogicalType().getTypeRoot())) {
+        } else if (LogicalTypeRoot.ROW == dataType.getLogicalType().getTypeRoot()) {
             return (EnhancedType<T>) EnhancedType.of(Row.class);
         } else {
             return (EnhancedType<T>) EnhancedType.of(dataType.getConversionClass());
