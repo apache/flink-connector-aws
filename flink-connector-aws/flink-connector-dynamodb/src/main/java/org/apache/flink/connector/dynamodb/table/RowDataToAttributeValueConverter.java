@@ -40,6 +40,7 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.IntStream;
 
 import static org.apache.flink.table.data.RowData.createFieldGetter;
@@ -108,21 +109,21 @@ public class RowDataToAttributeValueConverter {
                 });
     }
 
-    private java.util.Optional<AttributeConverter> buildRowAttributeConverter(DataType dataType) {
-        if (LogicalTypeRoot.ROW.equals(dataType.getLogicalType().getTypeRoot())) {
-            return java.util.Optional.of(createRowDocumentConverter(buildRowTableSchema(dataType)));
+    private Optional<AttributeConverter> buildRowAttributeConverter(DataType dataType) {
+        if (LogicalTypeRoot.ROW == dataType.getLogicalType().getTypeRoot()) {
+            return Optional.of(createRowDocumentConverter(buildRowTableSchema(dataType)));
         }
         if (dataType instanceof CollectionDataType) {
             DataType elementDataType = ((CollectionDataType) dataType).getElementDataType();
             if (LogicalTypeRoot.ROW.equals(elementDataType.getLogicalType().getTypeRoot())) {
                 AttributeConverter<Row> elementConverter =
                         createRowDocumentConverter(buildRowTableSchema(elementDataType));
-                return java.util.Optional.of(
+                return Optional.of(
                         new ArrayAttributeConverter<>(
                                 elementConverter, EnhancedType.of(Row[].class)));
             }
         }
-        return java.util.Optional.empty();
+        return Optional.empty();
     }
 
     private static AttributeConverter<Row> createRowDocumentConverter(
@@ -170,11 +171,11 @@ public class RowDataToAttributeValueConverter {
         builder.attributeConverterProviders(
                 newAttributeConverterProvider, AttributeConverterProvider.defaultProvider());
 
-        DataTypes.Field[] fields = DataType.getFields(dataType).toArray(new DataTypes.Field[0]);
-        IntStream.range(0, fields.length)
+        final List<DataTypes.Field> fields = DataType.getFields(dataType);
+        IntStream.range(0, fields.size())
                 .forEach(
                         idx -> {
-                            final DataTypes.Field field = fields[idx];
+                            final DataTypes.Field field = fields.get(idx);
                             final DataType fieldDataType = field.getDataType();
                             builder.addAttribute(
                                     getEnhancedType(fieldDataType),
