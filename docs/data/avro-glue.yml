@@ -16,23 +16,8 @@
 # limitations under the License.
 ################################################################################
 
-# Set root logger level to OFF to not flood build logs
-# set manually to INFO for debugging purposes
-rootLogger.level = OFF
-rootLogger.appenderRef.test.ref = TestLogger
-
-appender.testlogger.name = TestLogger
-appender.testlogger.type = CONSOLE
-appender.testlogger.target = SYSTEM_ERR
-appender.testlogger.layout.type = PatternLayout
-appender.testlogger.layout.pattern = %-4r [%t] %-5p %c %x - %m%n
-
-# GSR format classes at INFO (for debugging schema fetcher)
-logger.gsrformat.name = org.apache.flink.formats.avro.glue.schema.registry
-logger.gsrformat.level = INFO
-logger.gsrformat.appenderRef.test.ref = TestLogger
-
-# E2E test class
-logger.e2e.name = org.apache.flink.glue.schema.registry.test
-logger.e2e.level = INFO
-logger.e2e.appenderRef.test.ref = TestLogger
+version: 6.0.0
+flink_compatibility: [ "2.0" ]
+variants:
+  - maven: flink-avro-glue-schema-registry
+    sql_url: https://repo.maven.apache.org/maven2/org/apache/flink/flink-sql-avro-glue-schema-registry/$full_version/flink-sql-avro-glue-schema-registry-$full_version.jar
