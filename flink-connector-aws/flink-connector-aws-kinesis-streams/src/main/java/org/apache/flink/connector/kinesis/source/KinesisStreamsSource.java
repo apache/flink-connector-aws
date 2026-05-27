@@ -165,7 +165,8 @@ public class KinesisStreamsSource<T>
                 new KinesisStreamsRecordEmitter<>(deserializationSchema);
         return new KinesisStreamsSourceReader<>(
                 new SingleThreadFetcherManager<>(
-                        getKinesisShardSplitReaderSupplier(sourceConfig, shardMetricGroupMap)),
+                        getKinesisShardSplitReaderSupplier(sourceConfig, shardMetricGroupMap),
+                        sourceConfig),
                 recordEmitter,
                 sourceConfig,
                 readerContext,
