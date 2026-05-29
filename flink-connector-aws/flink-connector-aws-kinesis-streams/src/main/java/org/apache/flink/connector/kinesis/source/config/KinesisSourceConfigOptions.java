@@ -131,11 +131,4 @@ public class KinesisSourceConfigOptions {
                             .defaultValue(100)
                             .withDescription(
                                     "Maximum number of attempts for the exponential backoff retry strategy");
-
-    public static final ConfigOption<Duration> EFO_DEREGISTER_CONSUMER_TIMEOUT =
-            ConfigOptions.key("source.efo.deregister.timeout")
-                    .durationType()
-                    .defaultValue(Duration.ofMillis(10000))
-                    .withDescription(
-                            "Timeout for consumer deregistration. When timeout is reached, code will continue as per normal.");
 }
