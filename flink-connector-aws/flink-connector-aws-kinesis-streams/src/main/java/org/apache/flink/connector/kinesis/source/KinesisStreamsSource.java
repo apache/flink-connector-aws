@@ -72,7 +72,6 @@ import software.amazon.awssdk.services.kinesis.model.DescribeStreamConsumerRespo
 import software.amazon.awssdk.services.kinesis.model.LimitExceededException;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
-import software.amazon.awssdk.utils.AttributeMap;
 
 import java.time.Duration;
 import java.util.Map;
@@ -271,7 +270,7 @@ public class KinesisStreamsSource<T>
 
         SdkAsyncHttpClient asyncHttpClient =
                 AWSGeneralUtil.createAsyncHttpClient(
-                        AttributeMap.builder().build(), NettyNioAsyncHttpClient.builder());
+                        kinesisClientProperties, NettyNioAsyncHttpClient.builder());
         KinesisAsyncClient kinesisAsyncClient =
                 AWSClientUtil.createAwsAsyncClient(
                         kinesisClientProperties,
