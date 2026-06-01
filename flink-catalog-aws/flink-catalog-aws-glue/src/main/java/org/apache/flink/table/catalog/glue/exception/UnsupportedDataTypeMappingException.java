@@ -19,9 +19,9 @@
 package org.apache.flink.table.catalog.glue.exception;
 
 /**
- * Exception thrown when a data type cannot be mapped between Flink and AWS Glue.
- * This is used specifically for cases where a type conversion between the two systems
- * is not supported or cannot be performed.
+ * Exception thrown when a data type cannot be mapped between Flink and AWS Glue. This is used
+ * specifically for cases where a type conversion between the two systems is not supported or cannot
+ * be performed.
  */
 public class UnsupportedDataTypeMappingException extends RuntimeException {
 

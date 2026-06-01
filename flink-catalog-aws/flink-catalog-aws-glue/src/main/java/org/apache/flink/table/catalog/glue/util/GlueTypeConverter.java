@@ -37,8 +37,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Utility class for converting Flink types to Glue types and vice versa.
- * Supports the conversion of common primitive, array, map, and struct types.
+ * Utility class for converting Flink types to Glue types and vice versa. Supports the conversion of
+ * common primitive, array, map, and struct types.
  */
 public class GlueTypeConverter {
 
@@ -47,6 +47,7 @@ public class GlueTypeConverter {
 
     /** Regular expressions for handling specific Glue types. */
     private static final Pattern DECIMAL_PATTERN = Pattern.compile("decimal\\((\\d+),(\\d+)\\)");
+
     private static final Pattern ARRAY_PATTERN = Pattern.compile("array<(.+)>");
     private static final Pattern MAP_PATTERN = Pattern.compile("map<(.+),(.+)>");
     private static final Pattern STRUCT_PATTERN = Pattern.compile("struct<(.+)>");
@@ -73,7 +74,8 @@ public class GlueTypeConverter {
                 return "binary";
             case DECIMAL:
                 DecimalType decimalType = (DecimalType) logicalType;
-                return String.format("decimal(%d,%d)", decimalType.getPrecision(), decimalType.getScale());
+                return String.format(
+                        "decimal(%d,%d)", decimalType.getPrecision(), decimalType.getScale());
             case TINYINT:
                 return "tinyint";
             case SMALLINT:
@@ -98,7 +100,8 @@ public class GlueTypeConverter {
                 return "array<" + toGlueDataType(DataTypes.of(arrayType.getElementType())) + ">";
             case MAP:
                 MapType mapType = (MapType) logicalType;
-                return String.format("map<%s,%s>",
+                return String.format(
+                        "map<%s,%s>",
                         toGlueDataType(DataTypes.of(mapType.getKeyType())),
                         toGlueDataType(DataTypes.of(mapType.getValueType())));
             case ROW:
@@ -109,15 +112,16 @@ public class GlueTypeConverter {
                         structBuilder.append(",");
                     }
                     // Keep original field name for nested structs
-                    structBuilder.append(rowType.getFieldNames().get(i))
+                    structBuilder
+                            .append(rowType.getFieldNames().get(i))
                             .append(":")
                             .append(toGlueDataType(DataTypes.of(rowType.getChildren().get(i))));
                 }
                 structBuilder.append(">");
                 return structBuilder.toString();
             default:
-                throw new UnsupportedDataTypeMappingException("Flink type not supported by Glue Catalog: " + logicalType.getTypeRoot());
-
+                throw new UnsupportedDataTypeMappingException(
+                        "Flink type not supported by Glue Catalog: " + logicalType.getTypeRoot());
         }
     }
 
@@ -171,10 +175,7 @@ public class GlueTypeConverter {
             String keyType = mapContent.substring(0, commaPos).trim();
             String valueType = mapContent.substring(commaPos + 1).trim();
 
-            return DataTypes.MAP(
-                    toFlinkDataType(keyType),
-                    toFlinkDataType(valueType)
-            );
+            return DataTypes.MAP(toFlinkDataType(keyType), toFlinkDataType(valueType));
         }
 
         // Handle STRUCT type - using lowercase for pattern matching but preserving content
@@ -220,8 +221,8 @@ public class GlueTypeConverter {
     }
 
     /**
-     * Helper method to find the comma that separates key and value types in a map.
-     * Handles nested types correctly by tracking angle brackets.
+     * Helper method to find the comma that separates key and value types in a map. Handles nested
+     * types correctly by tracking angle brackets.
      *
      * @param mapContent The content of the map type definition.
      * @return The position of the separator comma, or -1 if not found.

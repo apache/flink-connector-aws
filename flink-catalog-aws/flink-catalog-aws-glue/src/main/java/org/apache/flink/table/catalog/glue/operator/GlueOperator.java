@@ -21,8 +21,8 @@ package org.apache.flink.table.catalog.glue.operator;
 import software.amazon.awssdk.services.glue.GlueClient;
 
 /**
- * Abstract base class for Glue operations that contains common functionality
- * for interacting with the AWS Glue service.
+ * Abstract base class for Glue operations that contains common functionality for interacting with
+ * the AWS Glue service.
  */
 public abstract class GlueOperator {
 

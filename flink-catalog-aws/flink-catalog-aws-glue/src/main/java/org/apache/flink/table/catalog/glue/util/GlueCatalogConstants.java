@@ -23,8 +23,8 @@ import org.apache.flink.annotation.Internal;
 import java.util.regex.Pattern;
 
 /**
- * Constants used throughout the Glue catalog implementation.
- * Includes string literals, patterns, and configuration keys.
+ * Constants used throughout the Glue catalog implementation. Includes string literals, patterns,
+ * and configuration keys.
  */
 @Internal
 public class GlueCatalogConstants {
@@ -44,7 +44,8 @@ public class GlueCatalogConstants {
     // These follow the pattern established for column names
     public static final String ORIGINAL_DATABASE_NAME = "flink.original-database-name";
     public static final String ORIGINAL_TABLE_NAME = "flink.original-table-name";
-    public static final String ORIGINAL_COLUMN_NAME = "originalName"; // Keep existing for backward compatibility
+    public static final String ORIGINAL_COLUMN_NAME =
+            "originalName"; // Keep existing for backward compatibility
     public static final String ORIGINAL_FUNCTION_NAME = "flink.original-function-name";
 
     public static final String FLINK_SCALA_FUNCTION_PREFIX = "flink:scala:";

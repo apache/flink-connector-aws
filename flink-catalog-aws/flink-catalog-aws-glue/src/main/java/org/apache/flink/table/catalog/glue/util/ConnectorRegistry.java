@@ -25,8 +25,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * This class is responsible for storing and retrieving location-specific keys for different connectors.
- * It maps connector types to their corresponding location keys (e.g., Kinesis, Kafka).
+ * This class is responsible for storing and retrieving location-specific keys for different
+ * connectors. It maps connector types to their corresponding location keys (e.g., Kinesis, Kafka).
  */
 public class ConnectorRegistry {
 

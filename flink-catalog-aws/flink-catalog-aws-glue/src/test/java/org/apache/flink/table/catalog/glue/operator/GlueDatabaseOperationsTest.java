@@ -17,9 +17,8 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Unit tests for the GlueDatabaseOperations class.
- * These tests verify the functionality for database operations
- * such as create, drop, get, and list in the AWS Glue service.
+ * Unit tests for the GlueDatabaseOperations class. These tests verify the functionality for
+ * database operations such as create, drop, get, and list in the AWS Glue service.
  */
 class GlueDatabaseOperationsTest {
 
@@ -38,14 +37,17 @@ class GlueDatabaseOperationsTest {
         CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test");
         glueDatabaseOperations.createDatabase("db1", catalogDatabase);
         Assertions.assertTrue(glueDatabaseOperations.glueDatabaseExists("db1"));
-        Assertions.assertEquals("test", glueDatabaseOperations.getDatabase("db1").getDescription().orElse(null));
+        Assertions.assertEquals(
+                "test", glueDatabaseOperations.getDatabase("db1").getDescription().orElse(null));
     }
 
     @Test
-    void testCreateDatabaseWithUppercaseLetters() throws DatabaseAlreadyExistException, DatabaseNotExistException {
+    void testCreateDatabaseWithUppercaseLetters()
+            throws DatabaseAlreadyExistException, DatabaseNotExistException {
         CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test");
         // Uppercase letters should now be accepted with case preservation
-        Assertions.assertDoesNotThrow(() -> glueDatabaseOperations.createDatabase("TestDB", catalogDatabase));
+        Assertions.assertDoesNotThrow(
+                () -> glueDatabaseOperations.createDatabase("TestDB", catalogDatabase));
 
         // Verify database was created and exists
         Assertions.assertTrue(glueDatabaseOperations.glueDatabaseExists("TestDB"));
@@ -59,9 +61,10 @@ class GlueDatabaseOperationsTest {
     @Test
     void testCreateDatabaseWithHyphens() {
         CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test");
-        CatalogException exception = Assertions.assertThrows(
-                CatalogException.class,
-                () -> glueDatabaseOperations.createDatabase("db-1", catalogDatabase));
+        CatalogException exception =
+                Assertions.assertThrows(
+                        CatalogException.class,
+                        () -> glueDatabaseOperations.createDatabase("db-1", catalogDatabase));
         Assertions.assertTrue(
                 exception.getMessage().contains("letters, numbers, and underscores"),
                 "Exception message should mention allowed characters");
@@ -70,9 +73,10 @@ class GlueDatabaseOperationsTest {
     @Test
     void testCreateDatabaseWithSpecialCharacters() {
         CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test");
-        CatalogException exception = Assertions.assertThrows(
-                CatalogException.class,
-                () -> glueDatabaseOperations.createDatabase("db.1", catalogDatabase));
+        CatalogException exception =
+                Assertions.assertThrows(
+                        CatalogException.class,
+                        () -> glueDatabaseOperations.createDatabase("db.1", catalogDatabase));
         Assertions.assertTrue(
                 exception.getMessage().contains("letters, numbers, and underscores"),
                 "Exception message should mention allowed characters");
@@ -143,14 +147,16 @@ class GlueDatabaseOperationsTest {
     void testDropDatabaseInvalidInput() {
         fakeGlueClient.setNextException(
                 InvalidInputException.builder().message("Invalid database name").build());
-        Assertions.assertThrows(CatalogException.class, () -> glueDatabaseOperations.dropGlueDatabase("db1"));
+        Assertions.assertThrows(
+                CatalogException.class, () -> glueDatabaseOperations.dropGlueDatabase("db1"));
     }
 
     @Test
     void testDropDatabaseTimeout() {
         fakeGlueClient.setNextException(
                 OperationTimeoutException.builder().message("Operation timed out").build());
-        Assertions.assertThrows(CatalogException.class, () -> glueDatabaseOperations.dropGlueDatabase("db1"));
+        Assertions.assertThrows(
+                CatalogException.class, () -> glueDatabaseOperations.dropGlueDatabase("db1"));
     }
 
     @Test
@@ -169,7 +175,8 @@ class GlueDatabaseOperationsTest {
     void testListDatabasesTimeout() {
         fakeGlueClient.setNextException(
                 OperationTimeoutException.builder().message("Operation timed out").build());
-        Assertions.assertThrows(CatalogException.class, () -> glueDatabaseOperations.listDatabases());
+        Assertions.assertThrows(
+                CatalogException.class, () -> glueDatabaseOperations.listDatabases());
     }
 
     @Test
@@ -178,7 +185,8 @@ class GlueDatabaseOperationsTest {
                 ResourceNumberLimitExceededException.builder()
                         .message("Resource limit exceeded")
                         .build());
-        Assertions.assertThrows(CatalogException.class, () -> glueDatabaseOperations.listDatabases());
+        Assertions.assertThrows(
+                CatalogException.class, () -> glueDatabaseOperations.listDatabases());
     }
 
     @Test
@@ -201,14 +209,16 @@ class GlueDatabaseOperationsTest {
     void testGetDatabaseInvalidInput() {
         fakeGlueClient.setNextException(
                 InvalidInputException.builder().message("Invalid database name").build());
-        Assertions.assertThrows(CatalogException.class, () -> glueDatabaseOperations.getDatabase("db1"));
+        Assertions.assertThrows(
+                CatalogException.class, () -> glueDatabaseOperations.getDatabase("db1"));
     }
 
     @Test
     void testGetDatabaseTimeout() {
         fakeGlueClient.setNextException(
                 OperationTimeoutException.builder().message("Operation timed out").build());
-        Assertions.assertThrows(CatalogException.class, () -> glueDatabaseOperations.getDatabase("db1"));
+        Assertions.assertThrows(
+                CatalogException.class, () -> glueDatabaseOperations.getDatabase("db1"));
     }
 
     @Test
@@ -241,7 +251,8 @@ class GlueDatabaseOperationsTest {
 
     @Test
     void testCaseSensitivityInDatabaseOperations() throws Exception {
-        CatalogDatabase catalogDatabase = new CatalogDatabaseImpl(Collections.emptyMap(), "test_database");
+        CatalogDatabase catalogDatabase =
+                new CatalogDatabaseImpl(Collections.emptyMap(), "test_database");
 
         // Test creating databases with different cases - use unique names to avoid conflicts
         String lowerCaseName = "testdb_case_lower";
@@ -252,8 +263,10 @@ class GlueDatabaseOperationsTest {
         Assertions.assertTrue(glueDatabaseOperations.glueDatabaseExists(lowerCaseName));
 
         // Create database with mixed case name - should be allowed now with case preservation
-        CatalogDatabase catalogDatabase2 = new CatalogDatabaseImpl(Collections.emptyMap(), "mixed_case_database");
-        Assertions.assertDoesNotThrow(() -> glueDatabaseOperations.createDatabase(mixedCaseName, catalogDatabase2));
+        CatalogDatabase catalogDatabase2 =
+                new CatalogDatabaseImpl(Collections.emptyMap(), "mixed_case_database");
+        Assertions.assertDoesNotThrow(
+                () -> glueDatabaseOperations.createDatabase(mixedCaseName, catalogDatabase2));
         Assertions.assertTrue(glueDatabaseOperations.glueDatabaseExists(mixedCaseName));
 
         // Verify both databases exist and can be retrieved
@@ -261,11 +274,15 @@ class GlueDatabaseOperationsTest {
         Assertions.assertEquals("test_database", retrievedLower.getDescription().orElse(null));
 
         CatalogDatabase retrievedMixed = glueDatabaseOperations.getDatabase(mixedCaseName);
-        Assertions.assertEquals("mixed_case_database", retrievedMixed.getDescription().orElse(null));
+        Assertions.assertEquals(
+                "mixed_case_database", retrievedMixed.getDescription().orElse(null));
 
         // List databases should show both with original case preserved
         List<String> databases = glueDatabaseOperations.listDatabases();
-        Assertions.assertTrue(databases.contains(lowerCaseName), "Lowercase database should appear in list");
-        Assertions.assertTrue(databases.contains(mixedCaseName), "Mixed-case database should appear with original case");
+        Assertions.assertTrue(
+                databases.contains(lowerCaseName), "Lowercase database should appear in list");
+        Assertions.assertTrue(
+                databases.contains(mixedCaseName),
+                "Mixed-case database should appear with original case");
     }
 }

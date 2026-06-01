@@ -33,7 +33,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Utility class for working with Glue tables, including transforming Glue-specific metadata into Flink-compatible objects.
+ * Utility class for working with Glue tables, including transforming Glue-specific metadata into
+ * Flink-compatible objects.
  */
 public class GlueTableUtils {
 
@@ -60,18 +61,16 @@ public class GlueTableUtils {
      * @param tableLocation Location of the Glue table.
      * @return A newly built StorageDescriptor object.
      */
-    public StorageDescriptor buildStorageDescriptor(Map<String, String> tableProperties, List<Column> glueColumns, String tableLocation) {
+    public StorageDescriptor buildStorageDescriptor(
+            Map<String, String> tableProperties, List<Column> glueColumns, String tableLocation) {
 
-        return StorageDescriptor.builder()
-                .columns(glueColumns)
-                .location(tableLocation)
-                .build();
+        return StorageDescriptor.builder().columns(glueColumns).location(tableLocation).build();
     }
 
     /**
-     * Extracts the table location based on the table properties and the table path.
-     * First, it checks for a location key from the connector registry. If no such key is found,
-     * it uses a default path based on the table path.
+     * Extracts the table location based on the table properties and the table path. First, it
+     * checks for a location key from the connector registry. If no such key is found, it uses a
+     * default path based on the table path.
      *
      * @param tableProperties Table properties containing the connector and location.
      * @param tablePath The Flink ObjectPath representing the table.
@@ -87,13 +86,14 @@ public class GlueTableUtils {
             }
         }
 
-        String defaultLocation = tablePath.getDatabaseName() + "/tables/" + tablePath.getObjectName();
+        String defaultLocation =
+                tablePath.getDatabaseName() + "/tables/" + tablePath.getObjectName();
         return defaultLocation;
     }
 
     /**
-     * Converts a Flink column to a Glue column.
-     * The column's data type is converted using the GlueTypeConverter.
+     * Converts a Flink column to a Glue column. The column's data type is converted using the
+     * GlueTypeConverter.
      *
      * @param flinkColumn The Flink column to be converted.
      * @return The corresponding Glue column.
@@ -109,8 +109,8 @@ public class GlueTableUtils {
     }
 
     /**
-     * Converts a Glue table into a Flink schema.
-     * Each Glue column is mapped to a Flink column using the GlueTypeConverter.
+     * Converts a Glue table into a Flink schema. Each Glue column is mapped to a Flink column using
+     * the GlueTypeConverter.
      *
      * @param glueTable The Glue table from which the schema will be derived.
      * @return A Flink schema constructed from the Glue table's columns.
@@ -128,7 +128,7 @@ public class GlueTableUtils {
             }
 
             String columnType = column.type();
-                    //.toLowerCase();
+            // .toLowerCase();
             DataType flinkDataType = glueTypeConverter.toFlinkDataType(columnType);
 
             schemaBuilder.column(originalName, flinkDataType);

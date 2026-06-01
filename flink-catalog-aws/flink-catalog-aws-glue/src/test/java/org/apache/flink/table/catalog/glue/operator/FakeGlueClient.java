@@ -61,22 +61,24 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A mock implementation of the AWS Glue client for testing purposes.
- * This class simulates the behavior of the real AWS Glue service without making actual API calls.
- * It manages in-memory storage of databases, tables, and functions for testing the Glue catalog implementation.
+ * A mock implementation of the AWS Glue client for testing purposes. This class simulates the
+ * behavior of the real AWS Glue service without making actual API calls. It manages in-memory
+ * storage of databases, tables, and functions for testing the Glue catalog implementation.
  */
 public class FakeGlueClient implements GlueClient {
 
     // Static map to maintain database state across tests
     private static final Map<String, Database> DATABASE_STORE = new HashMap<>();
-    private static Map<String, Map<String, Table>> tableStore = new HashMap<>(); // Map for tables by database name
-    private static Map<String, Map<String, UserDefinedFunction>> functionStore = new HashMap<>(); // Map for functions by database name
+    private static Map<String, Map<String, Table>> tableStore =
+            new HashMap<>(); // Map for tables by database name
+    private static Map<String, Map<String, UserDefinedFunction>> functionStore =
+            new HashMap<>(); // Map for functions by database name
 
     private RuntimeException nextException;
 
     /**
-     * Sets an exception to be thrown on the next API call.
-     * This method is used to simulate AWS service errors.
+     * Sets an exception to be thrown on the next API call. This method is used to simulate AWS
+     * service errors.
      *
      * @param exception The exception to throw on the next call.
      */
@@ -84,9 +86,7 @@ public class FakeGlueClient implements GlueClient {
         this.nextException = exception;
     }
 
-    /**
-     * Throws the next exception if one is set, then clears it.
-     */
+    /** Throws the next exception if one is set, then clears it. */
     private void throwNextExceptionIfExists() {
         if (nextException != null) {
             RuntimeException ex = nextException;
@@ -106,8 +106,7 @@ public class FakeGlueClient implements GlueClient {
     }
 
     /**
-     * Resets all stores to empty state.
-     * Call this method before each test to ensure a clean state.
+     * Resets all stores to empty state. Call this method before each test to ensure a clean state.
      */
     public static void reset() {
         DATABASE_STORE.clear();
@@ -119,9 +118,7 @@ public class FakeGlueClient implements GlueClient {
     public GetDatabasesResponse getDatabases(GetDatabasesRequest request) {
         throwNextExceptionIfExists();
         List<Database> databases = new ArrayList<>(DATABASE_STORE.values());
-        return GetDatabasesResponse.builder()
-                .databaseList(databases)
-                .build();
+        return GetDatabasesResponse.builder().databaseList(databases).build();
     }
 
     @Override
@@ -130,7 +127,9 @@ public class FakeGlueClient implements GlueClient {
         String databaseName = request.name();
         Database db = DATABASE_STORE.get(databaseName);
         if (db == null) {
-            throw EntityNotFoundException.builder().message("Database not found: " + databaseName).build();
+            throw EntityNotFoundException.builder()
+                    .message("Database not found: " + databaseName)
+                    .build();
         }
         return GetDatabaseResponse.builder().database(db).build();
     }
@@ -143,15 +142,18 @@ public class FakeGlueClient implements GlueClient {
 
         // Check if the database already exists
         if (DATABASE_STORE.containsKey(dbName)) {
-            throw AlreadyExistsException.builder().message("Database already exists: " + dbName).build();
+            throw AlreadyExistsException.builder()
+                    .message("Database already exists: " + dbName)
+                    .build();
         }
 
         // Create the database and add it to the store
-        Database db = Database.builder()
-                .name(dbName)
-                .description(dbInput.description())
-                .parameters(dbInput.parameters())
-                .build();
+        Database db =
+                Database.builder()
+                        .name(dbName)
+                        .description(dbInput.description())
+                        .parameters(dbInput.parameters())
+                        .build();
 
         DATABASE_STORE.put(dbName, db);
         return CreateDatabaseResponse.builder().build(); // Simulate a successful creation
@@ -164,7 +166,9 @@ public class FakeGlueClient implements GlueClient {
 
         // Check if the database exists
         if (!DATABASE_STORE.containsKey(dbName)) {
-            throw EntityNotFoundException.builder().message("Database not found: " + dbName).build();
+            throw EntityNotFoundException.builder()
+                    .message("Database not found: " + dbName)
+                    .build();
         }
 
         // Delete the database
@@ -204,13 +208,14 @@ public class FakeGlueClient implements GlueClient {
             throw AlreadyExistsException.builder().message("Table already exists").build();
         }
 
-        Table.Builder tableBuilder = Table.builder()
-                .name(tableName)
-                .databaseName(databaseName)
-                .tableType(request.tableInput().tableType())
-                .parameters(request.tableInput().parameters())
-                .storageDescriptor(request.tableInput().storageDescriptor())
-                .description(request.tableInput().description());
+        Table.Builder tableBuilder =
+                Table.builder()
+                        .name(tableName)
+                        .databaseName(databaseName)
+                        .tableType(request.tableInput().tableType())
+                        .parameters(request.tableInput().parameters())
+                        .storageDescriptor(request.tableInput().storageDescriptor())
+                        .description(request.tableInput().description());
 
         // Add view-specific fields if present
         if (request.tableInput().viewOriginalText() != null) {
@@ -226,8 +231,8 @@ public class FakeGlueClient implements GlueClient {
     }
 
     /**
-     * Helper to ensure column parameters, including originalName, are preserved
-     * when creating tables in the fake Glue client.
+     * Helper to ensure column parameters, including originalName, are preserved when creating
+     * tables in the fake Glue client.
      */
     private StorageDescriptor preserveColumnParameters(StorageDescriptor storageDescriptor) {
         if (storageDescriptor == null || storageDescriptor.columns() == null) {
@@ -256,7 +261,8 @@ public class FakeGlueClient implements GlueClient {
         String databaseName = request.databaseName();
         String tableName = request.name();
 
-        if (!tableStore.containsKey(databaseName) || !tableStore.get(databaseName).containsKey(tableName)) {
+        if (!tableStore.containsKey(databaseName)
+                || !tableStore.get(databaseName).containsKey(tableName)) {
             throw EntityNotFoundException.builder().message("Table does not exist").build();
         }
 
@@ -271,32 +277,36 @@ public class FakeGlueClient implements GlueClient {
         if (!tableStore.containsKey(databaseName)) {
             return GetTablesResponse.builder().tableList(Collections.emptyList()).build();
         }
-        return GetTablesResponse.builder().tableList(new ArrayList<>(tableStore.get(databaseName).values())).build();
+        return GetTablesResponse.builder()
+                .tableList(new ArrayList<>(tableStore.get(databaseName).values()))
+                .build();
     }
 
     // Function-related methods
     @Override
-    public CreateUserDefinedFunctionResponse createUserDefinedFunction(CreateUserDefinedFunctionRequest request) {
+    public CreateUserDefinedFunctionResponse createUserDefinedFunction(
+            CreateUserDefinedFunctionRequest request) {
         String databaseName = request.databaseName();
         String functionName = request.functionInput().functionName();
 
         // Check if the function already exists
-        if (functionStore.containsKey(databaseName) &&
-            functionStore.get(databaseName).containsKey(functionName)) {
+        if (functionStore.containsKey(databaseName)
+                && functionStore.get(databaseName).containsKey(functionName)) {
             throw AlreadyExistsException.builder()
                     .message("Function already exists: " + functionName)
                     .build();
         }
 
-        UserDefinedFunction function = UserDefinedFunction.builder()
-                .functionName(functionName)
-                .className(request.functionInput().className())
-                .ownerName(request.functionInput().ownerName())
-                .ownerType(request.functionInput().ownerType())
-                .resourceUris(request.functionInput().resourceUris())
-                .databaseName(databaseName)
-                .catalogId(request.catalogId())
-                .build();
+        UserDefinedFunction function =
+                UserDefinedFunction.builder()
+                        .functionName(functionName)
+                        .className(request.functionInput().className())
+                        .ownerName(request.functionInput().ownerName())
+                        .ownerType(request.functionInput().ownerType())
+                        .resourceUris(request.functionInput().resourceUris())
+                        .databaseName(databaseName)
+                        .catalogId(request.catalogId())
+                        .build();
 
         // Add the function to the store
         functionStore
@@ -307,26 +317,26 @@ public class FakeGlueClient implements GlueClient {
     }
 
     @Override
-    public GetUserDefinedFunctionResponse getUserDefinedFunction(GetUserDefinedFunctionRequest request) {
+    public GetUserDefinedFunctionResponse getUserDefinedFunction(
+            GetUserDefinedFunctionRequest request) {
         String databaseName = request.databaseName();
         String functionName = request.functionName();
 
         // Check if the function exists
-        if (!functionStore.containsKey(databaseName) ||
-            !functionStore.get(databaseName).containsKey(functionName)) {
+        if (!functionStore.containsKey(databaseName)
+                || !functionStore.get(databaseName).containsKey(functionName)) {
             throw EntityNotFoundException.builder()
                     .message("Function not found: " + functionName)
                     .build();
         }
 
         UserDefinedFunction function = functionStore.get(databaseName).get(functionName);
-        return GetUserDefinedFunctionResponse.builder()
-                .userDefinedFunction(function)
-                .build();
+        return GetUserDefinedFunctionResponse.builder().userDefinedFunction(function).build();
     }
 
     @Override
-    public GetUserDefinedFunctionsResponse getUserDefinedFunctions(GetUserDefinedFunctionsRequest request) {
+    public GetUserDefinedFunctionsResponse getUserDefinedFunctions(
+            GetUserDefinedFunctionsRequest request) {
         String databaseName = request.databaseName();
 
         if (!functionStore.containsKey(databaseName)) {
@@ -335,20 +345,20 @@ public class FakeGlueClient implements GlueClient {
                     .build();
         }
 
-        List<UserDefinedFunction> functions = new ArrayList<>(functionStore.get(databaseName).values());
-        return GetUserDefinedFunctionsResponse.builder()
-                .userDefinedFunctions(functions)
-                .build();
+        List<UserDefinedFunction> functions =
+                new ArrayList<>(functionStore.get(databaseName).values());
+        return GetUserDefinedFunctionsResponse.builder().userDefinedFunctions(functions).build();
     }
 
     @Override
-    public UpdateUserDefinedFunctionResponse updateUserDefinedFunction(UpdateUserDefinedFunctionRequest request) {
+    public UpdateUserDefinedFunctionResponse updateUserDefinedFunction(
+            UpdateUserDefinedFunctionRequest request) {
         String databaseName = request.databaseName();
         String functionName = request.functionName();
 
         // Check if the function exists
-        if (!functionStore.containsKey(databaseName) ||
-            !functionStore.get(databaseName).containsKey(functionName)) {
+        if (!functionStore.containsKey(databaseName)
+                || !functionStore.get(databaseName).containsKey(functionName)) {
             throw EntityNotFoundException.builder()
                     .message("Function not found: " + functionName)
                     .build();
@@ -356,15 +366,16 @@ public class FakeGlueClient implements GlueClient {
 
         // Update the function
         UserDefinedFunction oldFunction = functionStore.get(databaseName).get(functionName);
-        UserDefinedFunction newFunction = UserDefinedFunction.builder()
-                .functionName(functionName)
-                .className(request.functionInput().className())
-                .ownerName(request.functionInput().ownerName())
-                .ownerType(request.functionInput().ownerType())
-                .resourceUris(request.functionInput().resourceUris())
-                .databaseName(databaseName)
-                .catalogId(request.catalogId())
-                .build();
+        UserDefinedFunction newFunction =
+                UserDefinedFunction.builder()
+                        .functionName(functionName)
+                        .className(request.functionInput().className())
+                        .ownerName(request.functionInput().ownerName())
+                        .ownerType(request.functionInput().ownerType())
+                        .resourceUris(request.functionInput().resourceUris())
+                        .databaseName(databaseName)
+                        .catalogId(request.catalogId())
+                        .build();
 
         functionStore.get(databaseName).put(functionName, newFunction);
 
@@ -372,7 +383,8 @@ public class FakeGlueClient implements GlueClient {
     }
 
     @Override
-    public DeleteUserDefinedFunctionResponse deleteUserDefinedFunction(DeleteUserDefinedFunctionRequest request) {
+    public DeleteUserDefinedFunctionResponse deleteUserDefinedFunction(
+            DeleteUserDefinedFunctionRequest request) {
         String databaseName = request.databaseName();
         String functionName = request.functionName();
 

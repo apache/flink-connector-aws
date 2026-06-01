@@ -16,9 +16,8 @@ import software.amazon.awssdk.services.glue.model.TableInput;
 import java.util.List;
 
 /**
- * Unit tests for the GlueTableOperations class.
- * These tests verify that table operations such as create, drop, get, and list
- * are correctly executed against the AWS Glue service.
+ * Unit tests for the GlueTableOperations class. These tests verify that table operations such as
+ * create, drop, get, and list are correctly executed against the AWS Glue service.
  */
 public class GlueTableOperationsTest {
 
@@ -81,14 +80,16 @@ public class GlueTableOperationsTest {
     void testListTablesWithInvalidInput() {
         fakeGlueClient.setNextException(
                 InvalidInputException.builder().message("Invalid input").build());
-        Assertions.assertThrows(CatalogException.class, () -> glueTableOperations.listTables(DATABASE_NAME));
+        Assertions.assertThrows(
+                CatalogException.class, () -> glueTableOperations.listTables(DATABASE_NAME));
     }
 
     @Test
     void testCreateTable() {
         TableInput tableInput = TableInput.builder().name(TABLE_NAME).build();
 
-        Assertions.assertDoesNotThrow(() -> glueTableOperations.createTable(DATABASE_NAME, tableInput));
+        Assertions.assertDoesNotThrow(
+                () -> glueTableOperations.createTable(DATABASE_NAME, tableInput));
         Assertions.assertTrue(glueTableOperations.glueTableExists(DATABASE_NAME, TABLE_NAME));
     }
 
@@ -97,16 +98,18 @@ public class GlueTableOperationsTest {
         TableInput tableInput = TableInput.builder().name("TestTable").build();
 
         // Uppercase letters should now be accepted with case preservation
-        Assertions.assertDoesNotThrow(() -> glueTableOperations.createTable(DATABASE_NAME, tableInput));
+        Assertions.assertDoesNotThrow(
+                () -> glueTableOperations.createTable(DATABASE_NAME, tableInput));
     }
 
     @Test
     void testCreateTableWithHyphens() {
         TableInput tableInput = TableInput.builder().name("test-table").build();
 
-        CatalogException exception = Assertions.assertThrows(
-                CatalogException.class,
-                () -> glueTableOperations.createTable(DATABASE_NAME, tableInput));
+        CatalogException exception =
+                Assertions.assertThrows(
+                        CatalogException.class,
+                        () -> glueTableOperations.createTable(DATABASE_NAME, tableInput));
 
         Assertions.assertTrue(
                 exception.getMessage().contains("letters, numbers, and underscores"),
@@ -117,9 +120,10 @@ public class GlueTableOperationsTest {
     void testCreateTableWithSpecialCharacters() {
         TableInput tableInput = TableInput.builder().name("test.table").build();
 
-        CatalogException exception = Assertions.assertThrows(
-                CatalogException.class,
-                () -> glueTableOperations.createTable(DATABASE_NAME, tableInput));
+        CatalogException exception =
+                Assertions.assertThrows(
+                        CatalogException.class,
+                        () -> glueTableOperations.createTable(DATABASE_NAME, tableInput));
 
         Assertions.assertTrue(
                 exception.getMessage().contains("letters, numbers, and underscores"),
@@ -128,14 +132,12 @@ public class GlueTableOperationsTest {
 
     @Test
     void testBuildTableInputWithInvalidName() {
-        CatalogException exception = Assertions.assertThrows(
-                CatalogException.class,
-                () -> glueTableOperations.buildTableInput(
-                        "Invalid-Name",
-                        null,
-                        null,
-                        null,
-                        null));
+        CatalogException exception =
+                Assertions.assertThrows(
+                        CatalogException.class,
+                        () ->
+                                glueTableOperations.buildTableInput(
+                                        "Invalid-Name", null, null, null, null));
 
         Assertions.assertTrue(
                 exception.getMessage().contains("letters, numbers, and underscores"),
@@ -234,7 +236,8 @@ public class GlueTableOperationsTest {
                         .build());
 
         // Then drop it
-        Assertions.assertDoesNotThrow(() -> glueTableOperations.dropTable(DATABASE_NAME, TABLE_NAME));
+        Assertions.assertDoesNotThrow(
+                () -> glueTableOperations.dropTable(DATABASE_NAME, TABLE_NAME));
         Assertions.assertFalse(glueTableOperations.glueTableExists(DATABASE_NAME, TABLE_NAME));
     }
 
@@ -273,7 +276,8 @@ public class GlueTableOperationsTest {
                         .viewExpandedText("SELECT * FROM database.source_table")
                         .build();
 
-        Assertions.assertDoesNotThrow(() -> glueTableOperations.createTable(DATABASE_NAME, viewInput));
+        Assertions.assertDoesNotThrow(
+                () -> glueTableOperations.createTable(DATABASE_NAME, viewInput));
         Assertions.assertTrue(glueTableOperations.glueTableExists(DATABASE_NAME, "testview"));
     }
 

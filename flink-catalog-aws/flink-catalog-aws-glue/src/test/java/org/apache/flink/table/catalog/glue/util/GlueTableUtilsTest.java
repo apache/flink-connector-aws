@@ -18,8 +18,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Unit tests for the GlueTableUtils class.
- * Tests the utility methods for working with AWS Glue tables.
+ * Unit tests for the GlueTableUtils class. Tests the utility methods for working with AWS Glue
+ * tables.
  */
 class GlueTableUtilsTest {
 
@@ -76,7 +76,8 @@ class GlueTableUtilsTest {
         String location = glueTableUtils.extractTableLocation(tableProperties, tablePath);
 
         // Assert that the correct location is used
-        Assertions.assertEquals(TEST_TABLE_LOCATION, location, "Table location should match the location key");
+        Assertions.assertEquals(
+                TEST_TABLE_LOCATION, location, "Table location should match the location key");
     }
 
     @Test
@@ -268,7 +269,8 @@ class GlueTableUtilsTest {
         // We don't actually parse the JSON here since that would require external dependencies,
         // but this illustrates the scenario where correct case is important
 
-        Assertions.assertEquals("ID", resultColumnNames.get(0), "First column should maintain original case");
+        Assertions.assertEquals(
+                "ID", resultColumnNames.get(0), "First column should maintain original case");
         Assertions.assertEquals(
                 "UserName",
                 resultColumnNames.get(1),

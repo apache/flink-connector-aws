@@ -5,8 +5,8 @@ import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.glue.GlueClient;
 
 /**
- * Tests for the AbstractGlueOperations class.
- * This tests the initialization of fields in the abstract class.
+ * Tests for the AbstractGlueOperations class. This tests the initialization of fields in the
+ * abstract class.
  */
 class AbstractGlueOperationsTest {
 
@@ -19,6 +19,7 @@ class AbstractGlueOperationsTest {
         TestGlueOperations testOps = new TestGlueOperations(fakeGlueClient, "testCatalog");
 
         Assertions.assertNotNull(testOps.glueClient, "GlueClient should be initialized");
-        Assertions.assertEquals("testCatalog", testOps.getCatalogNameForTest(), "Catalog name should match");
+        Assertions.assertEquals(
+                "testCatalog", testOps.getCatalogNameForTest(), "Catalog name should match");
     }
 }

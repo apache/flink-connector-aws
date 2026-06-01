@@ -28,8 +28,8 @@ import java.util.Arrays;
 import java.util.stream.Collectors;
 
 /**
- * Utility class for handling Functions in AWS Glue Catalog integration.
- * Provides methods for converting between Flink and Glue function representation.
+ * Utility class for handling Functions in AWS Glue Catalog integration. Provides methods for
+ * converting between Flink and Glue function representation.
  */
 public class GlueFunctionsUtil {
 
@@ -87,10 +87,10 @@ public class GlueFunctionsUtil {
                 throw new UnsupportedOperationException(
                         "GlueCatalog supports only creating: "
                                 + Arrays.stream(FunctionLanguage.values())
-                                .map(FunctionLanguage::name)
-                                .collect(
-                                        Collectors.joining(
-                                                GlueCatalogConstants.NEXT_LINE)));
+                                        .map(FunctionLanguage::name)
+                                        .collect(
+                                                Collectors.joining(
+                                                        GlueCatalogConstants.NEXT_LINE)));
         }
     }
 }

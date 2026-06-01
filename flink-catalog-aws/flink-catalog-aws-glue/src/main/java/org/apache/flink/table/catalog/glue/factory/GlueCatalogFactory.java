@@ -29,9 +29,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Factory for creating GlueCatalog instances.
- */
+/** Factory for creating GlueCatalog instances. */
 public class GlueCatalogFactory implements CatalogFactory {
 
     // Define configuration options that users must provide
@@ -71,11 +69,13 @@ public class GlueCatalogFactory implements CatalogFactory {
         Map<String, String> config = context.getOptions();
         String name = context.getName();
         String region = config.get(REGION.key());
-        String defaultDatabase = config.getOrDefault(DEFAULT_DATABASE.key(), DEFAULT_DATABASE.defaultValue());
+        String defaultDatabase =
+                config.getOrDefault(DEFAULT_DATABASE.key(), DEFAULT_DATABASE.defaultValue());
 
         // Ensure required properties are present
         if (region == null || region.isEmpty()) {
-            throw new CatalogException("The 'region' property must be specified for the Glue catalog.");
+            throw new CatalogException(
+                    "The 'region' property must be specified for the Glue catalog.");
         }
 
         return new GlueCatalog(name, defaultDatabase, region);

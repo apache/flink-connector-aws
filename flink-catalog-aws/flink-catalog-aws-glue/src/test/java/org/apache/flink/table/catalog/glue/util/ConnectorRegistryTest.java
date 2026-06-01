@@ -7,9 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-/**
- * Test class for {@link ConnectorRegistry}.
- */
+/** Test class for {@link ConnectorRegistry}. */
 class ConnectorRegistryTest {
 
     // Test data for connectors
@@ -24,18 +22,14 @@ class ConnectorRegistryTest {
     private static final String DYNAMODB = "dynamodb";
     private static final String MONGODB = "mongodb";
 
-    /**
-     * Sets up the test environment before each test.
-     */
+    /** Sets up the test environment before each test. */
     @BeforeEach
     void setUp() {
         // Reset the static map for each test case
         // This could be necessary if ConnectorRegistry ever evolves to mutate its state
     }
 
-    /**
-     * Tests the location key retrieval for Kinesis connector.
-     */
+    /** Tests the location key retrieval for Kinesis connector. */
     @Test
     void testGetLocationKeyForKinesis() {
         String locationKey = ConnectorRegistry.getLocationKey(KINESIS);
@@ -45,9 +39,7 @@ class ConnectorRegistryTest {
         assertEquals("stream.arn", locationKey, "Location key for Kinesis should be 'stream.arn'");
     }
 
-    /**
-     * Tests the location key retrieval for Kafka connector.
-     */
+    /** Tests the location key retrieval for Kafka connector. */
     @Test
     void testGetLocationKeyForKafka() {
         String locationKey = ConnectorRegistry.getLocationKey(KAFKA);
@@ -60,9 +52,7 @@ class ConnectorRegistryTest {
                 "Location key for Kafka should be 'bootstrap.servers'");
     }
 
-    /**
-     * Tests the location key retrieval for JDBC connector.
-     */
+    /** Tests the location key retrieval for JDBC connector. */
     @Test
     void testGetLocationKeyForJDBC() {
         String locationKey = ConnectorRegistry.getLocationKey(JDBC);
@@ -72,9 +62,7 @@ class ConnectorRegistryTest {
         assertEquals("url", locationKey, "Location key for JDBC should be 'url'");
     }
 
-    /**
-     * Tests the location key retrieval for Filesystem connector.
-     */
+    /** Tests the location key retrieval for Filesystem connector. */
     @Test
     void testGetLocationKeyForFilesystem() {
         String locationKey = ConnectorRegistry.getLocationKey(FILESYSTEM);
@@ -84,9 +72,7 @@ class ConnectorRegistryTest {
         assertEquals("path", locationKey, "Location key for Filesystem should be 'path'");
     }
 
-    /**
-     * Tests the location key retrieval for Elasticsearch connector.
-     */
+    /** Tests the location key retrieval for Elasticsearch connector. */
     @Test
     void testGetLocationKeyForElasticsearch() {
         String locationKey = ConnectorRegistry.getLocationKey(ELASTICSEARCH);
@@ -96,9 +82,7 @@ class ConnectorRegistryTest {
         assertEquals("hosts", locationKey, "Location key for Elasticsearch should be 'hosts'");
     }
 
-    /**
-     * Tests the location key retrieval for OpenSearch connector.
-     */
+    /** Tests the location key retrieval for OpenSearch connector. */
     @Test
     void testGetLocationKeyForOpensearch() {
         String locationKey = ConnectorRegistry.getLocationKey(OPENSEARCH);
@@ -108,9 +92,7 @@ class ConnectorRegistryTest {
         assertEquals("hosts", locationKey, "Location key for OpenSearch should be 'hosts'");
     }
 
-    /**
-     * Tests the location key retrieval for HBase connector.
-     */
+    /** Tests the location key retrieval for HBase connector. */
     @Test
     void testGetLocationKeyForHBase() {
         String locationKey = ConnectorRegistry.getLocationKey(HBASE);
@@ -123,9 +105,7 @@ class ConnectorRegistryTest {
                 "Location key for HBase should be 'zookeeper.quorum'");
     }
 
-    /**
-     * Tests the location key retrieval for DynamoDB connector.
-     */
+    /** Tests the location key retrieval for DynamoDB connector. */
     @Test
     void testGetLocationKeyForDynamoDB() {
         String locationKey = ConnectorRegistry.getLocationKey(DYNAMODB);
@@ -135,9 +115,7 @@ class ConnectorRegistryTest {
         assertEquals("table.name", locationKey, "Location key for DynamoDB should be 'table.name'");
     }
 
-    /**
-     * Tests the location key retrieval for MongoDB connector.
-     */
+    /** Tests the location key retrieval for MongoDB connector. */
     @Test
     void testGetLocationKeyForMongoDB() {
         String locationKey = ConnectorRegistry.getLocationKey(MONGODB);
@@ -147,9 +125,7 @@ class ConnectorRegistryTest {
         assertEquals("uri", locationKey, "Location key for MongoDB should be 'uri'");
     }
 
-    /**
-     * Tests the location key retrieval for Hive connector.
-     */
+    /** Tests the location key retrieval for Hive connector. */
     @Test
     void testGetLocationKeyForHive() {
         String locationKey = ConnectorRegistry.getLocationKey("hive");
@@ -160,9 +136,7 @@ class ConnectorRegistryTest {
                 "hive-conf-dir", locationKey, "Location key for Hive should be 'hive-conf-dir'");
     }
 
-    /**
-     * Tests the location key retrieval for an unknown connector.
-     */
+    /** Tests the location key retrieval for an unknown connector. */
     @Test
     void testGetLocationKeyForUnknownConnector() {
         String locationKey = ConnectorRegistry.getLocationKey(UNKNOWN);
@@ -171,9 +145,7 @@ class ConnectorRegistryTest {
         assertNull(locationKey, "Location key for unknown connector should be null");
     }
 
-    /**
-     * Tests the logging behavior for an unknown connector.
-     */
+    /** Tests the logging behavior for an unknown connector. */
     @Test
     void testLoggingForUnknownConnector() {
         // Setting up a logger to capture logs if necessary

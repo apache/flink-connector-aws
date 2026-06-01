@@ -47,8 +47,8 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
- * Handles all database-related operations for the Glue catalog.
- * Provides functionality for listing, retrieving, creating, and deleting databases in AWS Glue.
+ * Handles all database-related operations for the Glue catalog. Provides functionality for listing,
+ * retrieving, creating, and deleting databases in AWS Glue.
  */
 public class GlueDatabaseOperator extends GlueOperator {
 
@@ -56,15 +56,13 @@ public class GlueDatabaseOperator extends GlueOperator {
     private static final Logger LOG = LoggerFactory.getLogger(GlueDatabaseOperator.class);
 
     /**
-     * Pattern for validating database names.
-     * AWS Glue supports alphanumeric characters and underscores.
-     * We preserve original case in metadata while storing lowercase in Glue.
+     * Pattern for validating database names. AWS Glue supports alphanumeric characters and
+     * underscores. We preserve original case in metadata while storing lowercase in Glue.
      */
     private static final Pattern VALID_NAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+$");
 
     /**
-     * Constructor for GlueDatabaseOperations.
-     * Initializes the Glue client and catalog name.
+     * Constructor for GlueDatabaseOperations. Initializes the Glue client and catalog name.
      *
      * @param glueClient The Glue client to interact with AWS Glue.
      * @param catalogName The name of the catalog.
@@ -74,9 +72,9 @@ public class GlueDatabaseOperator extends GlueOperator {
     }
 
     /**
-     * Validates that a database name contains only allowed characters.
-     * AWS Glue supports alphanumeric characters and underscores.
-     * Case is preserved in metadata while Glue stores lowercase internally.
+     * Validates that a database name contains only allowed characters. AWS Glue supports
+     * alphanumeric characters and underscores. Case is preserved in metadata while Glue stores
+     * lowercase internally.
      *
      * @param databaseName The database name to validate
      * @throws CatalogException if the database name contains invalid characters
@@ -88,14 +86,14 @@ public class GlueDatabaseOperator extends GlueOperator {
 
         if (!VALID_NAME_PATTERN.matcher(databaseName).matches()) {
             throw new CatalogException(
-                    "Database name can only contain letters, numbers, and underscores. " +
-                    "Original case is preserved in metadata while AWS Glue stores lowercase internally.");
+                    "Database name can only contain letters, numbers, and underscores. "
+                            + "Original case is preserved in metadata while AWS Glue stores lowercase internally.");
         }
     }
 
     /**
-     * Lists all the databases in the Glue catalog.
-     * Returns the original database names as specified by users, not the lowercase names stored in Glue.
+     * Lists all the databases in the Glue catalog. Returns the original database names as specified
+     * by users, not the lowercase names stored in Glue.
      *
      * @return A list of database names with original case preserved.
      * @throws CatalogException if there is an error fetching the list of databases.
@@ -130,15 +128,15 @@ public class GlueDatabaseOperator extends GlueOperator {
     }
 
     /**
-     * Extracts the original database name from a Glue database object.
-     * Falls back to the stored name if no original name is found.
+     * Extracts the original database name from a Glue database object. Falls back to the stored
+     * name if no original name is found.
      *
      * @param database The Glue database object
      * @return The original database name with case preserved
      */
     private String getOriginalDatabaseName(Database database) {
-        if (database.parameters() != null &&
-            database.parameters().containsKey(GlueCatalogConstants.ORIGINAL_DATABASE_NAME)) {
+        if (database.parameters() != null
+                && database.parameters().containsKey(GlueCatalogConstants.ORIGINAL_DATABASE_NAME)) {
             return database.parameters().get(GlueCatalogConstants.ORIGINAL_DATABASE_NAME);
         }
         // Fallback to stored name for backward compatibility
@@ -146,8 +144,8 @@ public class GlueDatabaseOperator extends GlueOperator {
     }
 
     /**
-     * Converts a user-provided database name to the name used for storage in Glue.
-     * Glue requires lowercase names, so we store in lowercase but preserve original in metadata.
+     * Converts a user-provided database name to the name used for storage in Glue. Glue requires
+     * lowercase names, so we store in lowercase but preserve original in metadata.
      *
      * @param originalDatabaseName The original database name as specified by the user
      * @return The database name to use for Glue storage (lowercase)
@@ -157,8 +155,8 @@ public class GlueDatabaseOperator extends GlueOperator {
     }
 
     /**
-     * Finds the Glue storage name for a given original database name.
-     * This is needed because users may specify names with different casing than stored in Glue.
+     * Finds the Glue storage name for a given original database name. This is needed because users
+     * may specify names with different casing than stored in Glue.
      *
      * @param originalDatabaseName The original database name to find
      * @return The Glue storage name if found, null if not found
@@ -170,7 +168,10 @@ public class GlueDatabaseOperator extends GlueOperator {
             String glueName = toGlueDatabaseName(originalDatabaseName);
             if (glueDatabaseExistsByGlueName(glueName)) {
                 // Verify this is actually the right database by checking stored original name
-                Database database = glueClient.getDatabase(GetDatabaseRequest.builder().name(glueName).build()).database();
+                Database database =
+                        glueClient
+                                .getDatabase(GetDatabaseRequest.builder().name(glueName).build())
+                                .database();
                 if (database != null) {
                     String storedOriginalName = getOriginalDatabaseName(database);
                     if (storedOriginalName.equals(originalDatabaseName)) {
@@ -179,7 +180,8 @@ public class GlueDatabaseOperator extends GlueOperator {
                 }
             }
 
-            // If direct match failed, search all databases (for backward compatibility or edge cases)
+            // If direct match failed, search all databases (for backward compatibility or edge
+            // cases)
             String nextToken = null;
             while (true) {
                 GetDatabasesRequest.Builder requestBuilder = GetDatabasesRequest.builder();
@@ -215,18 +217,17 @@ public class GlueDatabaseOperator extends GlueOperator {
      * @throws DatabaseNotExistException If the database does not exist in the Glue catalog.
      * @throws CatalogException If there is any error retrieving the database.
      */
-    public CatalogDatabase getDatabase(String originalDatabaseName) throws DatabaseNotExistException, CatalogException {
+    public CatalogDatabase getDatabase(String originalDatabaseName)
+            throws DatabaseNotExistException, CatalogException {
         try {
             String glueDatabaseName = findGlueDatabaseName(originalDatabaseName);
             if (glueDatabaseName == null) {
                 throw new DatabaseNotExistException(catalogName, originalDatabaseName);
             }
 
-            GetDatabaseResponse response = glueClient.getDatabase(
-                    GetDatabaseRequest.builder()
-                            .name(glueDatabaseName)
-                            .build()
-            );
+            GetDatabaseResponse response =
+                    glueClient.getDatabase(
+                            GetDatabaseRequest.builder().name(glueDatabaseName).build());
 
             Database glueDatabase = response.database();
             if (glueDatabase == null) {
@@ -240,7 +241,8 @@ public class GlueDatabaseOperator extends GlueOperator {
             throw new CatalogException("Invalid database name: " + originalDatabaseName, e);
         } catch (OperationTimeoutException e) {
             LOG.error("Timeout while getting database: {}", originalDatabaseName, e);
-            throw new CatalogException("Timeout while getting database: " + originalDatabaseName, e);
+            throw new CatalogException(
+                    "Timeout while getting database: " + originalDatabaseName, e);
         } catch (GlueException e) {
             LOG.error("Error getting database: {}", originalDatabaseName, e);
             throw new CatalogException("Error getting database: " + originalDatabaseName, e);
@@ -248,8 +250,8 @@ public class GlueDatabaseOperator extends GlueOperator {
     }
 
     /**
-     * Converts the Glue database model to a Flink CatalogDatabase.
-     * Preserves original database name metadata in the properties.
+     * Converts the Glue database model to a Flink CatalogDatabase. Preserves original database name
+     * metadata in the properties.
      *
      * @param glueDatabase The Glue database model.
      * @return A CatalogDatabase representing the Glue database.
@@ -262,10 +264,7 @@ public class GlueDatabaseOperator extends GlueOperator {
             properties.putAll(glueDatabase.parameters());
         }
 
-        return new CatalogDatabaseImpl(
-                properties,
-                glueDatabase.description()
-        );
+        return new CatalogDatabaseImpl(properties, glueDatabase.description());
     }
 
     /**
@@ -285,8 +284,8 @@ public class GlueDatabaseOperator extends GlueOperator {
     }
 
     /**
-     * Direct check if a database exists in Glue by Glue storage name.
-     * This method directly calls Glue API without going through higher-level search functions.
+     * Direct check if a database exists in Glue by Glue storage name. This method directly calls
+     * Glue API without going through higher-level search functions.
      *
      * @param glueDatabaseName The Glue storage name of the database to check.
      * @return true if the database exists, false otherwise.
@@ -303,8 +302,8 @@ public class GlueDatabaseOperator extends GlueOperator {
     }
 
     /**
-     * Creates a new database in Glue.
-     * Stores the original database name in metadata for case preservation.
+     * Creates a new database in Glue. Stores the original database name in metadata for case
+     * preservation.
      *
      * @param originalDatabaseName The original database name as specified by the user.
      * @param catalogDatabase The CatalogDatabase containing properties and description.
@@ -329,13 +328,21 @@ public class GlueDatabaseOperator extends GlueOperator {
             // Store original name in metadata
             parameters.put(GlueCatalogConstants.ORIGINAL_DATABASE_NAME, originalDatabaseName);
 
-            glueClient.createDatabase(builder -> builder.databaseInput(db ->
-                    db.name(glueDatabaseName)
-                            .description(catalogDatabase.getDescription().orElse(null))
-                            .parameters(parameters)));
+            glueClient.createDatabase(
+                    builder ->
+                            builder.databaseInput(
+                                    db ->
+                                            db.name(glueDatabaseName)
+                                                    .description(
+                                                            catalogDatabase
+                                                                    .getDescription()
+                                                                    .orElse(null))
+                                                    .parameters(parameters)));
 
-            LOG.info("Created database '{}' in Glue with original name '{}' preserved",
-                     glueDatabaseName, originalDatabaseName);
+            LOG.info(
+                    "Created database '{}' in Glue with original name '{}' preserved",
+                    glueDatabaseName,
+                    originalDatabaseName);
         } catch (AlreadyExistsException e) {
             throw new DatabaseAlreadyExistException(catalogName, originalDatabaseName);
         } catch (GlueException e) {
@@ -350,20 +357,22 @@ public class GlueDatabaseOperator extends GlueOperator {
      * @throws DatabaseNotExistException If the database does not exist in the Glue catalog.
      * @throws CatalogException If there is any error deleting the database.
      */
-    public void dropGlueDatabase(String originalDatabaseName) throws DatabaseNotExistException, CatalogException {
+    public void dropGlueDatabase(String originalDatabaseName)
+            throws DatabaseNotExistException, CatalogException {
         try {
             String glueDatabaseName = findGlueDatabaseName(originalDatabaseName);
             if (glueDatabaseName == null) {
                 throw new DatabaseNotExistException(catalogName, originalDatabaseName);
             }
 
-            DeleteDatabaseRequest deleteDatabaseRequest = DeleteDatabaseRequest.builder()
-                    .name(glueDatabaseName)
-                    .build();
+            DeleteDatabaseRequest deleteDatabaseRequest =
+                    DeleteDatabaseRequest.builder().name(glueDatabaseName).build();
 
             glueClient.deleteDatabase(deleteDatabaseRequest);
-            LOG.info("Successfully dropped database with original name '{}' (Glue name: '{}')",
-                     originalDatabaseName, glueDatabaseName);
+            LOG.info(
+                    "Successfully dropped database with original name '{}' (Glue name: '{}')",
+                    originalDatabaseName,
+                    glueDatabaseName);
         } catch (EntityNotFoundException e) {
             throw new DatabaseNotExistException(catalogName, originalDatabaseName);
         } catch (GlueException e) {

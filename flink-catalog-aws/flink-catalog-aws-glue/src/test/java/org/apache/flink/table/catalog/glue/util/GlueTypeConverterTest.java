@@ -99,19 +99,22 @@ class GlueTypeConverterTest {
     @Test
     void testToFlinkTypeThrowsExceptionForInvalidDataType() {
         Assertions.assertThrows(
-                UnsupportedDataTypeMappingException.class, () -> converter.toFlinkDataType("invalidtype"));
+                UnsupportedDataTypeMappingException.class,
+                () -> converter.toFlinkDataType("invalidtype"));
     }
 
     @Test
     void testToGlueTypeThrowsExceptionForEmptyGlueDataType() {
-        Assertions.assertThrows(IllegalArgumentException.class, () -> converter.toFlinkDataType(""));
+        Assertions.assertThrows(
+                IllegalArgumentException.class, () -> converter.toFlinkDataType(""));
     }
 
     @Test
     void testToGlueTypeThrowsExceptionForUnsupportedDataType() {
         DataType unsupportedType = DataTypes.NULL(); // NULL type isn't supported
         Assertions.assertThrows(
-                UnsupportedDataTypeMappingException.class, () -> converter.toGlueDataType(unsupportedType));
+                UnsupportedDataTypeMappingException.class,
+                () -> converter.toGlueDataType(unsupportedType));
     }
 
     @Test

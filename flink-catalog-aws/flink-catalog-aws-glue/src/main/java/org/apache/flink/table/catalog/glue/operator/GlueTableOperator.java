@@ -49,28 +49,24 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
- * Handles all table-related operations for the Glue catalog.
- * Provides functionality for checking existence, listing, creating, getting, and dropping tables in AWS Glue.
+ * Handles all table-related operations for the Glue catalog. Provides functionality for checking
+ * existence, listing, creating, getting, and dropping tables in AWS Glue.
  */
 public class GlueTableOperator extends GlueOperator {
 
-    /**
-     * Logger for logging table operations.
-     */
+    /** Logger for logging table operations. */
     private static final Logger LOG = LoggerFactory.getLogger(GlueTableOperator.class);
 
     /**
-     * Pattern for validating table names.
-     * AWS Glue supports alphanumeric characters and underscores.
-     * We preserve original case in metadata while storing lowercase in Glue.
+     * Pattern for validating table names. AWS Glue supports alphanumeric characters and
+     * underscores. We preserve original case in metadata while storing lowercase in Glue.
      */
     private static final Pattern VALID_NAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+$");
 
     /**
-     * Constructor for GlueTableOperations.
-     * Initializes the Glue client and catalog name.
+     * Constructor for GlueTableOperations. Initializes the Glue client and catalog name.
      *
-     * @param glueClient  The Glue client to interact with AWS Glue.
+     * @param glueClient The Glue client to interact with AWS Glue.
      * @param catalogName The name of the catalog.
      */
     public GlueTableOperator(GlueClient glueClient, String catalogName) {
@@ -78,9 +74,9 @@ public class GlueTableOperator extends GlueOperator {
     }
 
     /**
-     * Validates that a table name contains only allowed characters.
-     * AWS Glue supports alphanumeric characters and underscores.
-     * Case is preserved in metadata while Glue stores lowercase internally.
+     * Validates that a table name contains only allowed characters. AWS Glue supports alphanumeric
+     * characters and underscores. Case is preserved in metadata while Glue stores lowercase
+     * internally.
      *
      * @param tableName The table name to validate
      * @throws CatalogException if the table name contains invalid characters
@@ -92,8 +88,8 @@ public class GlueTableOperator extends GlueOperator {
 
         if (!VALID_NAME_PATTERN.matcher(tableName).matches()) {
             throw new CatalogException(
-                    "Table name can only contain letters, numbers, and underscores. " +
-                    "Original case is preserved in metadata while AWS Glue stores lowercase internally.");
+                    "Table name can only contain letters, numbers, and underscores. "
+                            + "Original case is preserved in metadata while AWS Glue stores lowercase internally.");
         }
     }
 
@@ -106,18 +102,19 @@ public class GlueTableOperator extends GlueOperator {
      */
     public boolean glueTableExists(String glueDatabaseName, String glueTableName) {
         try {
-            glueClient.getTable(builder -> builder.databaseName(glueDatabaseName).name(glueTableName));
+            glueClient.getTable(
+                    builder -> builder.databaseName(glueDatabaseName).name(glueTableName));
             return true;
         } catch (EntityNotFoundException e) {
             return false;
         } catch (GlueException e) {
-            throw new CatalogException("Error checking table existence: " + glueDatabaseName + "." + glueTableName, e);
+            throw new CatalogException(
+                    "Error checking table existence: " + glueDatabaseName + "." + glueTableName, e);
         }
     }
 
     /**
-     * Lists all tables in a given database.
-     * Returns the Glue storage names (lowercase).
+     * Lists all tables in a given database. Returns the Glue storage names (lowercase).
      *
      * @param glueDatabaseName The Glue storage name of the database from which to list tables.
      * @return A list of table names as stored in Glue (lowercase).
@@ -129,8 +126,8 @@ public class GlueTableOperator extends GlueOperator {
             String nextToken = null;
 
             while (true) {
-                GetTablesRequest.Builder requestBuilder = GetTablesRequest.builder()
-                        .databaseName(glueDatabaseName);
+                GetTablesRequest.Builder requestBuilder =
+                        GetTablesRequest.builder().databaseName(glueDatabaseName);
 
                 if (nextToken != null) {
                     requestBuilder.nextToken(nextToken);
@@ -157,11 +154,12 @@ public class GlueTableOperator extends GlueOperator {
     }
 
     /**
-     * Creates a new table in Glue.
-     * Stores the original table name in metadata for case preservation.
+     * Creates a new table in Glue. Stores the original table name in metadata for case
+     * preservation.
      *
      * @param databaseName The Glue storage name of the database where the table should be created.
-     * @param tableInput   The input data for creating the table (should include original name in parameters).
+     * @param tableInput The input data for creating the table (should include original name in
+     *     parameters).
      * @throws CatalogException if there is an error creating the table.
      */
     public void createTable(String databaseName, TableInput tableInput) {
@@ -174,21 +172,28 @@ public class GlueTableOperator extends GlueOperator {
             // The table name in tableInput should already be the Glue storage name (lowercase)
             // The original name should be stored in parameters by the caller
 
-            CreateTableRequest request = CreateTableRequest.builder()
-                    .databaseName(databaseName)
-                    .tableInput(tableInput)
-                    .build();
+            CreateTableRequest request =
+                    CreateTableRequest.builder()
+                            .databaseName(databaseName)
+                            .tableInput(tableInput)
+                            .build();
             CreateTableResponse response = glueClient.createTable(request);
-            if (response == null || (response.sdkHttpResponse() != null && !response.sdkHttpResponse().isSuccessful())) {
-                throw new CatalogException("Error creating table: " + databaseName + "." + tableInput.name());
+            if (response == null
+                    || (response.sdkHttpResponse() != null
+                            && !response.sdkHttpResponse().isSuccessful())) {
+                throw new CatalogException(
+                        "Error creating table: " + databaseName + "." + tableInput.name());
             }
 
             // Log both original and storage names for clarity
-            String originalTableName = tableInput.parameters() != null ?
-                tableInput.parameters().get(GlueCatalogConstants.ORIGINAL_TABLE_NAME) :
-                tableInput.name();
-            LOG.info("Created table '{}' in Glue with original name '{}' preserved",
-                     tableInput.name(), originalTableName);
+            String originalTableName =
+                    tableInput.parameters() != null
+                            ? tableInput.parameters().get(GlueCatalogConstants.ORIGINAL_TABLE_NAME)
+                            : tableInput.name();
+            LOG.info(
+                    "Created table '{}' in Glue with original name '{}' preserved",
+                    tableInput.name(),
+                    originalTableName);
         } catch (AlreadyExistsException e) {
             throw new CatalogException("Table already exists: " + e.getMessage(), e);
         } catch (GlueException e) {
@@ -200,20 +205,19 @@ public class GlueTableOperator extends GlueOperator {
      * Retrieves the details of a specific table from Glue.
      *
      * @param databaseName The name of the database where the table resides.
-     * @param tableName    The name of the table to retrieve.
+     * @param tableName The name of the table to retrieve.
      * @return The Table object containing the table details.
      * @throws TableNotExistException if the table does not exist in the Glue catalog.
-     * @throws CatalogException       if there is an error fetching the table details.
+     * @throws CatalogException if there is an error fetching the table details.
      */
     public Table getGlueTable(String databaseName, String tableName) throws TableNotExistException {
         try {
-            GetTableRequest request = GetTableRequest.builder()
-                    .databaseName(databaseName)
-                    .name(tableName)
-                    .build();
+            GetTableRequest request =
+                    GetTableRequest.builder().databaseName(databaseName).name(tableName).build();
             Table table = glueClient.getTable(request).table();
             if (table == null) {
-                throw new TableNotExistException(catalogName, new ObjectPath(databaseName, tableName));
+                throw new TableNotExistException(
+                        catalogName, new ObjectPath(databaseName, tableName));
             }
             return table;
         } catch (EntityNotFoundException e) {
@@ -227,19 +231,20 @@ public class GlueTableOperator extends GlueOperator {
      * Drops a table from Glue.
      *
      * @param databaseName The name of the database where the table resides.
-     * @param tableName    The name of the table to drop.
+     * @param tableName The name of the table to drop.
      * @throws TableNotExistException if the table does not exist in the Glue catalog.
-     * @throws CatalogException       if there is an error dropping the table.
+     * @throws CatalogException if there is an error dropping the table.
      */
     public void dropTable(String databaseName, String tableName) throws TableNotExistException {
         try {
-            DeleteTableRequest request = DeleteTableRequest.builder()
-                    .databaseName(databaseName)
-                    .name(tableName)
-                    .build();
+            DeleteTableRequest request =
+                    DeleteTableRequest.builder().databaseName(databaseName).name(tableName).build();
             DeleteTableResponse response = glueClient.deleteTable(request);
-            if (response == null || (response.sdkHttpResponse() != null && !response.sdkHttpResponse().isSuccessful())) {
-                throw new CatalogException("Error dropping table: " + databaseName + "." + tableName);
+            if (response == null
+                    || (response.sdkHttpResponse() != null
+                            && !response.sdkHttpResponse().isSuccessful())) {
+                throw new CatalogException(
+                        "Error dropping table: " + databaseName + "." + tableName);
             }
         } catch (EntityNotFoundException e) {
             throw new TableNotExistException(catalogName, new ObjectPath(databaseName, tableName));
@@ -252,16 +257,18 @@ public class GlueTableOperator extends GlueOperator {
      * Converts a Flink catalog table to Glue's TableInput object.
      *
      * @param tableName The original table name (case will be preserved in metadata).
-     * @param glueColumns       The list of columns for the table.
-     * @param catalogTable      The Flink CatalogTable containing the table schema.
+     * @param glueColumns The list of columns for the table.
+     * @param catalogTable The Flink CatalogTable containing the table schema.
      * @param storageDescriptor The Glue storage descriptor for the table.
-     * @param properties        The properties of the table.
+     * @param properties The properties of the table.
      * @return The Glue TableInput object representing the table.
      */
     public TableInput buildTableInput(
-            String tableName, List<Column> glueColumns,
+            String tableName,
+            List<Column> glueColumns,
             CatalogTable catalogTable,
-            StorageDescriptor storageDescriptor, Map<String, String> properties) {
+            StorageDescriptor storageDescriptor,
+            Map<String, String> properties) {
 
         // Validate table name
         validateTableName(tableName);
@@ -287,8 +294,8 @@ public class GlueTableOperator extends GlueOperator {
     }
 
     /**
-     * Converts a user-provided table name to the name used for storage in Glue.
-     * Glue requires lowercase names, so we store in lowercase.
+     * Converts a user-provided table name to the name used for storage in Glue. Glue requires
+     * lowercase names, so we store in lowercase.
      *
      * @param tableName The table name as specified by the user
      * @return The table name to use for Glue storage (lowercase)
@@ -298,15 +305,15 @@ public class GlueTableOperator extends GlueOperator {
     }
 
     /**
-     * Extracts the original table name from a Glue table object.
-     * Falls back to the stored name if no original name is found.
+     * Extracts the original table name from a Glue table object. Falls back to the stored name if
+     * no original name is found.
      *
      * @param table The Glue table object
      * @return The original table name with case preserved
      */
     public String getOriginalTableName(Table table) {
-        if (table.parameters() != null &&
-            table.parameters().containsKey(GlueCatalogConstants.ORIGINAL_TABLE_NAME)) {
+        if (table.parameters() != null
+                && table.parameters().containsKey(GlueCatalogConstants.ORIGINAL_TABLE_NAME)) {
             return table.parameters().get(GlueCatalogConstants.ORIGINAL_TABLE_NAME);
         }
         // Fallback to stored name for backward compatibility
@@ -314,15 +321,16 @@ public class GlueTableOperator extends GlueOperator {
     }
 
     /**
-     * Finds the Glue storage name for a given original table name.
-     * This method handles case-insensitive lookups while preserving original case.
+     * Finds the Glue storage name for a given original table name. This method handles
+     * case-insensitive lookups while preserving original case.
      *
      * @param glueDatabaseName The Glue storage name of the database
      * @param originalTableName The original table name to find
      * @return The Glue storage name if found, null if not found
      * @throws CatalogException if there's an error searching
      */
-    public String findGlueTableName(String glueDatabaseName, String originalTableName) throws CatalogException {
+    public String findGlueTableName(String glueDatabaseName, String originalTableName)
+            throws CatalogException {
         try {
             // First try the direct lowercase match (most common case)
             String glueTableName = originalTableName.toLowerCase();
@@ -335,7 +343,11 @@ public class GlueTableOperator extends GlueOperator {
                         return glueTableName;
                     }
                 } catch (Exception e) {
-                    LOG.warn("Error verifying table original name for: {}.{}", glueDatabaseName, glueTableName, e);
+                    LOG.warn(
+                            "Error verifying table original name for: {}.{}",
+                            glueDatabaseName,
+                            glueTableName,
+                            e);
                 }
             }
 
@@ -356,13 +368,14 @@ public class GlueTableOperator extends GlueOperator {
 
             return null; // Table not found
         } catch (Exception e) {
-            throw new CatalogException("Error searching for table: " + glueDatabaseName + "." + originalTableName, e);
+            throw new CatalogException(
+                    "Error searching for table: " + glueDatabaseName + "." + originalTableName, e);
         }
     }
 
     /**
-     * Lists all tables in a given database, returning original names.
-     * This is the public version that returns original table names with case preserved.
+     * Lists all tables in a given database, returning original names. This is the public version
+     * that returns original table names with case preserved.
      *
      * @param glueDatabaseName The Glue storage name of the database from which to list tables.
      * @return A list of original table names with case preserved.
@@ -374,8 +387,8 @@ public class GlueTableOperator extends GlueOperator {
             String nextToken = null;
 
             while (true) {
-                GetTablesRequest.Builder requestBuilder = GetTablesRequest.builder()
-                        .databaseName(glueDatabaseName);
+                GetTablesRequest.Builder requestBuilder =
+                        GetTablesRequest.builder().databaseName(glueDatabaseName);
 
                 if (nextToken != null) {
                     requestBuilder.nextToken(nextToken);
@@ -414,7 +427,11 @@ public class GlueTableOperator extends GlueOperator {
             String glueTableName = findGlueTableName(glueDatabaseName, originalTableName);
             return glueTableName != null;
         } catch (CatalogException e) {
-            LOG.warn("Error checking table existence for: {}.{}", glueDatabaseName, originalTableName, e);
+            LOG.warn(
+                    "Error checking table existence for: {}.{}",
+                    glueDatabaseName,
+                    originalTableName,
+                    e);
             return false;
         }
     }
@@ -428,10 +445,12 @@ public class GlueTableOperator extends GlueOperator {
      * @throws TableNotExistException if the table does not exist.
      * @throws CatalogException if there is an error fetching the table details.
      */
-    public Table getTableByOriginalName(String glueDatabaseName, String originalTableName) throws TableNotExistException {
+    public Table getTableByOriginalName(String glueDatabaseName, String originalTableName)
+            throws TableNotExistException {
         String glueTableName = findGlueTableName(glueDatabaseName, originalTableName);
         if (glueTableName == null) {
-            throw new TableNotExistException(catalogName, new ObjectPath(glueDatabaseName, originalTableName));
+            throw new TableNotExistException(
+                    catalogName, new ObjectPath(glueDatabaseName, originalTableName));
         }
         return getGlueTable(glueDatabaseName, glueTableName);
     }
@@ -444,10 +463,12 @@ public class GlueTableOperator extends GlueOperator {
      * @throws TableNotExistException if the table does not exist.
      * @throws CatalogException if there is an error dropping the table.
      */
-    public void dropTableByOriginalName(String glueDatabaseName, String originalTableName) throws TableNotExistException {
+    public void dropTableByOriginalName(String glueDatabaseName, String originalTableName)
+            throws TableNotExistException {
         String glueTableName = findGlueTableName(glueDatabaseName, originalTableName);
         if (glueTableName == null) {
-            throw new TableNotExistException(catalogName, new ObjectPath(glueDatabaseName, originalTableName));
+            throw new TableNotExistException(
+                    catalogName, new ObjectPath(glueDatabaseName, originalTableName));
         }
         dropTable(glueDatabaseName, glueTableName);
     }
