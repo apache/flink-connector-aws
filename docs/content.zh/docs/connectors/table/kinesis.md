@@ -29,6 +29,7 @@ under the License.
 {{< label "Scan Source: Unbounded" >}}
 {{< label "Sink: Batch" >}}
 {{< label "Sink: Streaming Append Mode" >}}
+{{< label "Sink: Streaming Upsert Mode" >}}
 
 The Kinesis connector allows for reading data from and writing data into [Amazon Kinesis Data Streams (KDS)](https://aws.amazon.com/kinesis/data-streams/).
 
@@ -922,6 +923,41 @@ Reusing a consumer name will result in existing subscriptions being terminated.
 In the event that a job terminates without executing the shutdown hooks, stream consumers will remain active.
 In this situation the stream consumers will be gracefully reused when the application restarts.
 With the `NONE` and `EAGER` strategies, stream consumer de-registration is not performed by `FlinkKinesisConsumer`.
+
+### Upsert Mode (Changelog Streams)
+
+The Kinesis connector supports writing **upsert changelog streams** when a `PRIMARY KEY` is defined on the table. This enables writing the results of aggregations (`GROUP BY`), deduplication, and streaming joins directly to Kinesis Data Streams.
+
+When a primary key is present, the connector automatically:
+
+* Accepts `INSERT`, `UPDATE_AFTER`, and `DELETE` changelog events
+* Uses the primary key fields as the Kinesis partition key (ensuring records with the same key are routed to the same shard)
+* Writes an empty payload (tombstone) for `DELETE` and `UPDATE_BEFORE` events
+* Serializes the full row for `INSERT` and `UPDATE_AFTER` events
+
+```sql
+CREATE TABLE aggregated_orders (
+  user_id STRING,
+  order_count BIGINT,
+  total_amount DECIMAL(10, 2),
+  PRIMARY KEY (user_id) NOT ENFORCED
+) WITH (
+  'connector' = 'kinesis',
+  'stream.arn' = 'arn:aws:kinesis:us-east-1:012345678901:stream/aggregated-orders',
+  'aws.region' = 'us-east-1',
+  'format' = 'json'
+);
+
+-- Write aggregation results to Kinesis
+INSERT INTO aggregated_orders
+SELECT user_id, COUNT(*), SUM(amount)
+FROM orders
+GROUP BY user_id;
+```
+
+{{< hint info >}}
+**Ordering considerations**: The Kinesis sink uses `PutRecords` with async batching. Records with the same partition key are routed to the same shard, where they are ordered by arrival time. With the default setting of multiple in-flight requests, two batches targeting the same shard may arrive out of order due to network jitter. For strict per-key ordering, set `'sink.requests.max-inflight' = '1'`. For most upsert use cases (materialized aggregations, deduplication), eventual consistency per key is sufficient since the downstream consumer materializes the latest value.
+{{< /hint >}}
 
 # Data Type Mapping
 
