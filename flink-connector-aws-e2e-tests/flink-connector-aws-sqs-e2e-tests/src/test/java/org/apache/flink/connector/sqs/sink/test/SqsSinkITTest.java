@@ -28,6 +28,7 @@ import org.apache.flink.connector.testframe.container.FlinkContainers;
 import org.apache.flink.connector.testframe.container.TestcontainersSettings;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.util.DockerImageVersions;
+import org.apache.flink.util.TestLoggerExtension;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.AfterAll;
@@ -35,6 +36,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.Network;
@@ -56,6 +58,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /** End to End test for SQS sink API. */
 @Testcontainers
+@ExtendWith(TestLoggerExtension.class)
 public class SqsSinkITTest {
 
     private static final Logger LOG = LoggerFactory.getLogger(SqsSinkITTest.class);

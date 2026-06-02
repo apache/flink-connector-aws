@@ -25,6 +25,7 @@ import org.apache.flink.connector.testframe.container.TestcontainersSettings;
 import org.apache.flink.test.resources.ResourceTestUtils;
 import org.apache.flink.test.util.SQLJobSubmission;
 import org.apache.flink.util.DockerImageVersions;
+import org.apache.flink.util.TestLoggerExtension;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -40,6 +41,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.Network;
@@ -76,6 +78,7 @@ import static org.apache.flink.connector.firehose.sink.testutils.KinesisFirehose
 /** End to End test for Kinesis Firehose Table sink API. */
 @Testcontainers
 @Timeout(value = 10, unit = TimeUnit.MINUTES)
+@ExtendWith(TestLoggerExtension.class)
 public class KinesisFirehoseTableITTest {
 
     private static final Logger LOG = LoggerFactory.getLogger(KinesisFirehoseTableITTest.class);

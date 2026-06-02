@@ -32,14 +32,14 @@ import org.apache.flink.formats.json.glue.schema.registry.GlueSchemaRegistryJson
 import org.apache.flink.formats.json.glue.schema.registry.GlueSchemaRegistryJsonSerializationSchema;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.util.StringUtils;
+import org.apache.flink.util.TestLoggerExtension;
 
 import com.amazonaws.services.schemaregistry.serializers.json.JsonDataWithSchema;
 import com.amazonaws.services.schemaregistry.utils.AWSSchemaRegistryConstants;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.junit.jupiter.Container;
@@ -67,11 +67,13 @@ import static org.apache.flink.connector.aws.config.AWSConfigConstants.HTTP_PROT
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.TRUST_ALL_CERTIFICATES;
 import static org.apache.flink.connector.aws.testutils.AWSServicesTestUtils.createConfig;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assumptions.assumeThat;
 
 /** End-to-end test for Glue Schema Registry Json format using Localstack. */
 @Testcontainers
+@ExtendWith(TestLoggerExtension.class)
 public class GlueSchemaRegistryJsonKinesisITCase {
-    private static final Logger LOGGER =
+    private static final Logger LOG =
             LoggerFactory.getLogger(GlueSchemaRegistryJsonKinesisITCase.class);
 
     private static final String INPUT_STREAM = "gsr_json_input_stream";
@@ -102,12 +104,8 @@ public class GlueSchemaRegistryJsonKinesisITCase {
     public void setup() throws Exception {
         System.setProperty(SdkSystemSetting.CBOR_ENABLED.property(), "false");
 
-        Assumptions.assumeTrue(
-                !StringUtils.isNullOrWhitespaceOnly(ACCESS_KEY),
-                "Access key not configured, skipping test...");
-        Assumptions.assumeTrue(
-                !StringUtils.isNullOrWhitespaceOnly(SECRET_KEY),
-                "Secret key not configured, skipping test...");
+        assumeThat(ACCESS_KEY).as("Access key not configured, skipping test...").isNotBlank();
+        assumeThat(SECRET_KEY).as("Secret key not configured, skipping test...").isNotBlank();
 
         StaticCredentialsProvider gsrCredentialsProvider =
                 StaticCredentialsProvider.create(
@@ -124,7 +122,7 @@ public class GlueSchemaRegistryJsonKinesisITCase {
         gsrKinesisPubsubClient.prepareStream(INPUT_STREAM);
         gsrKinesisPubsubClient.prepareStream(OUTPUT_STREAM);
 
-        LOGGER.info("Done setting up the localstack.");
+        LOG.info("Done setting up the localstack.");
     }
 
     @AfterEach
@@ -140,7 +138,7 @@ public class GlueSchemaRegistryJsonKinesisITCase {
         for (JsonDataWithSchema msg : messages) {
             gsrKinesisPubsubClient.sendMessage(msg.getSchema(), INPUT_STREAM, msg);
         }
-        log.info("generated records");
+        LOG.info("generated records");
 
         DataStream<JsonDataWithSchema> input =
                 env.fromSource(createSource(), WatermarkStrategy.noWatermarks(), "source")
@@ -153,11 +151,11 @@ public class GlueSchemaRegistryJsonKinesisITCase {
         List<Object> results =
                 gsrKinesisPubsubClient.readAllMessages(OUTPUT_STREAM, OUTPUT_STREAM_ARN);
         while (deadline.hasTimeLeft() && results.size() < messages.size()) {
-            log.info("waiting for results..");
+            LOG.info("waiting for results..");
             Thread.sleep(1000);
             results = gsrKinesisPubsubClient.readAllMessages(OUTPUT_STREAM, OUTPUT_STREAM_ARN);
         }
-        log.info("results: {}", results);
+        LOG.info("results: {}", results);
 
         assertThat(results).containsExactlyInAnyOrderElementsOf(messages);
     }
