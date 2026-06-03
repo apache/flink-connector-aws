@@ -32,21 +32,21 @@ import org.apache.flink.formats.avro.glue.schema.registry.GlueSchemaRegistryAvro
 import org.apache.flink.formats.avro.typeutils.GenericRecordAvroTypeInfo;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.util.StringUtils;
-import org.apache.flink.util.TestLogger;
+import org.apache.flink.util.TestLoggerExtension;
 
 import com.amazonaws.services.schemaregistry.utils.AWSSchemaRegistryConstants;
 import com.amazonaws.services.schemaregistry.utils.AvroRecordType;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.junit.After;
-import org.junit.Assume;
-import org.junit.Before;
-import org.junit.ClassRule;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -71,10 +71,13 @@ import static org.apache.flink.connector.aws.config.AWSConfigConstants.HTTP_PROT
 import static org.apache.flink.connector.aws.config.AWSConfigConstants.TRUST_ALL_CERTIFICATES;
 import static org.apache.flink.connector.aws.testutils.AWSServicesTestUtils.createConfig;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assumptions.assumeThat;
 
 /** End-to-end test for Glue Schema Registry AVRO format using Localstack. */
-public class GlueSchemaRegistryAvroKinesisITCase extends TestLogger {
-    private static final Logger LOGGER =
+@Testcontainers
+@ExtendWith(TestLoggerExtension.class)
+public class GlueSchemaRegistryAvroKinesisITCase {
+    private static final Logger LOG =
             LoggerFactory.getLogger(GlueSchemaRegistryAvroKinesisITCase.class);
 
     private static final String INPUT_STREAM = "gsr_avro_input_stream";
@@ -95,21 +98,17 @@ public class GlueSchemaRegistryAvroKinesisITCase extends TestLogger {
     private KinesisClient kinesisClient;
     private GSRKinesisPubsubClient gsrKinesisPubsubClient;
 
-    @ClassRule
+    @Container
     public static LocalstackContainer mockKinesisContainer =
             new LocalstackContainer(DockerImageName.parse(LOCALSTACK_DOCKER_IMAGE_VERSION))
                     .withNetworkAliases("localstack");
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         System.setProperty(SdkSystemSetting.CBOR_ENABLED.property(), "false");
 
-        Assume.assumeTrue(
-                "Access key not configured, skipping test...",
-                !StringUtils.isNullOrWhitespaceOnly(ACCESS_KEY));
-        Assume.assumeTrue(
-                "Secret key not configured, skipping test...",
-                !StringUtils.isNullOrWhitespaceOnly(SECRET_KEY));
+        assumeThat(ACCESS_KEY).as("Access key not configured, skipping test...").isNotBlank();
+        assumeThat(SECRET_KEY).as("Secret key not configured, skipping test...").isNotBlank();
 
         StaticCredentialsProvider gsrCredentialsProvider =
                 StaticCredentialsProvider.create(
@@ -125,10 +124,10 @@ public class GlueSchemaRegistryAvroKinesisITCase extends TestLogger {
         gsrKinesisPubsubClient.prepareStream(INPUT_STREAM);
         gsrKinesisPubsubClient.prepareStream(OUTPUT_STREAM);
 
-        LOGGER.info("Done setting up the localstack.");
+        LOG.info("Done setting up the localstack.");
     }
 
-    @After
+    @AfterEach
     public void teardown() {
         System.clearProperty(SdkSystemSetting.CBOR_ENABLED.property());
         AWSGeneralUtil.closeResources(httpClient, kinesisClient);
@@ -142,7 +141,7 @@ public class GlueSchemaRegistryAvroKinesisITCase extends TestLogger {
         for (GenericRecord msg : messages) {
             gsrKinesisPubsubClient.sendMessage(getSchema().toString(), INPUT_STREAM, msg);
         }
-        log.info("generated records");
+        LOG.info("generated records");
 
         DataStream<GenericRecord> input =
                 env.fromSource(createSource(), WatermarkStrategy.noWatermarks(), "source")
@@ -155,11 +154,11 @@ public class GlueSchemaRegistryAvroKinesisITCase extends TestLogger {
         List<Object> results =
                 gsrKinesisPubsubClient.readAllMessages(OUTPUT_STREAM, OUTPUT_STREAM_ARN);
         while (deadline.hasTimeLeft() && results.size() < messages.size()) {
-            log.info("waiting for results..");
+            LOG.info("waiting for results..");
             Thread.sleep(1000);
             results = gsrKinesisPubsubClient.readAllMessages(OUTPUT_STREAM, OUTPUT_STREAM_ARN);
         }
-        log.info("results: {}", results);
+        LOG.info("results: {}", results);
 
         assertThat(results).containsExactlyInAnyOrderElementsOf(messages);
     }

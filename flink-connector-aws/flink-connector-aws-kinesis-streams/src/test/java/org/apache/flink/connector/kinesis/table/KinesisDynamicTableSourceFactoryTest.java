@@ -40,9 +40,10 @@ import org.apache.flink.table.factories.TableOptionsBuilder;
 import org.apache.flink.table.factories.TestFormatFactory;
 import org.apache.flink.table.runtime.connector.source.ScanRuntimeProviderContext;
 import org.apache.flink.table.types.DataType;
-import org.apache.flink.util.TestLogger;
+import org.apache.flink.util.TestLoggerExtension;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -60,7 +61,8 @@ import static org.apache.flink.table.factories.utils.FactoryMocks.createTableSou
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Test for {@link KinesisDynamicSource} created by {@link KinesisDynamicTableFactory}. */
-public class KinesisDynamicTableSourceFactoryTest extends TestLogger {
+@ExtendWith(TestLoggerExtension.class)
+public class KinesisDynamicTableSourceFactoryTest {
 
     @Test
     public void testGoodTableSource() {
