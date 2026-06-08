@@ -118,9 +118,12 @@ public abstract class KinesisShardSplitReaderBase
             assignedSplits.add(splitState);
         }
 
-        shardMetricGroupMap
-                .get(splitState.getShardId())
-                .setMillisBehindLatest(recordBatch.getMillisBehindLatest());
+        KinesisShardMetrics shardMetrics = shardMetricGroupMap.get(splitState.getShardId());
+        shardMetrics.setMillisBehindLatest(recordBatch.getMillisBehindLatest());
+        // Feed the per-shard EWMA used to estimate `pendingRecords` for the
+        // Flink Kubernetes Operator autoscaler. Empty batches carry no rate information and are
+        // skipped inside the helper.
+        shardMetrics.observeBatchSize(recordBatch.getRecords().size());
 
         if (recordBatch.getRecords().isEmpty()) {
             if (recordBatch.isCompleted()) {
