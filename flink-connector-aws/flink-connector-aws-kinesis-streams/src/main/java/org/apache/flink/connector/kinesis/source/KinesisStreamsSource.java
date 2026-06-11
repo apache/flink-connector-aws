@@ -105,7 +105,8 @@ import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConf
  */
 @Experimental
 public class KinesisStreamsSource<T>
-        implements Source<T, KinesisShardSplit, KinesisStreamsSourceEnumeratorState> {
+        implements Source<T, KinesisShardSplit, KinesisStreamsSourceEnumeratorState>,
+                org.apache.flink.streaming.api.lineage.LineageVertexProvider {
 
     private final String streamArn;
     private final Configuration sourceConfig;
@@ -353,5 +354,15 @@ public class KinesisStreamsSource<T>
                 .circuitBreakerEnabled(false)
                 .retryOnExceptionOrCauseInstanceOf(LimitExceededException.class)
                 .maxAttempts(maxAttempts);
+    }
+
+    // ---- Lineage support ----
+
+    @Override
+    public org.apache.flink.streaming.api.lineage.SourceLineageVertex getLineageVertex() {
+        return org.apache.flink.connector.kinesis.lineage.KinesisLineageUtil.sourceLineageVertexOf(
+                java.util.Collections.singletonList(
+                        org.apache.flink.connector.kinesis.lineage.KinesisLineageUtil.datasetOf(
+                                streamArn)));
     }
 }

@@ -67,7 +67,8 @@ import java.util.Properties;
  * @param <InputT> Type of the elements handled by this sink
  */
 @PublicEvolving
-public class KinesisStreamsSink<InputT> extends AsyncSinkBase<InputT, PutRecordsRequestEntry> {
+public class KinesisStreamsSink<InputT> extends AsyncSinkBase<InputT, PutRecordsRequestEntry>
+        implements org.apache.flink.streaming.api.lineage.LineageVertexProvider {
 
     private final boolean failOnError;
     private final String streamName;
@@ -173,5 +174,25 @@ public class KinesisStreamsSink<InputT> extends AsyncSinkBase<InputT, PutRecords
                 streamArn,
                 kinesisClientProperties,
                 recoveredState);
+    }
+
+    // ---- Lineage support ----
+
+    @Override
+    public org.apache.flink.streaming.api.lineage.LineageVertex getLineageVertex() {
+        if (streamArn != null) {
+            return org.apache.flink.connector.kinesis.lineage.KinesisLineageUtil
+                    .sinkLineageVertexOf(
+                            java.util.Collections.singletonList(
+                                    org.apache.flink.connector.kinesis.lineage.KinesisLineageUtil
+                                            .datasetOf(streamArn)));
+        }
+        // Fallback when only streamName is provided (no ARN)
+        return org.apache.flink.connector.kinesis.lineage.KinesisLineageUtil.sinkLineageVertexOf(
+                java.util.Collections.singletonList(
+                        new org.apache.flink.streaming.api.lineage.DefaultLineageDataset(
+                                streamName,
+                                "kinesis://unknown-region",
+                                java.util.Collections.emptyMap())));
     }
 }
