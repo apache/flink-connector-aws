@@ -437,14 +437,6 @@ Connector Options
       <td>Only applicable to EFO <code>ReaderType</code>. Timeout for EFO Consumer subscription.</td>
     </tr>
     <tr>
-      <td><h5>source.efo.deregister.timeout</h5></td>
-      <td>optional</td>
-      <td>no</td>
-      <td style="word-wrap: break-word;">10 s</td>
-      <td>Duration</td>
-      <td>Only applicable to EFO <code>ReaderType</code>. Timeout for consumer deregistration. When timeout is reached, code will continue as per normal.</td>
-    </tr>
-    <tr>
       <td><h5>source.efo.describe.retry-strategy.attempts.max</h5></td>
       <td>optional</td>
       <td>no</td>
