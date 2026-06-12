@@ -32,6 +32,7 @@ import org.apache.flink.table.connector.sink.SinkV2Provider;
 import org.apache.flink.table.connector.sink.abilities.SupportsPartitioning;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
+import org.apache.flink.types.RowKind;
 import org.apache.flink.util.Preconditions;
 
 import software.amazon.awssdk.services.kinesis.model.PutRecordsRequestEntry;
@@ -65,6 +66,9 @@ public class KinesisDynamicSink extends AsyncDynamicTableSink<PutRecordsRequestE
 
     private final Boolean failOnError;
 
+    /** Whether this sink supports upsert mode (primary key is defined on the table). */
+    private final boolean upsertMode;
+
     public KinesisDynamicSink(
             @Nullable Integer maxBatchSize,
             @Nullable Integer maxInFlightRequests,
@@ -76,7 +80,8 @@ public class KinesisDynamicSink extends AsyncDynamicTableSink<PutRecordsRequestE
             String streamArn,
             @Nullable Properties kinesisClientProperties,
             EncodingFormat<SerializationSchema<RowData>> encodingFormat,
-            PartitionKeyGenerator<RowData> partitioner) {
+            PartitionKeyGenerator<RowData> partitioner,
+            boolean upsertMode) {
         super(
                 maxBatchSize,
                 maxInFlightRequests,
@@ -94,10 +99,14 @@ public class KinesisDynamicSink extends AsyncDynamicTableSink<PutRecordsRequestE
         this.partitioner =
                 Preconditions.checkNotNull(
                         partitioner, "Kinesis partition key generator must not be null");
+        this.upsertMode = upsertMode;
     }
 
     @Override
     public ChangelogMode getChangelogMode(ChangelogMode requestedMode) {
+        if (upsertMode) {
+            return ChangelogMode.upsert();
+        }
         return encodingFormat.getChangelogMode();
     }
 
@@ -106,9 +115,14 @@ public class KinesisDynamicSink extends AsyncDynamicTableSink<PutRecordsRequestE
         SerializationSchema<RowData> serializationSchema =
                 encodingFormat.createRuntimeEncoder(context, consumedDataType);
 
+        SerializationSchema<RowData> actualSchema =
+                upsertMode
+                        ? new UpsertSerializationSchemaWrapper(serializationSchema)
+                        : serializationSchema;
+
         KinesisStreamsSinkBuilder<RowData> builder =
                 KinesisStreamsSink.<RowData>builder()
-                        .setSerializationSchema(serializationSchema)
+                        .setSerializationSchema(actualSchema)
                         .setPartitionKeyGenerator(partitioner)
                         .setKinesisClientProperties(kinesisClientProperties)
                         .setStreamArn(streamArn);
@@ -132,7 +146,8 @@ public class KinesisDynamicSink extends AsyncDynamicTableSink<PutRecordsRequestE
                 streamArn,
                 kinesisClientProperties,
                 encodingFormat,
-                partitioner);
+                partitioner,
+                upsertMode);
     }
 
     @Override
@@ -179,7 +194,8 @@ public class KinesisDynamicSink extends AsyncDynamicTableSink<PutRecordsRequestE
                 && Objects.equals(kinesisClientProperties, that.kinesisClientProperties)
                 && Objects.equals(encodingFormat, that.encodingFormat)
                 && Objects.equals(partitioner, that.partitioner)
-                && Objects.equals(failOnError, that.failOnError);
+                && Objects.equals(failOnError, that.failOnError)
+                && upsertMode == that.upsertMode;
     }
 
     @Override
@@ -191,7 +207,41 @@ public class KinesisDynamicSink extends AsyncDynamicTableSink<PutRecordsRequestE
                 kinesisClientProperties,
                 encodingFormat,
                 partitioner,
-                failOnError);
+                failOnError,
+                upsertMode);
+    }
+
+    /**
+     * Wraps a serialization schema to handle upsert semantics: writes the value for
+     * INSERT/UPDATE_AFTER and an empty payload for DELETE/UPDATE_BEFORE (tombstone).
+     */
+    @Internal
+    static class UpsertSerializationSchemaWrapper implements SerializationSchema<RowData> {
+
+        private static final long serialVersionUID = 1L;
+
+        private final SerializationSchema<RowData> inner;
+
+        UpsertSerializationSchemaWrapper(SerializationSchema<RowData> inner) {
+            this.inner = inner;
+        }
+
+        @Override
+        public void open(InitializationContext context) throws Exception {
+            inner.open(context);
+        }
+
+        @Override
+        public byte[] serialize(RowData element) {
+            RowKind kind = element.getRowKind();
+            if (kind == RowKind.DELETE || kind == RowKind.UPDATE_BEFORE) {
+                return new byte[0];
+            }
+            element.setRowKind(RowKind.INSERT);
+            byte[] bytes = inner.serialize(element);
+            element.setRowKind(kind);
+            return bytes;
+        }
     }
 
     /** Builder class for {@link KinesisDynamicSink}. */
@@ -206,6 +256,7 @@ public class KinesisDynamicSink extends AsyncDynamicTableSink<PutRecordsRequestE
         private EncodingFormat<SerializationSchema<RowData>> encodingFormat = null;
         private PartitionKeyGenerator<RowData> partitioner = null;
         private Boolean failOnError = null;
+        private boolean upsertMode = false;
 
         public KinesisDynamicTableSinkBuilder setConsumedDataType(DataType consumedDataType) {
             this.consumedDataType = consumedDataType;
@@ -245,6 +296,11 @@ public class KinesisDynamicSink extends AsyncDynamicTableSink<PutRecordsRequestE
             return this;
         }
 
+        public KinesisDynamicTableSinkBuilder setUpsertMode(boolean upsertMode) {
+            this.upsertMode = upsertMode;
+            return this;
+        }
+
         @Override
         public KinesisDynamicSink build() {
             return new KinesisDynamicSink(
@@ -258,7 +314,8 @@ public class KinesisDynamicSink extends AsyncDynamicTableSink<PutRecordsRequestE
                     streamArn,
                     kinesisClientProperties,
                     encodingFormat,
-                    partitioner);
+                    partitioner,
+                    upsertMode);
         }
     }
 }

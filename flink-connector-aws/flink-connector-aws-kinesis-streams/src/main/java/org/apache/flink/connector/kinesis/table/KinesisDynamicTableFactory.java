@@ -38,7 +38,9 @@ import org.apache.flink.table.factories.DynamicTableSourceFactory;
 import org.apache.flink.table.factories.FactoryUtil;
 import org.apache.flink.table.types.logical.RowType;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -92,6 +94,19 @@ public class KinesisDynamicTableFactory extends AsyncDynamicTableSinkFactory
         addAsyncOptionsToBuilder(properties, builder);
         Optional.ofNullable((Boolean) properties.get(SINK_FAIL_ON_ERROR.key()))
                 .ifPresent(builder::setFailOnError);
+
+        int[] primaryKeyIndexes = context.getPrimaryKeyIndexes();
+        if (primaryKeyIndexes != null && primaryKeyIndexes.length > 0) {
+            builder.setUpsertMode(true);
+            RowType rowType = (RowType) factoryContext.getPhysicalDataType().getLogicalType();
+            List<String> primaryKeyFields = new ArrayList<>();
+            for (int idx : primaryKeyIndexes) {
+                primaryKeyFields.add(rowType.getFieldNames().get(idx));
+            }
+            builder.setPartitioner(
+                    new RowDataFieldsKinesisPartitionKeyGenerator(rowType, primaryKeyFields));
+        }
+
         return builder.build();
     }
 
