@@ -45,13 +45,6 @@ public class DynamodbStreamsSourceConfigConstants {
                     .defaultValue(Duration.ofSeconds(60))
                     .withDescription("The interval between each attempt to discover new shards.");
 
-    public static final ConfigOption<Integer> DESCRIBE_STREAM_INCONSISTENCY_RESOLUTION_RETRY_COUNT =
-            ConfigOptions.key("flink.describestream.inconsistencyresolution.retries")
-                    .intType()
-                    .defaultValue(5)
-                    .withDescription(
-                            "The number of times to retry build shard lineage if describestream returns inconsistent response");
-
     public static final ConfigOption<Integer> DYNAMODB_STREAMS_RETRY_COUNT =
             ConfigOptions.key("flink.dynamodbstreams.numretries")
                     .intType()

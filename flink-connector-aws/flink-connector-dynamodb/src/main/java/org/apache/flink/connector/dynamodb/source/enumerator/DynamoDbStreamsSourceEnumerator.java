@@ -28,7 +28,6 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.InitialPosition;
 import org.apache.flink.connector.dynamodb.source.enumerator.event.SplitsFinishedEvent;
 import org.apache.flink.connector.dynamodb.source.enumerator.event.SplitsFinishedEventContext;
-import org.apache.flink.connector.dynamodb.source.enumerator.tracker.SplitGraphInconsistencyTracker;
 import org.apache.flink.connector.dynamodb.source.enumerator.tracker.SplitTracker;
 import org.apache.flink.connector.dynamodb.source.exception.DynamoDbStreamsSourceException;
 import org.apache.flink.connector.dynamodb.source.proxy.StreamProxy;
@@ -38,7 +37,6 @@ import org.apache.flink.connector.dynamodb.source.util.ListShardsResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.dynamodb.model.Shard;
-import software.amazon.awssdk.services.dynamodb.model.StreamStatus;
 
 import javax.annotation.Nullable;
 
@@ -54,7 +52,6 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.DESCRIBE_STREAM_INCONSISTENCY_RESOLUTION_RETRY_COUNT;
 import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.SHARD_DISCOVERY_INTERVAL;
 import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.STREAM_INITIAL_POSITION;
 
@@ -181,10 +178,6 @@ public class DynamoDbStreamsSourceEnumerator
             throw new DynamoDbStreamsSourceException("Failed to list shards.", throwable);
         }
 
-        if (discoveredSplits.getInconsistencyDetected()) {
-            return;
-        }
-
         splitTracker.addSplits(discoveredSplits.getShards());
         splitTracker.cleanUpOldFinishedSplits(
                 discoveredSplits.getShards().stream()
@@ -198,42 +191,6 @@ public class DynamoDbStreamsSourceEnumerator
             return;
         }
         assignAllAvailableSplits();
-    }
-
-    /**
-     * This method tracks the discovered splits in a graph and if the graph has inconsistencies, it
-     * tries to resolve them using DescribeStream calls using the first inconsistent node found in
-     * the split graph.
-     *
-     * @param discoveredSplits splits discovered after calling DescribeStream at the start of the
-     *     application or periodically.
-     */
-    private SplitGraphInconsistencyTracker trackSplitsAndResolveInconsistencies(
-            ListShardsResult discoveredSplits) {
-        SplitGraphInconsistencyTracker splitGraphInconsistencyTracker =
-                new SplitGraphInconsistencyTracker();
-        splitGraphInconsistencyTracker.addNodes(discoveredSplits.getShards());
-
-        // we don't want to do inconsistency checks for DISABLED streams because there will be no
-        // open child shard in DISABLED stream
-        boolean streamDisabled = discoveredSplits.getStreamStatus().equals(StreamStatus.DISABLED);
-        int describeStreamInconsistencyResolutionCount =
-                sourceConfig.get(DESCRIBE_STREAM_INCONSISTENCY_RESOLUTION_RETRY_COUNT);
-        for (int i = 0;
-                i < describeStreamInconsistencyResolutionCount
-                        && !streamDisabled
-                        && splitGraphInconsistencyTracker.inconsistencyDetected();
-                i++) {
-            String earliestClosedLeafNodeId =
-                    splitGraphInconsistencyTracker.getEarliestClosedLeafNode();
-            LOG.warn(
-                    "We have detected inconsistency with DescribeStream output, resolving inconsistency with shardId: {}",
-                    earliestClosedLeafNodeId);
-            ListShardsResult shardsToResolveInconsistencies =
-                    streamProxy.listShards(streamArn, earliestClosedLeafNodeId);
-            splitGraphInconsistencyTracker.addNodes(shardsToResolveInconsistencies.getShards());
-        }
-        return splitGraphInconsistencyTracker;
     }
 
     private void assignAllAvailableSplits() {
@@ -282,26 +239,7 @@ public class DynamoDbStreamsSourceEnumerator
      * @return list of discovered splits
      */
     private ListShardsResult discoverSplits() {
-        ListShardsResult listShardsResult = streamProxy.listShards(streamArn, null);
-        SplitGraphInconsistencyTracker splitGraphInconsistencyTracker =
-                trackSplitsAndResolveInconsistencies(listShardsResult);
-
-        ListShardsResult discoveredSplits = new ListShardsResult();
-        discoveredSplits.setStreamStatus(listShardsResult.getStreamStatus());
-        discoveredSplits.setInconsistencyDetected(listShardsResult.getInconsistencyDetected());
-        List<Shard> shardList = new ArrayList<>(splitGraphInconsistencyTracker.getNodes());
-        // We do not throw an exception here and just return to let SplitTracker process through the
-        // splits it has not yet processed. This might be helpful for large streams which see a lot
-        // of
-        // inconsistency issues.
-        if (splitGraphInconsistencyTracker.inconsistencyDetected()) {
-            LOG.error(
-                    "There are inconsistencies in DescribeStream which we were not able to resolve. First leaf node on which inconsistency was detected:"
-                            + splitGraphInconsistencyTracker.getEarliestClosedLeafNode());
-            return discoveredSplits;
-        }
-        discoveredSplits.addShards(shardList);
-        return discoveredSplits;
+        return streamProxy.listShards(streamArn, null);
     }
 
     private void assignSplitToSubtask(

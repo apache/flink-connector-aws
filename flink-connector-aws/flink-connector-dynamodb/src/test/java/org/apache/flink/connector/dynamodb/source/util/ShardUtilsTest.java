@@ -42,13 +42,4 @@ public class ShardUtilsTest {
         assertThat(ShardUtils.isShardOlderThanRetentionPeriod(oldShardId)).isTrue();
         assertThat(ShardUtils.isShardOlderThanRetentionPeriod(newShardId)).isFalse();
     }
-
-    @Test
-    void testIsShardOlderThanInconsistencyDetectionRetentionPeriod() {
-        Instant currentTime = Instant.now();
-        String oldShardId = "shardId-" + currentTime.minus(OLD_SHARD_DURATION).toEpochMilli();
-        String newShardId = "shardId-" + currentTime.toEpochMilli();
-        assertThat(ShardUtils.isShardOlderThanRetentionPeriod(oldShardId)).isTrue();
-        assertThat(ShardUtils.isShardOlderThanRetentionPeriod(newShardId)).isFalse();
-    }
 }

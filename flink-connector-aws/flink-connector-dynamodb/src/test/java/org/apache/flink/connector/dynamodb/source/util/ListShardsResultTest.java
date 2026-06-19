@@ -49,13 +49,6 @@ public class ListShardsResultTest {
     }
 
     @Test
-    void testSetInconsistencyDetected() {
-        ListShardsResult listShardsResult = new ListShardsResult();
-        listShardsResult.setInconsistencyDetected(true);
-        assertThat(listShardsResult.getInconsistencyDetected()).isEqualTo(true);
-    }
-
-    @Test
     void testEquals() {
         EqualsVerifier.simple().forClass(ListShardsResult.class).verify();
     }

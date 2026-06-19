@@ -36,12 +36,10 @@ import java.util.Objects;
 public class ListShardsResult {
     private final List<Shard> shards;
     private StreamStatus streamStatus;
-    private boolean inconsistencyDetected;
 
     public ListShardsResult() {
         this.shards = new ArrayList<>();
         this.streamStatus = StreamStatus.ENABLED;
-        this.inconsistencyDetected = false;
     }
 
     public void addShards(List<Shard> shardList) {
@@ -52,20 +50,12 @@ public class ListShardsResult {
         this.streamStatus = streamStatus;
     }
 
-    public void setInconsistencyDetected(boolean inconsistencyDetected) {
-        this.inconsistencyDetected = inconsistencyDetected;
-    }
-
     public List<Shard> getShards() {
         return this.shards;
     }
 
     public StreamStatus getStreamStatus() {
         return this.streamStatus;
-    }
-
-    public boolean getInconsistencyDetected() {
-        return this.inconsistencyDetected;
     }
 
     @Override
@@ -78,13 +68,12 @@ public class ListShardsResult {
         }
         ListShardsResult that = (ListShardsResult) o;
         return Objects.equals(shards, that.shards)
-                && Objects.equals(streamStatus, that.getStreamStatus())
-                && Objects.equals(inconsistencyDetected, that.inconsistencyDetected);
+                && Objects.equals(streamStatus, that.getStreamStatus());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(shards, streamStatus, inconsistencyDetected);
+        return Objects.hash(shards, streamStatus);
     }
 
     @Override
@@ -94,8 +83,6 @@ public class ListShardsResult {
                 + shards
                 + ", streamStatus="
                 + streamStatus.toString()
-                + ", inconsistencyDetected="
-                + inconsistencyDetected
                 + "}";
     }
 }
