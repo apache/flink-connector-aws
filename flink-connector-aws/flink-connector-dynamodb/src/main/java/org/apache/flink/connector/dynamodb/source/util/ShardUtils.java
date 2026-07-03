@@ -45,6 +45,7 @@ public class ShardUtils {
             Duration.ofHours(25);
 
     private static final String SHARD_ID_SEPARATOR = "-";
+
     /**
      * This method extracts the shard creation timestamp from the shardId.
      *

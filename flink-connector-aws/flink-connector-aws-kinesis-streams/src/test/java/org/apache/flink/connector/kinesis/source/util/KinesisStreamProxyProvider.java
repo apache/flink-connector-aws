@@ -275,8 +275,7 @@ public class KinesisStreamProxyProvider {
 
         private String getConsumerArnFromName(String consumerName) {
             Arn streamArn = Arn.fromString(STREAM_ARN);
-            return streamArn
-                    .toBuilder()
+            return streamArn.toBuilder()
                     .resource(
                             streamArn.resourceAsString()
                                     + "/consumer/"

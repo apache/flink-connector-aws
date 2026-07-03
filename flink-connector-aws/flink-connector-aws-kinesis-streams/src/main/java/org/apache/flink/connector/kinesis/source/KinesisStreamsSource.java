@@ -211,8 +211,8 @@ public class KinesisStreamsSource<T>
             Configuration sourceConfig, Map<String, KinesisShardMetrics> shardMetricGroupMap) {
         KinesisSourceConfigOptions.ReaderType readerType = sourceConfig.get(READER_TYPE);
         switch (readerType) {
-                // We create a new stream proxy for each split reader since they have their own
-                // independent lifecycle.
+            // We create a new stream proxy for each split reader since they have their own
+            // independent lifecycle.
             case POLLING:
                 return () ->
                         new PollingKinesisShardSplitReader(

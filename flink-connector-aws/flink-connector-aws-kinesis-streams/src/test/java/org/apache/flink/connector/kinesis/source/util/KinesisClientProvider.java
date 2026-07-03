@@ -95,9 +95,13 @@ public class KinesisClientProvider {
         @Override
         public GetShardIteratorResponse getShardIterator(
                 GetShardIteratorRequest getShardIteratorRequest)
-                throws ResourceNotFoundException, InvalidArgumentException,
-                        ProvisionedThroughputExceededException, AccessDeniedException,
-                        AwsServiceException, SdkClientException, KinesisException {
+                throws ResourceNotFoundException,
+                        InvalidArgumentException,
+                        ProvisionedThroughputExceededException,
+                        AccessDeniedException,
+                        AwsServiceException,
+                        SdkClientException,
+                        KinesisException {
             getShardIteratorValidation.accept(getShardIteratorRequest);
             return GetShardIteratorResponse.builder().shardIterator(shardIterators.poll()).build();
         }
@@ -108,9 +112,15 @@ public class KinesisClientProvider {
 
         @Override
         public ListShardsResponse listShards(ListShardsRequest listShardsRequest)
-                throws ResourceNotFoundException, InvalidArgumentException, LimitExceededException,
-                        ExpiredNextTokenException, ResourceInUseException, AccessDeniedException,
-                        AwsServiceException, SdkClientException, KinesisException {
+                throws ResourceNotFoundException,
+                        InvalidArgumentException,
+                        LimitExceededException,
+                        ExpiredNextTokenException,
+                        ResourceInUseException,
+                        AccessDeniedException,
+                        AwsServiceException,
+                        SdkClientException,
+                        KinesisException {
             ListShardItem item = listShardQueue.pop();
 
             item.validation.accept(listShardsRequest);
@@ -130,11 +140,19 @@ public class KinesisClientProvider {
 
         @Override
         public GetRecordsResponse getRecords(GetRecordsRequest getRecordsRequest)
-                throws ResourceNotFoundException, InvalidArgumentException,
-                        ProvisionedThroughputExceededException, ExpiredIteratorException,
-                        KmsDisabledException, KmsInvalidStateException, KmsAccessDeniedException,
-                        KmsNotFoundException, KmsOptInRequiredException, KmsThrottlingException,
-                        AccessDeniedException, AwsServiceException, SdkClientException,
+                throws ResourceNotFoundException,
+                        InvalidArgumentException,
+                        ProvisionedThroughputExceededException,
+                        ExpiredIteratorException,
+                        KmsDisabledException,
+                        KmsInvalidStateException,
+                        KmsAccessDeniedException,
+                        KmsNotFoundException,
+                        KmsOptInRequiredException,
+                        KmsThrottlingException,
+                        AccessDeniedException,
+                        AwsServiceException,
+                        SdkClientException,
                         KinesisException {
             getRecordsValidation.accept(getRecordsRequest);
             return getRecordsResponse;
@@ -153,8 +171,12 @@ public class KinesisClientProvider {
         @Override
         public DescribeStreamSummaryResponse describeStreamSummary(
                 DescribeStreamSummaryRequest describeStreamSummaryRequest)
-                throws ResourceNotFoundException, LimitExceededException, InvalidArgumentException,
-                        AccessDeniedException, AwsServiceException, SdkClientException,
+                throws ResourceNotFoundException,
+                        LimitExceededException,
+                        InvalidArgumentException,
+                        AccessDeniedException,
+                        AwsServiceException,
+                        SdkClientException,
                         KinesisException {
             describeStreamSummaryRequestValidation.accept(describeStreamSummaryRequest);
             return describeStreamSummaryResponse;

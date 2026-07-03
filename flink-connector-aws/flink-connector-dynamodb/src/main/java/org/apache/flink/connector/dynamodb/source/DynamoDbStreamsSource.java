@@ -194,8 +194,7 @@ public class DynamoDbStreamsSource<T>
         BackoffStrategy backoffStrategy =
                 BackoffStrategy.exponentialDelay(minDelayBetweenRetries, maxDelayBetweenRetries);
         AdaptiveRetryStrategy adaptiveRetryStrategy =
-                SdkDefaultRetryStrategy.adaptiveRetryStrategy()
-                        .toBuilder()
+                SdkDefaultRetryStrategy.adaptiveRetryStrategy().toBuilder()
                         .maxAttempts(maxApiCallAttempts)
                         .backoffStrategy(backoffStrategy)
                         .throttlingBackoffStrategy(backoffStrategy)
