@@ -81,6 +81,10 @@ jobs:
         with:
           maven-version: 3.8.6
 
+      - name: Set java11 compile target if required
+        if: ${{ matrix.jdk == 11 }}
+        run: echo "MVN_COMMON_OPTIONS=${MVN_COMMON_OPTIONS} -P java11-target" >> $GITHUB_ENV
+
       - name: Create cache dirs
         run: mkdir -p ${{ env.FLINK_CACHE_DIR }}
 
@@ -102,9 +106,9 @@ jobs:
         run: |
           set -o pipefail
 
-          mvn clean install -Dflink.convergence.phase=install -Pcheck-convergence -U -B ${{ env.MVN_CONNECTION_OPTIONS }} \
+          mvn clean install ${MVN_COMMON_OPTIONS} -Dflink.convergence.phase=install -Pcheck-convergence ${{ env.MVN_CONNECTION_OPTIONS }} \
             -DaltDeploymentRepository=validation_repository::default::file:${{ env.MVN_VALIDATION_DIR }} \
-            -Dflink.version=${{ inputs.flink_version }} | tee ${{ env.MVN_BUILD_OUTPUT_FILE }}
+            | tee ${{ env.MVN_BUILD_OUTPUT_FILE }}
 
       - name: Run e2e tests
         run: |
@@ -112,9 +116,8 @@ jobs:
 
           cd flink-connector-aws-e2e-tests
 
-          mvn clean verify ${{ env.MVN_CONNECTION_OPTIONS }} \
+          mvn clean verify ${MVN_COMMON_OPTIONS} ${{ env.MVN_CONNECTION_OPTIONS }} \
             -DaltDeploymentRepository=validation_repository::default::file:${{ env.MVN_VALIDATION_DIR }} \
-            -Dflink.version=${{ inputs.flink_version }}  \
             -Prun-end-to-end-tests -DdistDir=${{ env.FLINK_CACHE_DIR }}/flink-${{ inputs.flink_version }} \
             | tee ${{ env.MVN_BUILD_OUTPUT_FILE }}
 
@@ -127,9 +130,8 @@ jobs:
 
           cd flink-connector-aws-e2e-tests
 
-          mvn clean verify ${{ env.MVN_CONNECTION_OPTIONS }} \
+          mvn clean verify ${MVN_COMMON_OPTIONS} ${{ env.MVN_CONNECTION_OPTIONS }} \
             -DaltDeploymentRepository=validation_repository::default::file:${{ env.MVN_VALIDATION_DIR }} \
-            -Dflink.version=${{ inputs.flink_version }}  \
             -Prun-aws-end-to-end-tests -DdistDir=${{ env.FLINK_CACHE_DIR }}/flink-${{ inputs.flink_version }} \
             | tee ${{ env.MVN_BUILD_OUTPUT_FILE }}
 
