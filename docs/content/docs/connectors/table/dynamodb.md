@@ -310,6 +310,53 @@ WITH (
 );
 ```
 
+## Primary Key and CDC (Changelog) Streams
+
+When the DynamoDB sink consumes a changelog (CDC) stream that contains `DELETE`
+records (for example, from a Debezium source), you must declare a `PRIMARY KEY`
+on the table. DynamoDB requires a delete operation to be issued with only the
+table's key (its partition key and, if present, its sort key). The declared
+`PRIMARY KEY` tells the connector which columns form that key, so it can build a
+valid delete request instead of sending the whole row. The columns are used in
+the order they are declared: the first column is the partition key and the
+optional second column is the sort key.
+
+```sql
+CREATE TABLE DynamoDbTable (
+  `user_id` BIGINT,
+  `item_id` BIGINT,
+  `category_id` BIGINT,
+  `behavior` STRING,
+  PRIMARY KEY (user_id) NOT ENFORCED
+) PARTITIONED BY ( user_id )
+WITH (
+  'connector' = 'dynamodb',
+  'table-name' = 'user_behavior',
+  'aws.region' = 'us-east-2'
+);
+```
+
+If a `DELETE` record is received and no `PRIMARY KEY` has been declared, the sink
+fails with a clear error asking you to declare one. `INSERT` and `UPDATE_AFTER`
+records are unaffected by the `PRIMARY KEY` declaration and always write the full
+item.
+
+The `PRIMARY KEY` must have at most two columns, matching a DynamoDB key schema:
+the first column is the partition key and the optional second column is the sort
+key. Declaring more than two columns fails table creation. The `NOT ENFORCED`
+qualifier is required because Flink does not own the data and therefore cannot
+enforce key uniqueness; it only uses the declaration as metadata.
+
+Note that `PRIMARY KEY` is distinct from the `PARTITIONED BY` clause described in
+[Sink Partitioning](#sink-partitioning): `PARTITIONED BY` controls client-side
+deduplication of records within a batch, while `PRIMARY KEY` identifies the
+DynamoDB table key used to build delete requests. When `PRIMARY KEY` is declared
+but `PARTITIONED BY` is not, the sink automatically uses the primary key for
+client-side deduplication. This is required for changelog streams: a single batch
+may contain both an upsert and a delete for the same key, and without
+deduplication DynamoDB rejects the batch as containing duplicate keys. If you
+specify both clauses, they should normally list the same columns.
+
 ## Notice
 
 The current implementation of the DynamoDB SQL connector is write-only and doesn't provide an implementation for source queries.

@@ -34,6 +34,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -41,6 +43,7 @@ import java.util.stream.IntStream;
 
 import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 /** Test for {@link RowDataToAttributeValueConverter}. */
 public class RowDataToAttributeValueConverterTest {
@@ -690,6 +693,132 @@ public class RowDataToAttributeValueConverterTest {
                                 .build());
 
         assertThat(actualResult).containsAllEntriesOf(expectedResult);
+    }
+
+    @Test
+    void testDeleteOnlyPrimaryKey() {
+        String key = "key";
+        String value = "some_value";
+        String otherField = "other_field";
+        String otherValue = "other_value";
+
+        DataType dataType =
+                DataTypes.ROW(
+                        DataTypes.FIELD(key, DataTypes.STRING()),
+                        DataTypes.FIELD(otherField, DataTypes.STRING()));
+        RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
+                new RowDataToAttributeValueConverter(dataType, List.of(key));
+        Map<String, AttributeValue> actualResult =
+                rowDataToAttributeValueConverter.convertRowDataToKey(
+                        createElement(
+                                StringData.fromString(value), StringData.fromString(otherValue)));
+        Map<String, AttributeValue> expectedResult =
+                singletonMap(key, AttributeValue.builder().s(value).build());
+
+        assertThat(actualResult).containsExactlyInAnyOrderEntriesOf(expectedResult);
+    }
+
+    @Test
+    void testDeleteOnlyPrimaryKeys() {
+        String key = "key";
+        String value = "some_value";
+        String additionalKey = "additional_key";
+        String additionalValue = "additional_value";
+        String otherField = "other_field";
+        String otherValue = "other_value";
+
+        DataType dataType =
+                DataTypes.ROW(
+                        DataTypes.FIELD(key, DataTypes.STRING()),
+                        DataTypes.FIELD(additionalKey, DataTypes.STRING()),
+                        DataTypes.FIELD(otherField, DataTypes.STRING()));
+        RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
+                new RowDataToAttributeValueConverter(dataType, List.of(key, additionalKey));
+        Map<String, AttributeValue> actualResult =
+                rowDataToAttributeValueConverter.convertRowDataToKey(
+                        createElement(
+                                StringData.fromString(value),
+                                StringData.fromString(additionalValue),
+                                StringData.fromString(otherValue)));
+        Map<String, AttributeValue> expectedResult = new HashMap<>();
+        expectedResult.put(key, AttributeValue.builder().s(value).build());
+        expectedResult.put(additionalKey, AttributeValue.builder().s(additionalValue).build());
+
+        assertThat(actualResult).containsExactlyInAnyOrderEntriesOf(expectedResult);
+    }
+
+    @Test
+    void testPKIgnoredForInsert() {
+        String key = "key";
+        String value = "some_value";
+        String otherField = "other_field";
+        String otherValue = "other_value";
+
+        DataType dataType =
+                DataTypes.ROW(
+                        DataTypes.FIELD(key, DataTypes.STRING()),
+                        DataTypes.FIELD(otherField, DataTypes.STRING()));
+        // A primary key is configured, but convertRowData (used for INSERT/UPDATE_AFTER) must still
+        // return the full item.
+        RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
+                new RowDataToAttributeValueConverter(dataType, List.of(key));
+        Map<String, AttributeValue> actualResult =
+                rowDataToAttributeValueConverter.convertRowData(
+                        createElement(
+                                StringData.fromString(value), StringData.fromString(otherValue)));
+        Map<String, AttributeValue> expectedResult = new HashMap<>();
+        expectedResult.put(key, AttributeValue.builder().s(value).build());
+        expectedResult.put(otherField, AttributeValue.builder().s(otherValue).build());
+
+        assertThat(actualResult).containsExactlyInAnyOrderEntriesOf(expectedResult);
+    }
+
+    @Test
+    void testPKIgnoredForUpdateAfter() {
+        // convertRowData is used for both INSERT and UPDATE_AFTER; verifying it returns the full
+        // item confirms the primary key is ignored for UPDATE_AFTER as well.
+        String key = "key";
+        String value = "some_value";
+        String otherField = "other_field";
+        String otherValue = "other_value";
+
+        DataType dataType =
+                DataTypes.ROW(
+                        DataTypes.FIELD(key, DataTypes.STRING()),
+                        DataTypes.FIELD(otherField, DataTypes.STRING()));
+        RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
+                new RowDataToAttributeValueConverter(dataType, List.of(key, otherField));
+        Map<String, AttributeValue> actualResult =
+                rowDataToAttributeValueConverter.convertRowData(
+                        createElement(
+                                StringData.fromString(value), StringData.fromString(otherValue)));
+        Map<String, AttributeValue> expectedResult = new HashMap<>();
+        expectedResult.put(key, AttributeValue.builder().s(value).build());
+        expectedResult.put(otherField, AttributeValue.builder().s(otherValue).build());
+
+        assertThat(actualResult).containsExactlyInAnyOrderEntriesOf(expectedResult);
+    }
+
+    @Test
+    void testDeleteThrowsWhenPrimaryKeyValueIsMissing() {
+        String key = "key";
+        String otherField = "other_field";
+        String otherValue = "other_value";
+
+        DataType dataType =
+                DataTypes.ROW(
+                        DataTypes.FIELD(key, DataTypes.STRING()),
+                        DataTypes.FIELD(otherField, DataTypes.STRING()));
+        // ignoreNulls drops null attributes, so a null primary key value is absent from the item.
+        RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
+                new RowDataToAttributeValueConverter(dataType, List.of(key), true);
+
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(
+                        () ->
+                                rowDataToAttributeValueConverter.convertRowDataToKey(
+                                        createElement(null, StringData.fromString(otherValue))))
+                .withMessageContaining("missing a value for the primary key attribute");
     }
 
     private RowData createElement(Object... values) {

@@ -27,6 +27,8 @@ import org.apache.flink.table.api.TableException;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
 
+import java.util.List;
+
 /**
  * Implementation of an {@link ElementConverter} for the DynamoDb Table sink. The element converter
  * maps the Flink internal type of {@link RowData} to a {@link DynamoDbWriteRequest} to be used by
@@ -37,39 +39,54 @@ public class RowDataElementConverter implements ElementConverter<RowData, Dynamo
 
     private boolean ignoreNulls = false;
     private final DataType physicalDataType;
+    private final List<String> primaryKey;
     private transient RowDataToAttributeValueConverter rowDataToAttributeValueConverter;
 
     public RowDataElementConverter(DataType physicalDataType) {
-        this.physicalDataType = physicalDataType;
-        this.rowDataToAttributeValueConverter =
-                new RowDataToAttributeValueConverter(physicalDataType);
+        this(physicalDataType, List.of(), false);
     }
 
     public RowDataElementConverter(DataType physicalDataType, boolean ignoreNulls) {
-        this.ignoreNulls = ignoreNulls;
+        this(physicalDataType, List.of(), ignoreNulls);
+    }
+
+    public RowDataElementConverter(DataType physicalDataType, List<String> primaryKey) {
+        this(physicalDataType, primaryKey, false);
+    }
+
+    public RowDataElementConverter(
+            DataType physicalDataType, List<String> primaryKey, boolean ignoreNulls) {
         this.physicalDataType = physicalDataType;
+        this.primaryKey = primaryKey;
+        this.ignoreNulls = ignoreNulls;
         this.rowDataToAttributeValueConverter =
-                new RowDataToAttributeValueConverter(physicalDataType, ignoreNulls);
+                new RowDataToAttributeValueConverter(physicalDataType, primaryKey, ignoreNulls);
     }
 
     @Override
     public DynamoDbWriteRequest apply(RowData element, SinkWriter.Context context) {
         if (rowDataToAttributeValueConverter == null) {
             rowDataToAttributeValueConverter =
-                    new RowDataToAttributeValueConverter(physicalDataType, ignoreNulls);
+                    new RowDataToAttributeValueConverter(physicalDataType, primaryKey, ignoreNulls);
         }
 
-        DynamoDbWriteRequest.Builder builder =
-                DynamoDbWriteRequest.builder()
-                        .setItem(rowDataToAttributeValueConverter.convertRowData(element));
+        DynamoDbWriteRequest.Builder builder = DynamoDbWriteRequest.builder();
 
         switch (element.getRowKind()) {
             case INSERT:
             case UPDATE_AFTER:
-                builder.setType(DynamoDbWriteRequestType.PUT);
+                builder.setType(DynamoDbWriteRequestType.PUT)
+                        .setItem(rowDataToAttributeValueConverter.convertRowData(element));
                 break;
             case DELETE:
-                builder.setType(DynamoDbWriteRequestType.DELETE);
+                if (primaryKey.isEmpty()) {
+                    throw new TableException(
+                            "Cannot process a DELETE record because no PRIMARY KEY is defined on "
+                                    + "the DynamoDB table. Please declare a PRIMARY KEY on the "
+                                    + "table to support deletes from a changelog (CDC) stream.");
+                }
+                builder.setType(DynamoDbWriteRequestType.DELETE)
+                        .setItem(rowDataToAttributeValueConverter.convertRowDataToKey(element));
                 break;
             case UPDATE_BEFORE:
             default:

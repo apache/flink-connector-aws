@@ -31,8 +31,11 @@ import org.apache.flink.types.RowKind;
 import org.apache.flink.util.InstantiationUtil;
 
 import org.junit.jupiter.api.Test;
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
 import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -46,6 +49,8 @@ public class RowDataElementConverterTest {
                     DataTypes.FIELD("payload", DataTypes.STRING()));
     private static final RowDataElementConverter elementConverter =
             new RowDataElementConverter(DATA_TYPE);
+    private static final RowDataElementConverter elementConverterWithPrimaryKey =
+            new RowDataElementConverter(DATA_TYPE, List.of("partition_key"));
     private static final SinkWriter.Context context = new UnusedSinkWriterContext();
     private static final RowDataToAttributeValueConverter rowDataToAttributeValueConverter =
             new RowDataToAttributeValueConverter(DATA_TYPE);
@@ -89,16 +94,63 @@ public class RowDataElementConverterTest {
     }
 
     @Test
-    void testDelete() {
+    void testDeleteWithPrimaryKeyIncludesOnlyPrimaryKey() {
         RowData rowData = createElement(RowKind.DELETE);
-        DynamoDbWriteRequest actualWriteRequest = elementConverter.apply(rowData, context);
-        DynamoDbWriteRequest expectedWriterequest =
+        DynamoDbWriteRequest actualWriteRequest =
+                elementConverterWithPrimaryKey.apply(rowData, context);
+
+        Map<String, AttributeValue> expectedKey =
+                Map.of("partition_key", AttributeValue.builder().s("some_partition_key").build());
+        DynamoDbWriteRequest expectedWriteRequest =
                 DynamoDbWriteRequest.builder()
                         .setType(DynamoDbWriteRequestType.DELETE)
+                        .setItem(expectedKey)
+                        .build();
+
+        assertThat(actualWriteRequest).usingRecursiveComparison().isEqualTo(expectedWriteRequest);
+        // The non-key "payload" attribute must not be part of a DELETE request.
+        assertThat(actualWriteRequest.getItem()).containsOnlyKeys("partition_key");
+    }
+
+    @Test
+    void testDeleteWithoutPrimaryKeyThrows() {
+        RowData rowData = createElement(RowKind.DELETE);
+
+        assertThatExceptionOfType(TableException.class)
+                .isThrownBy(() -> elementConverter.apply(rowData, context))
+                .withMessageContaining("no PRIMARY KEY is defined");
+    }
+
+    @Test
+    void testPKIgnoredForInsert() {
+        RowData rowData = createElement(RowKind.INSERT);
+        DynamoDbWriteRequest actualWriteRequest =
+                elementConverterWithPrimaryKey.apply(rowData, context);
+        DynamoDbWriteRequest expectedWriteRequest =
+                DynamoDbWriteRequest.builder()
+                        .setType(DynamoDbWriteRequestType.PUT)
                         .setItem(rowDataToAttributeValueConverter.convertRowData(rowData))
                         .build();
 
-        assertThat(actualWriteRequest).usingRecursiveComparison().isEqualTo(expectedWriterequest);
+        assertThat(actualWriteRequest).usingRecursiveComparison().isEqualTo(expectedWriteRequest);
+        // Even with a primary key configured, an INSERT still carries the full item.
+        assertThat(actualWriteRequest.getItem()).containsOnlyKeys("partition_key", "payload");
+    }
+
+    @Test
+    void testPKIgnoredForUpdateAfter() {
+        RowData rowData = createElement(RowKind.UPDATE_AFTER);
+        DynamoDbWriteRequest actualWriteRequest =
+                elementConverterWithPrimaryKey.apply(rowData, context);
+        DynamoDbWriteRequest expectedWriteRequest =
+                DynamoDbWriteRequest.builder()
+                        .setType(DynamoDbWriteRequestType.PUT)
+                        .setItem(rowDataToAttributeValueConverter.convertRowData(rowData))
+                        .build();
+
+        assertThat(actualWriteRequest).usingRecursiveComparison().isEqualTo(expectedWriteRequest);
+        // Even with a primary key configured, an UPDATE_AFTER still carries the full item.
+        assertThat(actualWriteRequest.getItem()).containsOnlyKeys("partition_key", "payload");
     }
 
     @Test

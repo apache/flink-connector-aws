@@ -38,6 +38,7 @@ import software.amazon.awssdk.enhanced.dynamodb.TableSchema;
 import software.amazon.awssdk.enhanced.dynamodb.mapper.StaticTableSchema;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -51,21 +52,64 @@ public class RowDataToAttributeValueConverter {
 
     private final DataType physicalDataType;
     private final TableSchema<RowData> tableSchema;
+
+    /**
+     * Ordered primary key attribute names. Following DynamoDB's primary key definition, the first
+     * element is the partition key and the optional second element is the sort key. Used to build
+     * the key of a {@code DeleteRequest}, which must contain only the primary key attributes.
+     */
+    private final List<String> primaryKey;
+
     private boolean ignoreNulls = false;
 
     public RowDataToAttributeValueConverter(DataType physicalDataType) {
-        this.physicalDataType = physicalDataType;
-        this.tableSchema = createTableSchema();
+        this(physicalDataType, List.of(), false);
     }
 
     public RowDataToAttributeValueConverter(DataType physicalDataType, boolean ignoreNulls) {
+        this(physicalDataType, List.of(), ignoreNulls);
+    }
+
+    public RowDataToAttributeValueConverter(DataType physicalDataType, List<String> primaryKey) {
+        this(physicalDataType, primaryKey, false);
+    }
+
+    public RowDataToAttributeValueConverter(
+            DataType physicalDataType, List<String> primaryKey, boolean ignoreNulls) {
         this.physicalDataType = physicalDataType;
+        this.primaryKey = primaryKey;
         this.tableSchema = createTableSchema();
         this.ignoreNulls = ignoreNulls;
     }
 
     public Map<String, AttributeValue> convertRowData(RowData row) {
         return tableSchema.itemToMap(row, ignoreNulls);
+    }
+
+    /**
+     * Builds a map containing only the primary key attributes of the given row. This is used for
+     * {@code DELETE} requests, where DynamoDB requires the request to contain only the primary key
+     * (partition key and, if present, sort key) rather than the whole item.
+     *
+     * @param row the row to extract the primary key from
+     * @return a map of the primary key attribute names to their {@link AttributeValue}s
+     */
+    public Map<String, AttributeValue> convertRowDataToKey(RowData row) {
+        Map<String, AttributeValue> item = tableSchema.itemToMap(row, ignoreNulls);
+        Map<String, AttributeValue> key = new LinkedHashMap<>();
+        for (String keyAttributeName : primaryKey) {
+            AttributeValue value = item.get(keyAttributeName);
+            if (value == null) {
+                throw new IllegalArgumentException(
+                        String.format(
+                                "The row to delete is missing a value for the primary key "
+                                        + "attribute '%s'. A DELETE request must contain all "
+                                        + "primary key attributes.",
+                                keyAttributeName));
+            }
+            key.put(keyAttributeName, value);
+        }
+        return key;
     }
 
     private StaticTableSchema<RowData> createTableSchema() {

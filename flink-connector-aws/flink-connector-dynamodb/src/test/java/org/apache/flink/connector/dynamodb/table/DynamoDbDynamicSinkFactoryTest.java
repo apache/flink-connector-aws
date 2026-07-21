@@ -24,6 +24,7 @@ import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.catalog.Column;
 import org.apache.flink.table.catalog.ResolvedSchema;
+import org.apache.flink.table.catalog.UniqueConstraint;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.sink.SinkV2Provider;
 import org.apache.flink.table.data.RowData;
@@ -77,6 +78,7 @@ public class DynamoDbDynamicSinkFactoryTest {
                         DynamoDbDynamicSink.builder()
                                 .setTableName(DYNAMO_DB_TABLE_NAME)
                                 .setOverwriteByPartitionKeys(new HashSet<>(partitionKeys))
+                                .setPrimaryKey(List.of())
                                 .setDynamoDbClientProperties(dynamoDbClientProperties)
                                 .setPhysicalDataType(sinkSchema.toPhysicalRowDataType())
                                 .build();
@@ -109,6 +111,7 @@ public class DynamoDbDynamicSinkFactoryTest {
                         DynamoDbDynamicSink.builder()
                                 .setTableName(DYNAMO_DB_TABLE_NAME)
                                 .setOverwriteByPartitionKeys(new HashSet<>())
+                                .setPrimaryKey(List.of())
                                 .setDynamoDbClientProperties(defaultSinkProperties())
                                 .setPhysicalDataType(sinkSchema.toPhysicalRowDataType())
                                 .build();
@@ -127,6 +130,7 @@ public class DynamoDbDynamicSinkFactoryTest {
                         DynamoDbDynamicSink.builder()
                                 .setTableName(DYNAMO_DB_TABLE_NAME)
                                 .setOverwriteByPartitionKeys(new HashSet<>())
+                                .setPrimaryKey(List.of())
                                 .setDynamoDbClientProperties(defaultSinkProperties())
                                 .setPhysicalDataType(sinkSchema.toPhysicalRowDataType())
                                 .build();
@@ -154,6 +158,7 @@ public class DynamoDbDynamicSinkFactoryTest {
                         DynamoDbDynamicSink.builder()
                                 .setTableName(DYNAMO_DB_TABLE_NAME)
                                 .setOverwriteByPartitionKeys(new HashSet<>(partitionKeys))
+                                .setPrimaryKey(List.of())
                                 .setDynamoDbClientProperties(defaultSinkProperties())
                                 .setPhysicalDataType(sinkSchema.toPhysicalRowDataType())
                                 .setFailOnError(true)
@@ -187,6 +192,7 @@ public class DynamoDbDynamicSinkFactoryTest {
                         DynamoDbDynamicSink.builder()
                                 .setTableName(DYNAMO_DB_TABLE_NAME)
                                 .setOverwriteByPartitionKeys(new HashSet<>(partitionKeys))
+                                .setPrimaryKey(List.of())
                                 .setDynamoDbClientProperties(expectedSinkProperties)
                                 .setPhysicalDataType(sinkSchema.toPhysicalRowDataType())
                                 .setFailOnError(true)
@@ -219,6 +225,7 @@ public class DynamoDbDynamicSinkFactoryTest {
                         DynamoDbDynamicSink.builder()
                                 .setTableName(DYNAMO_DB_TABLE_NAME)
                                 .setOverwriteByPartitionKeys(new HashSet<>(partitionKeys))
+                                .setPrimaryKey(List.of())
                                 .setDynamoDbClientProperties(expectedSinkProperties)
                                 .setPhysicalDataType(sinkSchema.toPhysicalRowDataType())
                                 .setFailOnError(true)
@@ -255,6 +262,7 @@ public class DynamoDbDynamicSinkFactoryTest {
                                 .setMaxTimeInBufferMS(1000)
                                 .setTableName(DYNAMO_DB_TABLE_NAME)
                                 .setOverwriteByPartitionKeys(new HashSet<>(partitionKeys))
+                                .setPrimaryKey(List.of())
                                 .setDynamoDbClientProperties(defaultSinkProperties())
                                 .setPhysicalDataType(sinkSchema.toPhysicalRowDataType())
                                 .build();
@@ -314,6 +322,125 @@ public class DynamoDbDynamicSinkFactoryTest {
                 .havingCause()
                 .withMessageContaining("One or more required options are missing.")
                 .withMessageContaining(AWS_REGION.key());
+    }
+
+    @Test
+    void testPrimaryKeyIsReadFromSchema() {
+        ResolvedSchema sinkSchema =
+                new ResolvedSchema(
+                        defaultSinkColumns(),
+                        List.of(),
+                        UniqueConstraint.primaryKey("pk", List.of("partition_key")));
+        Map<String, String> sinkOptions = defaultSinkOptions().build();
+        List<String> partitionKeys = List.of("partition_key");
+
+        DynamoDbDynamicSink actualSink =
+                (DynamoDbDynamicSink) createTableSink(sinkSchema, partitionKeys, sinkOptions);
+
+        DynamoDbDynamicSink expectedSink =
+                (DynamoDbDynamicSink)
+                        DynamoDbDynamicSink.builder()
+                                .setTableName(DYNAMO_DB_TABLE_NAME)
+                                .setOverwriteByPartitionKeys(new HashSet<>(partitionKeys))
+                                .setPrimaryKey(List.of("partition_key"))
+                                .setDynamoDbClientProperties(defaultSinkProperties())
+                                .setPhysicalDataType(sinkSchema.toPhysicalRowDataType())
+                                .build();
+
+        assertThat(actualSink).usingRecursiveComparison().isEqualTo(expectedSink);
+    }
+
+    @Test
+    void testCompositePrimaryKeyPreservesOrder() {
+        ResolvedSchema sinkSchema =
+                new ResolvedSchema(
+                        defaultSinkColumns(),
+                        List.of(),
+                        UniqueConstraint.primaryKey("pk", List.of("partition_key", "sort_key")));
+        Map<String, String> sinkOptions = defaultSinkOptions().build();
+        List<String> partitionKeys = List.of("partition_key", "sort_key");
+
+        DynamoDbDynamicSink actualSink =
+                (DynamoDbDynamicSink) createTableSink(sinkSchema, partitionKeys, sinkOptions);
+
+        DynamoDbDynamicSink expectedSink =
+                (DynamoDbDynamicSink)
+                        DynamoDbDynamicSink.builder()
+                                .setTableName(DYNAMO_DB_TABLE_NAME)
+                                .setOverwriteByPartitionKeys(new HashSet<>(partitionKeys))
+                                .setPrimaryKey(List.of("partition_key", "sort_key"))
+                                .setDynamoDbClientProperties(defaultSinkProperties())
+                                .setPhysicalDataType(sinkSchema.toPhysicalRowDataType())
+                                .build();
+
+        assertThat(actualSink).usingRecursiveComparison().isEqualTo(expectedSink);
+    }
+
+    @Test
+    void testPrimaryKeyDefaultsPartitionKeysWhenNotPartitioned() {
+        // No PARTITIONED BY clause: the primary key must be used for client-side deduplication.
+        ResolvedSchema sinkSchema =
+                new ResolvedSchema(
+                        defaultSinkColumns(),
+                        List.of(),
+                        UniqueConstraint.primaryKey("pk", List.of("partition_key")));
+        Map<String, String> sinkOptions = defaultSinkOptions().build();
+
+        DynamoDbDynamicSink actualSink =
+                (DynamoDbDynamicSink) createTableSink(sinkSchema, sinkOptions);
+
+        DynamoDbDynamicSink expectedSink =
+                (DynamoDbDynamicSink)
+                        DynamoDbDynamicSink.builder()
+                                .setTableName(DYNAMO_DB_TABLE_NAME)
+                                .setOverwriteByPartitionKeys(
+                                        new HashSet<>(List.of("partition_key")))
+                                .setPrimaryKey(List.of("partition_key"))
+                                .setDynamoDbClientProperties(defaultSinkProperties())
+                                .setPhysicalDataType(sinkSchema.toPhysicalRowDataType())
+                                .build();
+
+        assertThat(actualSink).usingRecursiveComparison().isEqualTo(expectedSink);
+    }
+
+    @Test
+    void testBadTableSinkWithPrimaryKeyOfMoreThanTwoColumns() {
+        ResolvedSchema sinkSchema =
+                new ResolvedSchema(
+                        defaultSinkColumns(),
+                        List.of(),
+                        UniqueConstraint.primaryKey(
+                                "pk", List.of("partition_key", "sort_key", "payload")));
+        Map<String, String> sinkOptions = defaultSinkOptions().build();
+
+        assertThatExceptionOfType(ValidationException.class)
+                .isThrownBy(() -> createTableSink(sinkSchema, sinkOptions))
+                .havingCause()
+                .withMessageContaining("at most two columns");
+    }
+
+    @Test
+    void testBadTableSinkWithPartitionKeysDifferentFromPrimaryKey() {
+        ResolvedSchema sinkSchema =
+                new ResolvedSchema(
+                        defaultSinkColumns(),
+                        List.of(),
+                        UniqueConstraint.primaryKey("pk", List.of("partition_key")));
+        Map<String, String> sinkOptions = defaultSinkOptions().build();
+        // PARTITIONED BY (sort_key) differs from PRIMARY KEY (partition_key).
+        List<String> partitionKeys = List.of("sort_key");
+
+        assertThatExceptionOfType(ValidationException.class)
+                .isThrownBy(() -> createTableSink(sinkSchema, partitionKeys, sinkOptions))
+                .havingCause()
+                .withMessageContaining("must reference the same columns");
+    }
+
+    private List<Column> defaultSinkColumns() {
+        return List.of(
+                Column.physical("partition_key", DataTypes.STRING()),
+                Column.physical("sort_key", DataTypes.BIGINT()),
+                Column.physical("payload", DataTypes.STRING()));
     }
 
     private ResolvedSchema createResolvedSchemaUsingAllDataTypes() {

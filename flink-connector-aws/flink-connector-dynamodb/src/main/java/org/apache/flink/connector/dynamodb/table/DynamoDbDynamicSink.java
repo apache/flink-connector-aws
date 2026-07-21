@@ -34,6 +34,7 @@ import org.apache.flink.table.types.DataType;
 import javax.annotation.Nullable;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -52,6 +53,7 @@ public class DynamoDbDynamicSink extends AsyncDynamicTableSink<DynamoDbWriteRequ
     private final Properties dynamoDbClientProperties;
     private final DataType physicalDataType;
     private final Set<String> overwriteByPartitionKeys;
+    private final List<String> primaryKey;
 
     protected DynamoDbDynamicSink(
             @Nullable Integer maxBatchSize,
@@ -64,7 +66,8 @@ public class DynamoDbDynamicSink extends AsyncDynamicTableSink<DynamoDbWriteRequ
             boolean ignoreNulls,
             Properties dynamoDbClientProperties,
             DataType physicalDataType,
-            Set<String> overwriteByPartitionKeys) {
+            Set<String> overwriteByPartitionKeys,
+            List<String> primaryKey) {
         super(
                 maxBatchSize,
                 maxInFlightRequests,
@@ -77,6 +80,7 @@ public class DynamoDbDynamicSink extends AsyncDynamicTableSink<DynamoDbWriteRequ
         this.dynamoDbClientProperties = dynamoDbClientProperties;
         this.physicalDataType = physicalDataType;
         this.overwriteByPartitionKeys = overwriteByPartitionKeys;
+        this.primaryKey = primaryKey;
     }
 
     @Override
@@ -93,7 +97,8 @@ public class DynamoDbDynamicSink extends AsyncDynamicTableSink<DynamoDbWriteRequ
                         .setOverwriteByPartitionKeys(new ArrayList<>(overwriteByPartitionKeys))
                         .setDynamoDbProperties(dynamoDbClientProperties)
                         .setElementConverter(
-                                new RowDataElementConverter(physicalDataType, ignoreNulls));
+                                new RowDataElementConverter(
+                                        physicalDataType, primaryKey, ignoreNulls));
 
         addAsyncOptionsToSinkBuilder(builder);
 
@@ -113,7 +118,8 @@ public class DynamoDbDynamicSink extends AsyncDynamicTableSink<DynamoDbWriteRequ
                 ignoreNulls,
                 dynamoDbClientProperties,
                 physicalDataType,
-                overwriteByPartitionKeys);
+                overwriteByPartitionKeys,
+                primaryKey);
     }
 
     @Override
@@ -142,6 +148,7 @@ public class DynamoDbDynamicSink extends AsyncDynamicTableSink<DynamoDbWriteRequ
         private Properties dynamoDbClientProperties;
         private DataType physicalDataType;
         private Set<String> overwriteByPartitionKeys;
+        private List<String> primaryKey;
 
         public DynamoDbDynamicTableSinkBuilder setTableName(String tableName) {
             this.tableName = tableName;
@@ -175,6 +182,11 @@ public class DynamoDbDynamicSink extends AsyncDynamicTableSink<DynamoDbWriteRequ
             return this;
         }
 
+        public DynamoDbDynamicTableSinkBuilder setPrimaryKey(List<String> primaryKey) {
+            this.primaryKey = primaryKey;
+            return this;
+        }
+
         @Override
         public AsyncDynamicTableSink<DynamoDbWriteRequest> build() {
             return new DynamoDbDynamicSink(
@@ -188,7 +200,8 @@ public class DynamoDbDynamicSink extends AsyncDynamicTableSink<DynamoDbWriteRequ
                     ignoreNulls,
                     dynamoDbClientProperties,
                     physicalDataType,
-                    overwriteByPartitionKeys);
+                    overwriteByPartitionKeys,
+                    primaryKey);
         }
     }
 }
