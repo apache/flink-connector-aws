@@ -29,6 +29,7 @@ under the License.
 {{< label "Scan Source: Unbounded" >}}
 {{< label "Sink: Batch" >}}
 {{< label "Sink: Streaming Append Mode" >}}
+{{< label "Sink: Streaming Upsert Mode" >}}
 
 The Kinesis connector allows for reading data from and writing data into [Amazon Kinesis Data Streams (KDS)](https://aws.amazon.com/kinesis/data-streams/).
 
@@ -602,6 +603,48 @@ Valid values are:
 Records written into tables defining a `PARTITION BY` clause will always be partitioned based on a concatenated projection of the `PARTITION BY` fields.
 In this case, the `sink.partitioner` field cannot be used to modify this behavior (attempting to do this results in a configuration error).
 You can, however, use the `sink.partitioner-field-delimiter` option to set the delimiter of field values in the concatenated [PartitionKey](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_PutRecord.html#Streams-PutRecord-request-PartitionKey) string (an empty string is also a valid delimiter).
+{{< /hint >}}
+
+### Upsert Mode (Changelog Streams)
+
+The Kinesis connector supports writing **upsert changelog streams** when a `PRIMARY KEY` is defined on the table. This enables writing the results of aggregations (`GROUP BY`), deduplication, and streaming joins over append-only inputs directly to Kinesis Data Streams.
+
+When a primary key is present, the connector automatically:
+
+* Accepts `INSERT` and `UPDATE_AFTER` changelog events, serializing the full row for both
+* Uses the primary key fields as the Kinesis partition key (ensuring records with the same key are routed to the same shard)
+* Restricts the writer to a single in-flight request (`sink.requests.max-inflight` = `1`) so that batches cannot overtake each other and per-key ordering is preserved
+
+`DELETE` events are **not supported**: Kinesis records have no key/value separation, so a delete event cannot carry the deleted key in a format-agnostic way. Queries that can produce `DELETE` events (for example CDC sources or Top-N queries) are rejected at planning time with a descriptive error.
+
+The following are incompatible with upsert mode and produce a validation error:
+
+* the `sink.partitioner` option (the partition key is always derived from the primary key)
+* the `sink.requests.max-inflight` option with a value other than `1`
+* a `PARTITIONED BY` clause
+
+```sql
+CREATE TABLE aggregated_orders (
+  user_id STRING,
+  order_count BIGINT,
+  total_amount DECIMAL(10, 2),
+  PRIMARY KEY (user_id) NOT ENFORCED
+) WITH (
+  'connector' = 'kinesis',
+  'stream.arn' = 'arn:aws:kinesis:us-east-1:012345678901:stream/aggregated-orders',
+  'aws.region' = 'us-east-1',
+  'format' = 'json'
+);
+
+-- Write aggregation results to Kinesis
+INSERT INTO aggregated_orders
+SELECT user_id, COUNT(*), SUM(amount)
+FROM orders
+GROUP BY user_id;
+```
+
+{{< hint info >}}
+**Ordering considerations**: In upsert mode the connector limits each writer to a single in-flight request, so request batches cannot arrive out of order. Note that the Kinesis [PutRecords](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_PutRecords.html) API does not guarantee ordering between records within the same request: if multiple updates for the same primary key land in one batch, they may receive out-of-order sequence numbers. Downstream consumers requiring strict per-key ordering should deduplicate on a version attribute carried in the row, or reduce the chance of same-key co-occurrence by tuning `sink.batch.max-size`.
 {{< /hint >}}
 
 # Data Type Mapping

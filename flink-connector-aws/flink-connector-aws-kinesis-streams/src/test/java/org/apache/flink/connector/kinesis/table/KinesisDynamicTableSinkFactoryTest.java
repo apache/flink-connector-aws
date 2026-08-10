@@ -25,6 +25,8 @@ import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.catalog.Column;
 import org.apache.flink.table.catalog.ResolvedSchema;
+import org.apache.flink.table.catalog.UniqueConstraint;
+import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.sink.DynamicTableSink;
 import org.apache.flink.table.connector.sink.SinkV2Provider;
 import org.apache.flink.table.data.RowData;
@@ -33,11 +35,13 @@ import org.apache.flink.table.factories.TestFormatFactory;
 import org.apache.flink.table.runtime.connector.sink.SinkRuntimeProviderContext;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.types.RowKind;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -281,11 +285,123 @@ class KinesisDynamicTableSinkFactoryTest {
                 .withMessageContaining("Could not find and instantiate partitioner class 'abc'");
     }
 
+    @Test
+    void testGoodTableSinkForUpsertTableWithPrimaryKey() {
+        ResolvedSchema sinkSchema = defaultSinkSchemaWithPrimaryKey();
+        DataType physicalDataType = sinkSchema.toPhysicalRowDataType();
+        Map<String, String> sinkOptions = defaultTableOptions().build();
+
+        // Construct actual DynamicTableSink using FactoryUtil
+        KinesisDynamicSink actualSink =
+                (KinesisDynamicSink) createTableSink(sinkSchema, sinkOptions);
+
+        // Construct expected DynamicTableSink using factory under test
+        KinesisDynamicSink expectedSink =
+                new KinesisDynamicSink.KinesisDynamicTableSinkBuilder()
+                        .setMaxInFlightRequests(1)
+                        .setConsumedDataType(physicalDataType)
+                        .setStreamArn(TestUtil.STREAM_ARN)
+                        .setKinesisClientProperties(defaultProducerProperties())
+                        .setEncodingFormat(new TestFormatFactory.EncodingFormatMock(","))
+                        .setPartitioner(
+                                new RowDataFieldsKinesisPartitionKeyGenerator(
+                                        (RowType) physicalDataType.getLogicalType(),
+                                        Collections.singletonList("name")))
+                        .setUpsertMode(true)
+                        .build();
+        Assertions.assertThat(actualSink).isEqualTo(expectedSink);
+
+        // upsert mode accepts INSERT and UPDATE_AFTER only; DELETE-producing queries
+        // must be rejected during planning
+        ChangelogMode changelogMode = actualSink.getChangelogMode(ChangelogMode.all());
+        Assertions.assertThat(changelogMode.contains(RowKind.INSERT)).isTrue();
+        Assertions.assertThat(changelogMode.contains(RowKind.UPDATE_AFTER)).isTrue();
+        Assertions.assertThat(changelogMode.contains(RowKind.DELETE)).isFalse();
+        Assertions.assertThat(changelogMode.contains(RowKind.UPDATE_BEFORE)).isFalse();
+
+        // verify the produced sink
+        DynamicTableSink.SinkRuntimeProvider sinkFunctionProvider =
+                actualSink.getSinkRuntimeProvider(new SinkRuntimeProviderContext(false));
+        Sink<RowData> sinkFunction = ((SinkV2Provider) sinkFunctionProvider).createSink();
+        Assertions.assertThat(sinkFunction).isInstanceOf(KinesisStreamsSink.class);
+    }
+
+    @Test
+    void testGoodTableSinkForUpsertTableWithExplicitSingleInFlightRequest() {
+        ResolvedSchema sinkSchema = defaultSinkSchemaWithPrimaryKey();
+        Map<String, String> sinkOptions =
+                defaultTableOptions().withTableOption(MAX_IN_FLIGHT_REQUESTS.key(), "1").build();
+
+        // explicitly setting max in-flight requests to 1 is consistent with upsert mode
+        KinesisDynamicSink actualSink =
+                (KinesisDynamicSink) createTableSink(sinkSchema, sinkOptions);
+
+        Assertions.assertThat(
+                        actualSink.getChangelogMode(ChangelogMode.all()).contains(RowKind.DELETE))
+                .isFalse();
+    }
+
+    @Test
+    void testBadTableSinkForExplicitPartitionerWithPrimaryKey() {
+        ResolvedSchema sinkSchema = defaultSinkSchemaWithPrimaryKey();
+        Map<String, String> sinkOptions =
+                defaultTableOptions()
+                        .withTableOption(KinesisConnectorOptions.SINK_PARTITIONER, "random")
+                        .build();
+
+        Assertions.assertThatExceptionOfType(ValidationException.class)
+                .isThrownBy(() -> createTableSink(sinkSchema, sinkOptions))
+                .havingCause()
+                .withMessageContaining(
+                        String.format(
+                                "Cannot set %s option for a table defined with a PRIMARY KEY",
+                                KinesisConnectorOptions.SINK_PARTITIONER.key()));
+    }
+
+    @Test
+    void testBadTableSinkForMaxInFlightRequestsWithPrimaryKey() {
+        ResolvedSchema sinkSchema = defaultSinkSchemaWithPrimaryKey();
+        Map<String, String> sinkOptions =
+                defaultTableOptions().withTableOption(MAX_IN_FLIGHT_REQUESTS.key(), "5").build();
+
+        Assertions.assertThatExceptionOfType(ValidationException.class)
+                .isThrownBy(() -> createTableSink(sinkSchema, sinkOptions))
+                .havingCause()
+                .withMessageContaining("Upsert semantics require per-key ordering");
+    }
+
+    @Test
+    void testBadTableSinkForPartitionedTableWithPrimaryKey() {
+        ResolvedSchema sinkSchema = defaultSinkSchemaWithPrimaryKey();
+        Map<String, String> sinkOptions = defaultTableOptions().build();
+
+        Assertions.assertThatExceptionOfType(ValidationException.class)
+                .isThrownBy(
+                        () ->
+                                createTableSink(
+                                        sinkSchema,
+                                        Collections.singletonList("curr_id"),
+                                        sinkOptions))
+                .havingCause()
+                .withMessageContaining(
+                        "Cannot define a PARTITIONED BY clause for a table defined with a PRIMARY KEY");
+    }
+
     private ResolvedSchema defaultSinkSchema() {
         return ResolvedSchema.of(
                 Column.physical("name", DataTypes.STRING()),
                 Column.physical("curr_id", DataTypes.BIGINT()),
                 Column.physical("time", DataTypes.TIMESTAMP(3)));
+    }
+
+    private ResolvedSchema defaultSinkSchemaWithPrimaryKey() {
+        return new ResolvedSchema(
+                Arrays.asList(
+                        Column.physical("name", DataTypes.STRING().notNull()),
+                        Column.physical("curr_id", DataTypes.BIGINT()),
+                        Column.physical("time", DataTypes.TIMESTAMP(3))),
+                Collections.emptyList(),
+                UniqueConstraint.primaryKey("PK_name", Collections.singletonList("name")));
     }
 
     private TableOptionsBuilder defaultTableOptionsWithSinkOptions() {

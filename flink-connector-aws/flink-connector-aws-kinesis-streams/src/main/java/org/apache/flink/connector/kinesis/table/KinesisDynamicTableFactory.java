@@ -38,11 +38,15 @@ import org.apache.flink.table.factories.DynamicTableSourceFactory;
 import org.apache.flink.table.factories.FactoryUtil;
 import org.apache.flink.table.types.logical.RowType;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.flink.connector.base.table.AsyncSinkConnectorOptions.MAX_IN_FLIGHT_REQUESTS;
 import static org.apache.flink.connector.kinesis.table.KinesisConnectorOptions.AWS_REGION;
 import static org.apache.flink.connector.kinesis.table.KinesisConnectorOptions.SINK_FAIL_ON_ERROR;
 import static org.apache.flink.connector.kinesis.table.KinesisConnectorOptions.SINK_PARTITIONER;
@@ -92,7 +96,52 @@ public class KinesisDynamicTableFactory extends AsyncDynamicTableSinkFactory
         addAsyncOptionsToBuilder(properties, builder);
         Optional.ofNullable((Boolean) properties.get(SINK_FAIL_ON_ERROR.key()))
                 .ifPresent(builder::setFailOnError);
+
+        int[] primaryKeyIndexes = context.getPrimaryKeyIndexes();
+        if (primaryKeyIndexes.length > 0) {
+            validateUpsertMode(
+                    context.getCatalogTable().getOptions(), factoryContext.isPartitioned());
+            builder.setUpsertMode(true);
+            // Upsert semantics require per-key ordering: batches must not overtake each
+            // other, so allow at most one in-flight request per writer.
+            builder.setMaxInFlightRequests(1);
+            RowType rowType = (RowType) factoryContext.getPhysicalDataType().getLogicalType();
+            List<String> primaryKeyFields = new ArrayList<>();
+            for (int idx : primaryKeyIndexes) {
+                primaryKeyFields.add(rowType.getFieldNames().get(idx));
+            }
+            builder.setPartitioner(
+                    new RowDataFieldsKinesisPartitionKeyGenerator(rowType, primaryKeyFields));
+        }
+
         return builder.build();
+    }
+
+    private static void validateUpsertMode(Map<String, String> tableOptions, boolean partitioned) {
+        if (partitioned) {
+            throw new ValidationException(
+                    "Cannot define a PARTITIONED BY clause for a table defined with a PRIMARY KEY. "
+                            + "In upsert mode the partition key is derived from the primary key fields.");
+        }
+        if (tableOptions.containsKey(SINK_PARTITIONER.key())) {
+            throw new ValidationException(
+                    String.format(
+                            "Cannot set %s option for a table defined with a PRIMARY KEY. "
+                                    + "In upsert mode the partition key is derived from the primary "
+                                    + "key fields so that changelog records for the same key are "
+                                    + "routed to the same shard.",
+                            SINK_PARTITIONER.key()));
+        }
+        String maxInFlightRequests = tableOptions.get(MAX_IN_FLIGHT_REQUESTS.key());
+        if (maxInFlightRequests != null && !"1".equals(maxInFlightRequests.trim())) {
+            throw new ValidationException(
+                    String.format(
+                            "Invalid option %s = '%s' for a table defined with a PRIMARY KEY. "
+                                    + "Upsert semantics require per-key ordering, which the Kinesis "
+                                    + "sink only provides with a single in-flight request per "
+                                    + "writer. Remove the option or set it to 1.",
+                            MAX_IN_FLIGHT_REQUESTS.key(), maxInFlightRequests));
+        }
     }
 
     @Override
