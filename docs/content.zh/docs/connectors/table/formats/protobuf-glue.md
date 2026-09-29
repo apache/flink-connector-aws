@@ -45,13 +45,7 @@ For SQL Client usage, download the fat JAR `flink-sql-protobuf-glue-schema-regis
 
 To use the format in a DataStream or Table API program, add the following dependency to your project:
 
-```xml
-<dependency>
-  <groupId>org.apache.flink</groupId>
-  <artifactId>flink-protobuf-glue-schema-registry</artifactId>
-  <version>6.0.0</version>
-</dependency>
-```
+{{< connector_artifact flink-protobuf-glue-schema-registry protobuf-glue >}}
 
 How to create a table with Protobuf-Glue format
 -------------------------------------------------
@@ -168,9 +162,9 @@ Format Options
       <td><h5>protobuf-glue.schema.compatibility</h5></td>
       <td>optional</td>
       <td>yes</td>
-      <td style="word-wrap: break-word;">NONE</td>
+      <td style="word-wrap: break-word;">BACKWARD</td>
       <td>String</td>
-      <td>Schema compatibility mode. Supported values: <code>NONE</code>, <code>DISABLED</code>, <code>BACKWARD</code>, <code>BACKWARD_ALL</code>, <code>FORWARD</code>, <code>FORWARD_ALL</code>, <code>FULL</code>, <code>FULL_ALL</code>.</td>
+      <td>Schema compatibility mode applied by the registry when a new schema version is registered (see <a href="https://docs.aws.amazon.com/glue/latest/dg/schema-registry.html#schema-registry-compatibility">AWS Glue Schema Registry compatibility modes</a>). Defaults to the registry client's default, <code>BACKWARD</code>. Supported values: <code>NONE</code>, <code>DISABLED</code>, <code>BACKWARD</code>, <code>BACKWARD_ALL</code>, <code>FORWARD</code>, <code>FORWARD_ALL</code>, <code>FULL</code>, <code>FULL_ALL</code>.</td>
     </tr>
     <tr>
       <td><h5>protobuf-glue.schema.compression</h5></td>
@@ -186,7 +180,7 @@ Format Options
 Data Type Mapping
 -----------------
 
-The Protobuf-Glue format maps between Flink SQL types and Protobuf types as follows:
+The Protobuf-Glue format generates a proto3 message from the table's row type and maps Flink SQL types to Protobuf field types as follows:
 
 <table class="table table-bordered">
     <thead>
@@ -201,7 +195,7 @@ The Protobuf-Glue format maps between Flink SQL types and Protobuf types as foll
       <td><code>bool</code></td>
     </tr>
     <tr>
-      <td><code>INT</code></td>
+      <td><code>TINYINT</code> / <code>SMALLINT</code> / <code>INT</code></td>
       <td><code>int32</code></td>
     </tr>
     <tr>
@@ -217,27 +211,35 @@ The Protobuf-Glue format maps between Flink SQL types and Protobuf types as foll
       <td><code>double</code></td>
     </tr>
     <tr>
-      <td><code>STRING</code></td>
+      <td><code>DECIMAL</code></td>
+      <td><code>string</code> (lossless <code>BigDecimal</code> text form)</td>
+    </tr>
+    <tr>
+      <td><code>CHAR</code> / <code>VARCHAR</code> / <code>STRING</code></td>
       <td><code>string</code></td>
     </tr>
     <tr>
-      <td><code>BYTES</code></td>
+      <td><code>BINARY</code> / <code>VARBINARY</code> / <code>BYTES</code></td>
       <td><code>bytes</code></td>
     </tr>
     <tr>
-      <td><code>ARRAY</code></td>
-      <td><code>repeated</code></td>
+      <td><code>DATE</code></td>
+      <td><code>int32</code> (epoch days)</td>
     </tr>
     <tr>
-      <td><code>MAP</code></td>
-      <td><code>map</code></td>
+      <td><code>TIME</code></td>
+      <td><code>int32</code> (milliseconds of day)</td>
     </tr>
     <tr>
-      <td><code>ROW</code></td>
-      <td><code>message</code> (nested)</td>
+      <td><code>TIMESTAMP</code> / <code>TIMESTAMP_LTZ</code></td>
+      <td><code>int64</code> (epoch milliseconds)</td>
     </tr>
     </tbody>
 </table>
+
+{{< hint warning >}}
+`ARRAY`, `MAP`, `MULTISET` and `ROW` columns are **not** supported by this format and are rejected at table creation (see Limitations). The format does not generate `repeated`, `map` or nested `message` fields.
+{{< /hint >}}
 
 Limitations
 -----------

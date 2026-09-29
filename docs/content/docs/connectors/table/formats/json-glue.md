@@ -45,13 +45,7 @@ For SQL Client usage, download the fat JAR `flink-sql-json-glue-schema-registry`
 
 To use the format in a DataStream or Table API program, add the following dependency to your project:
 
-```xml
-<dependency>
-  <groupId>org.apache.flink</groupId>
-  <artifactId>flink-json-glue-schema-registry</artifactId>
-  <version>6.0.0</version>
-</dependency>
-```
+{{< connector_artifact flink-json-glue-schema-registry json-glue >}}
 
 How to create a table with JSON-Glue format
 --------------------------------------------
@@ -168,9 +162,9 @@ Format Options
       <td><h5>json-glue.schema.compatibility</h5></td>
       <td>optional</td>
       <td>yes</td>
-      <td style="word-wrap: break-word;">NONE</td>
+      <td style="word-wrap: break-word;">BACKWARD</td>
       <td>String</td>
-      <td>Schema compatibility mode. Supported values: <code>NONE</code>, <code>DISABLED</code>, <code>BACKWARD</code>, <code>BACKWARD_ALL</code>, <code>FORWARD</code>, <code>FORWARD_ALL</code>, <code>FULL</code>, <code>FULL_ALL</code>.</td>
+      <td>Schema compatibility mode applied by the registry when a new schema version is registered (see <a href="https://docs.aws.amazon.com/glue/latest/dg/schema-registry.html#schema-registry-compatibility">AWS Glue Schema Registry compatibility modes</a>). Defaults to the registry client's default, <code>BACKWARD</code>. Supported values: <code>NONE</code>, <code>DISABLED</code>, <code>BACKWARD</code>, <code>BACKWARD_ALL</code>, <code>FORWARD</code>, <code>FORWARD_ALL</code>, <code>FULL</code>, <code>FULL_ALL</code>.</td>
     </tr>
     <tr>
       <td><h5>json-glue.schema.compression</h5></td>
@@ -186,13 +180,13 @@ Format Options
 Data Type Mapping
 -----------------
 
-The JSON-Glue format uses Flink's built-in JSON serialization/deserialization. The mapping between Flink SQL types and JSON types follows the standard Flink JSON format:
+The JSON-Glue format uses Flink's built-in JSON serialization/deserialization for the record payload, and registers a JSON Schema (draft-07) derived from the table's row type. The mapping between Flink SQL types and JSON Schema types is:
 
 <table class="table table-bordered">
     <thead>
     <tr>
         <th class="text-left">Flink SQL Type</th>
-        <th class="text-left">JSON Type</th>
+        <th class="text-left">JSON Schema Type</th>
     </tr>
     </thead>
     <tbody>
@@ -202,7 +196,7 @@ The JSON-Glue format uses Flink's built-in JSON serialization/deserialization. T
     </tr>
     <tr>
       <td><code>TINYINT</code> / <code>SMALLINT</code> / <code>INT</code> / <code>BIGINT</code></td>
-      <td><code>number</code></td>
+      <td><code>integer</code></td>
     </tr>
     <tr>
       <td><code>FLOAT</code> / <code>DOUBLE</code></td>

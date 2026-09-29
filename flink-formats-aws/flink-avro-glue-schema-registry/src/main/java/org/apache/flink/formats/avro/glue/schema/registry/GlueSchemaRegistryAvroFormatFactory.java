@@ -164,7 +164,6 @@ public class GlueSchemaRegistryAvroFormatFactory
         options.add(GlueFormatOptions.SCHEMA_AUTO_REGISTRATION);
         options.add(GlueFormatOptions.SCHEMA_COMPATIBILITY);
         options.add(GlueFormatOptions.SCHEMA_COMPRESSION);
-        options.add(AvroGlueFormatOptions.SCHEMA_TYPE);
         options.add(AvroGlueFormatOptions.AVRO_NAMESPACE);
         options.add(AvroGlueFormatOptions.AVRO_RECORD_NAME);
         options.add(AvroGlueFormatOptions.SCHEMA_FETCH_FROM_REGISTRY);
@@ -183,7 +182,6 @@ public class GlueSchemaRegistryAvroFormatFactory
                         GlueFormatOptions.SCHEMA_AUTO_REGISTRATION,
                         GlueFormatOptions.SCHEMA_COMPATIBILITY,
                         GlueFormatOptions.SCHEMA_COMPRESSION,
-                        AvroGlueFormatOptions.SCHEMA_TYPE,
                         AvroGlueFormatOptions.AVRO_NAMESPACE,
                         AvroGlueFormatOptions.AVRO_RECORD_NAME,
                         AvroGlueFormatOptions.SCHEMA_FETCH_FROM_REGISTRY)

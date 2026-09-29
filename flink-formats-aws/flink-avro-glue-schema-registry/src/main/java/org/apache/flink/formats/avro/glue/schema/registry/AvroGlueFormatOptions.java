@@ -22,8 +22,6 @@ import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
 
-import com.amazonaws.services.schemaregistry.utils.AvroRecordType;
-
 /**
  * Avro-specific configuration options for the AWS Glue Schema Registry Avro format factory.
  *
@@ -32,12 +30,6 @@ import com.amazonaws.services.schemaregistry.utils.AvroRecordType;
  */
 @PublicEvolving
 public class AvroGlueFormatOptions extends GlueFormatOptions {
-
-    public static final ConfigOption<AvroRecordType> SCHEMA_TYPE =
-            ConfigOptions.key("schema.type")
-                    .enumType(AvroRecordType.class)
-                    .defaultValue(AvroRecordType.GENERIC_RECORD)
-                    .withDescription("Avro record type. Defaults to GENERIC_RECORD.");
 
     public static final ConfigOption<String> AVRO_NAMESPACE =
             ConfigOptions.key("avro.namespace")

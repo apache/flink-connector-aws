@@ -45,13 +45,7 @@ For SQL Client usage, download the fat JAR `flink-sql-avro-glue-schema-registry`
 
 To use the format in a DataStream or Table API program, add the following dependency to your project:
 
-```xml
-<dependency>
-  <groupId>org.apache.flink</groupId>
-  <artifactId>flink-avro-glue-schema-registry</artifactId>
-  <version>6.0.0</version>
-</dependency>
-```
+{{< connector_artifact flink-avro-glue-schema-registry avro-glue >}}
 
 How to create a table with Avro-Glue format
 --------------------------------------------
@@ -81,7 +75,7 @@ CREATE TABLE KinesisTable (
 Schema Namespace Override
 -------------------------
 
-Flink's `AvroSchemaConverter` auto-generates an Avro schema from the SQL table definition. The generated schema uses a default namespace (`org.apache.flink.avro.generated`) and record name (`record`) that may differ from schemas already registered in Glue Schema Registry.
+Flink's `AvroSchemaConverter` auto-generates an Avro schema from the SQL table definition and records are always written and read as Avro `GenericRecord`s (there is no `SPECIFIC_RECORD` mode on the SQL path). The generated schema uses a default namespace (`org.apache.flink.avro.generated`) and record name (`record`) that may differ from schemas already registered in Glue Schema Registry.
 
 If your GSR registry already contains a schema with a specific namespace or record name, you can override the auto-generated values using the `avro.namespace` and `avro.record-name` options:
 
@@ -180,14 +174,6 @@ Format Options
       <td>Custom AWS endpoint URL for Glue Schema Registry.</td>
     </tr>
     <tr>
-      <td><h5>avro-glue.schema.type</h5></td>
-      <td>optional</td>
-      <td>yes</td>
-      <td style="word-wrap: break-word;">GENERIC_RECORD</td>
-      <td>String</td>
-      <td>Avro record type. Supported values: <code>GENERIC_RECORD</code>, <code>SPECIFIC_RECORD</code>.</td>
-    </tr>
-    <tr>
       <td><h5>avro-glue.avro.namespace</h5></td>
       <td>optional</td>
       <td>yes</td>
@@ -239,9 +225,9 @@ Format Options
       <td><h5>avro-glue.schema.compatibility</h5></td>
       <td>optional</td>
       <td>yes</td>
-      <td style="word-wrap: break-word;">NONE</td>
+      <td style="word-wrap: break-word;">BACKWARD</td>
       <td>String</td>
-      <td>Schema compatibility mode. Supported values: <code>NONE</code>, <code>DISABLED</code>, <code>BACKWARD</code>, <code>BACKWARD_ALL</code>, <code>FORWARD</code>, <code>FORWARD_ALL</code>, <code>FULL</code>, <code>FULL_ALL</code>.</td>
+      <td>Schema compatibility mode applied by the registry when a new schema version is registered (see <a href="https://docs.aws.amazon.com/glue/latest/dg/schema-registry.html#schema-registry-compatibility">AWS Glue Schema Registry compatibility modes</a>). Defaults to the registry client's default, <code>BACKWARD</code>. Supported values: <code>NONE</code>, <code>DISABLED</code>, <code>BACKWARD</code>, <code>BACKWARD_ALL</code>, <code>FORWARD</code>, <code>FORWARD_ALL</code>, <code>FULL</code>, <code>FULL_ALL</code>.</td>
     </tr>
     <tr>
       <td><h5>avro-glue.schema.compression</h5></td>
@@ -335,7 +321,7 @@ Limitations
 
 * **Type support**: the writer schema is derived with Flink's `AvroSchemaConverter`, so the format supports exactly the Flink SQL types the built-in Avro format supports (see the mapping above). Types the converter cannot express (`INTERVAL`, `RAW`, structured types) fail at table creation with the converter's own error rather than being written as `string`.
 * **Schema compatibility is enforced by the registry, not by Flink**: when `schema.autoRegistration` is enabled and a schema version already exists, AWS Glue Schema Registry applies the registry's compatibility mode. A table whose generated schema is incompatible fails on the first record with the registry's `AWSSchemaRegistryException`.
-* **Single writer schema per table**: the format registers one schema (from the table's row type, or from `avro.schema` when given). Records serialized by other producers under a different schema version are read through Avro schema resolution against the table's schema; fields the table does not declare are dropped.
+* **Single writer schema per table**: the format registers one schema, derived from the table's row type (optionally renamed with `avro.namespace` / `avro.record-name`, or replaced by the registry copy with `schema.fetchFromRegistry`). Records serialized by other producers under a different schema version are read through Avro schema resolution against the table's schema; fields the table does not declare are dropped.
 * **Registry lookups on the source**: with `schema.fetchFromRegistry = true` the source fetches the writer schema by the UUID in each record's header and caches it. A record whose schema version is not readable with the configured credentials fails the task.
 
 Usage with Kinesis and Firehose Connectors
