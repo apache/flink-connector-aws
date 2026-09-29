@@ -247,6 +247,14 @@ The JSON-Glue format uses Flink's built-in JSON serialization/deserialization. T
     </tbody>
 </table>
 
+Limitations
+-----------
+
+* **Type support**: the writer schema is a JSON Schema generated from the table's row type. The supported Flink SQL types are the scalar types (`BOOLEAN`, the `INT` family, `FLOAT`/`DOUBLE`, `DECIMAL`, `CHAR`/`VARCHAR`, `BINARY`/`VARBINARY`, `DATE`, `TIME`, `TIMESTAMP`, `TIMESTAMP_LTZ`) and the container types `ARRAY`, `MAP` and `ROW`. Any other type (`MULTISET`, `INTERVAL`, `RAW`, structured types) is rejected at table creation with an `UnsupportedOperationException` naming the type, instead of being silently coerced to `string`.
+* **`MAP` keys must be strings**: JSON object keys are strings, so a `MAP` whose key type is not `CHAR`/`VARCHAR` is rejected with the same exception.
+* **Lossy JSON Schema types**: the generated schema declares `integer` for every `INT` family type, `number` for `FLOAT`/`DOUBLE`/`DECIMAL`, and `string` (with a `format` or `contentEncoding` annotation) for temporal and binary types. Precision, scale and length are not part of the registered schema; they are enforced by the table definition on the Flink side only.
+* **Validation is structural**: records are (de)serialized with Flink's built-in JSON format; the registered schema is used for registry compatibility checks and for the GSR header, not for per-record JSON Schema validation.
+
 Usage with Kinesis and Firehose Connectors
 ------------------------------------------
 

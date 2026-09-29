@@ -330,6 +330,14 @@ The Avro-Glue format uses Flink's built-in `AvroSchemaConverter` to map between 
 Nullable Flink SQL types are mapped to Avro union types `["null", "type"]`. Flink SQL types are nullable by default, so the auto-generated Avro schema will use union types for all fields unless `NOT NULL` constraints are specified.
 {{< /hint >}}
 
+Limitations
+-----------
+
+* **Type support**: the writer schema is derived with Flink's `AvroSchemaConverter`, so the format supports exactly the Flink SQL types the built-in Avro format supports (see the mapping above). Types the converter cannot express (`INTERVAL`, `RAW`, structured types) fail at table creation with the converter's own error rather than being written as `string`.
+* **Schema compatibility is enforced by the registry, not by Flink**: when `schema.autoRegistration` is enabled and a schema version already exists, AWS Glue Schema Registry applies the registry's compatibility mode. A table whose generated schema is incompatible fails on the first record with the registry's `AWSSchemaRegistryException`.
+* **Single writer schema per table**: the format registers one schema (from the table's row type, or from `avro.schema` when given). Records serialized by other producers under a different schema version are read through Avro schema resolution against the table's schema; fields the table does not declare are dropped.
+* **Registry lookups on the source**: with `schema.fetchFromRegistry = true` the source fetches the writer schema by the UUID in each record's header and caches it. A record whose schema version is not readable with the configured credentials fails the task.
+
 Usage with Kinesis and Firehose Connectors
 ------------------------------------------
 

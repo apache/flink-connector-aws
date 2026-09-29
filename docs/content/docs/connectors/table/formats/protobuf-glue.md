@@ -239,6 +239,14 @@ The Protobuf-Glue format maps between Flink SQL types and Protobuf types as foll
     </tbody>
 </table>
 
+Limitations
+-----------
+
+* **Scalar fields only**: the generated proto3 schema supports the scalar Flink SQL types listed in the mapping above (`BOOLEAN`, the `INT` family, `FLOAT`/`DOUBLE`, `DECIMAL`, `CHAR`/`VARCHAR`, `BINARY`/`VARBINARY`, `DATE`, `TIME`, `TIMESTAMP`, `TIMESTAMP_LTZ`). Complex types (`ARRAY`, `MAP`, `MULTISET`, `ROW`, `RAW`, structured types) are rejected at table creation with an `UnsupportedOperationException` naming the type, instead of being silently coerced to `string`. Nested messages and `repeated` fields are therefore not produced by this format.
+* **Lossy Protobuf types**: `DECIMAL` is written as its lossless `BigDecimal` text form in a `string` field; `DATE` as `int32` epoch days; `TIME` as `int32` milliseconds of day; `TIMESTAMP`/`TIMESTAMP_LTZ` as `int64` epoch milliseconds, so sub-millisecond precision is truncated. The declared precision, scale and length are enforced by the table definition on the Flink side only.
+* **Field names are sanitized**: SQL column names that are not valid proto identifiers are rewritten (see the format description above); the original column name is preserved as the field's `json_name`, so reads through the same table round-trip correctly.
+* **Reading foreign schemas**: on the source, only proto3 scalar field types in the writer schema are decoded (`bool`, the `int32`/`int64` families, `float`, `double`, `string`, `bytes`). A writer schema using other field types fails the task with an `IllegalArgumentException` naming the field type.
+
 Usage with Kinesis and Firehose Connectors
 ------------------------------------------
 
