@@ -164,6 +164,86 @@ class JsonSchemaConverterTest {
                         "\"addr\":{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\"street\":{\"type\":\"string\"}}");
     }
 
+    // ---- Composition: parameterized / nullable / structured types inside containers ----------
+
+    /** Element nullability and formats must survive inside an array, not only at top level. */
+    @Test
+    void testArrayOfNullableTimestampsKeepsUnionAndFormat() {
+        RowType rowType = row(f("times", new ArrayType(false, new TimestampType(true, 3))));
+        String schema = JsonSchemaConverter.convertToJsonSchema(rowType);
+        assertThat(schema)
+                .contains(
+                        "\"times\":{\"type\":\"array\",\"items\":{\"type\":[\"string\",\"null\"],\"format\":\"date-time\"}}");
+    }
+
+    @Test
+    void testArrayOfRowsCarriesNestedRequiredList() {
+        RowType item =
+                row(
+                        f("sku", new VarCharType(false, VarCharType.MAX_LENGTH)),
+                        f("qty", new IntType(true)));
+        RowType rowType = row(f("items", new ArrayType(false, item)));
+        String schema = JsonSchemaConverter.convertToJsonSchema(rowType);
+        assertThat(schema)
+                .contains("\"items\":{\"type\":\"array\",\"items\":{\"type\":\"object\"")
+                .contains("\"sku\":{\"type\":\"string\"}")
+                .contains("\"qty\":{\"type\":[\"integer\",\"null\"]}")
+                .contains("\"required\":[\"sku\"]");
+        // Only the top-level 'items' and the nested 'sku' are required: exactly two lists.
+        assertThat(schema.split("\"required\"", -1)).hasSize(3);
+    }
+
+    @Test
+    void testArrayOfArraysAndMapOfArrays() {
+        RowType rowType =
+                row(
+                        f(
+                                "matrix",
+                                new ArrayType(false, new ArrayType(false, new DoubleType(false)))),
+                        f(
+                                "byKey",
+                                new MapType(
+                                        false,
+                                        new VarCharType(false, VarCharType.MAX_LENGTH),
+                                        new ArrayType(false, new DecimalType(false, 10, 2)))));
+        String schema = JsonSchemaConverter.convertToJsonSchema(rowType);
+        assertThat(schema)
+                .contains(
+                        "\"matrix\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}}}")
+                .contains(
+                        "\"byKey\":{\"type\":\"object\",\"additionalProperties\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}}}");
+    }
+
+    @Test
+    void testRowInRowInRowKeepsInnermostRequired() {
+        RowType inner = row(f("c", new IntType(false)));
+        RowType middle = row(f("b", inner));
+        RowType rowType = row(f("a", middle));
+        String schema = JsonSchemaConverter.convertToJsonSchema(rowType);
+        assertThat(schema)
+                .contains("\"c\":{\"type\":\"integer\"}")
+                .contains("\"required\":[\"c\"]")
+                .contains("\"required\":[\"b\"]")
+                .contains("\"required\":[\"a\"]");
+    }
+
+    /** Unsupported types nested inside a container must fail as clearly as at top level. */
+    @Test
+    void testUnsupportedTypeInsideContainerFailsFast() {
+        RowType rowType =
+                row(
+                        f(
+                                "bad",
+                                new ArrayType(
+                                        false,
+                                        new MapType(
+                                                false,
+                                                new IntType(false),
+                                                new VarCharType(false, VarCharType.MAX_LENGTH)))));
+        assertThatThrownBy(() -> JsonSchemaConverter.convertToJsonSchema(rowType))
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
     @Test
     void testUnsupportedTypeFailsFast() {
         RowType rowType = row(f("m", new MultisetType(new IntType())));
