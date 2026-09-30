@@ -160,8 +160,26 @@ public class ProtobufToRowDataConverter {
                 return protoValue;
             case DECIMAL:
                 final DecimalType dt = (DecimalType) type;
-                return DecimalData.fromBigDecimal(
-                        new BigDecimal(protoValue.toString()), dt.getPrecision(), dt.getScale());
+                final BigDecimal decimal = new BigDecimal(protoValue.toString());
+                // fromBigDecimal rescales to the reader's scale (rounding HALF_UP, as CAST does)
+                // and returns null when the integer part does not fit the reader's precision.
+                // A null here would surface as a wrong value on a nullable column and as a
+                // NOT NULL violation on a non-nullable one, so fail with the actual numbers.
+                DecimalData decimalData =
+                        DecimalData.fromBigDecimal(decimal, dt.getPrecision(), dt.getScale());
+                if (decimalData == null) {
+                    throw new IllegalArgumentException(
+                            String.format(
+                                    "Value %s written by the producer does not fit the declared "
+                                            + "type %s (%d digit(s) before the decimal point, "
+                                            + "%d allowed). The writer's schema is wider than the "
+                                            + "reader's; widen the column or fix the producer.",
+                                    decimal.toPlainString(),
+                                    dt.asSummaryString(),
+                                    decimal.precision() - decimal.scale(),
+                                    dt.getPrecision() - dt.getScale()));
+                }
+                return decimalData;
             case CHAR:
             case VARCHAR:
                 return StringData.fromString(protoValue.toString());

@@ -227,11 +227,11 @@ The Protobuf-Glue format generates a proto3 message from the table's row type an
       <td><code>int32</code> (epoch days)</td>
     </tr>
     <tr>
-      <td><code>TIME</code></td>
+      <td><code>TIME(p)</code>, p &le; 3</td>
       <td><code>int32</code> (milliseconds of day)</td>
     </tr>
     <tr>
-      <td><code>TIMESTAMP</code> / <code>TIMESTAMP_LTZ</code></td>
+      <td><code>TIMESTAMP(p)</code> / <code>TIMESTAMP_LTZ(p)</code>, p &le; 3</td>
       <td><code>int64</code> (epoch milliseconds)</td>
     </tr>
     </tbody>
@@ -245,8 +245,10 @@ Limitations
 -----------
 
 * **Scalar fields only**: the generated proto3 schema supports the scalar Flink SQL types listed in the mapping above (`BOOLEAN`, the `INT` family, `FLOAT`/`DOUBLE`, `DECIMAL`, `CHAR`/`VARCHAR`, `BINARY`/`VARBINARY`, `DATE`, `TIME`, `TIMESTAMP`, `TIMESTAMP_LTZ`). Complex types (`ARRAY`, `MAP`, `MULTISET`, `ROW`, `RAW`, structured types) are rejected at table creation with an `UnsupportedOperationException` naming the type, instead of being silently coerced to `string`. Nested messages and `repeated` fields are therefore not produced by this format.
-* **Lossy Protobuf types**: `DECIMAL` is written as its lossless `BigDecimal` text form in a `string` field; `DATE` as `int32` epoch days; `TIME` as `int32` milliseconds of day; `TIMESTAMP`/`TIMESTAMP_LTZ` as `int64` epoch milliseconds, so sub-millisecond precision is truncated. The declared precision, scale and length are enforced by the table definition on the Flink side only.
-* **Field names are sanitized**: SQL column names that are not valid proto identifiers are rewritten (see the format description above); the original column name is preserved as the field's `json_name`, so reads through the same table round-trip correctly.
+* **Millisecond time precision**: `TIME` is written as `int32` milliseconds of day and `TIMESTAMP`/`TIMESTAMP_LTZ` as `int64` epoch milliseconds. A column declared with a precision above 3 (for example `TIMESTAMP(6)`) is rejected at table creation with an `IllegalArgumentException`, because its sub-millisecond digits could not be transported; declare precision 3 or lower. `DATE` is written as `int32` epoch days.
+* **DECIMAL is text**: `DECIMAL` is written as its lossless `BigDecimal` text form in a `string` field with the writer's scale. On read the value is rescaled to the reading table's `DECIMAL(p, s)` (rounding `HALF_UP`, like `CAST`). A value whose integer part does not fit the reading table's precision fails the read with a message naming the value and the declared type, rather than producing `NULL`. Declared length of `CHAR`/`VARCHAR` is enforced on the Flink side only.
+* **Field names are sanitized**: SQL column names that are not valid proto identifiers are rewritten (see the format description above); the original column name is preserved as the field's `json_name`, so reads through the same table round-trip correctly. Two columns that sanitize to the same identifier (for example `` `a b` `` and `` `a-b` ``, both `a_b`) are rejected at table creation with both column names.
+* **NOT NULL is enforced on write**: a `NULL` reaching the serializer in a `NOT NULL` column fails the record instead of being written as the Protobuf type default (`0`, `""`, `false`). SQL sinks enforce `NOT NULL` before the format (see `table.exec.sink.not-null-enforcer`); the check protects DataStream users of the serialization schema.
 * **Reading foreign schemas**: on the source, only proto3 scalar field types in the writer schema are decoded (`bool`, the `int32`/`int64` families, `float`, `double`, `string`, `bytes`). A writer schema using other field types fails the task with an `IllegalArgumentException` naming the field type.
 
 Usage with Kinesis and Firehose Connectors

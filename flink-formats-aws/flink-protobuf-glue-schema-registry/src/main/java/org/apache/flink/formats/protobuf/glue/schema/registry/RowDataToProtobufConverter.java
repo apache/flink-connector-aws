@@ -58,14 +58,24 @@ public class RowDataToProtobufConverter {
         List<Descriptors.FieldDescriptor> fields = descriptor.getFields();
 
         for (int i = 0; i < rowType.getFieldCount(); i++) {
+            LogicalType fieldType = rowType.getTypeAt(i);
             if (rowData.isNullAt(i)) {
+                if (!fieldType.isNullable()) {
+                    // A NOT NULL column is an implicit-presence proto3 field: leaving it unset
+                    // would decode as the type default (0 / "" / false), turning a contract
+                    // violation into silently wrong data. SQL sinks enforce NOT NULL before the
+                    // serializer; DataStream users may not.
+                    throw new IllegalStateException(
+                            String.format(
+                                    "Column '%s' is declared NOT NULL but the row carries null",
+                                    rowType.getFieldNames().get(i)));
+                }
                 // Leave the field unset. For a NULLABLE column this is a proto3 explicit-presence
                 // (`optional`) field, so an unset field is observably absent (hasField()==false)
-                // and decodes back to null; for a NOT NULL column the column is never null here.
-                // Explicit presence is emitted by ProtobufSchemaConverter (review finding C2).
+                // and decodes back to null. Explicit presence is emitted by
+                // ProtobufSchemaConverter (review finding C2).
                 continue;
             }
-            LogicalType fieldType = rowType.getTypeAt(i);
             Descriptors.FieldDescriptor fd = fields.get(i);
             Object value = extractFieldValue(rowData, i, fieldType);
             if (value != null) {

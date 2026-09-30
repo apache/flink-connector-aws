@@ -83,6 +83,7 @@ public class ProtobufSchemaConverter {
      * @return a Protobuf schema definition string
      */
     public static String convertToProtobufSchema(RowType rowType, String messageName) {
+        requireUniqueSanitizedFieldNames(rowType);
         String sanitized = sanitizeMessageName(messageName);
         StringBuilder sb = new StringBuilder();
         sb.append("syntax = \"proto3\";\n\n");
@@ -120,6 +121,7 @@ public class ProtobufSchemaConverter {
      */
     public static DescriptorProtos.FileDescriptorProto buildFileDescriptorProto(
             RowType rowType, String messageName) {
+        requireUniqueSanitizedFieldNames(rowType);
         String sanitized = sanitizeMessageName(messageName);
         DescriptorProtos.DescriptorProto.Builder messageBuilder =
                 DescriptorProtos.DescriptorProto.newBuilder().setName(sanitized);
@@ -308,7 +310,64 @@ public class ProtobufSchemaConverter {
         return sanitized;
     }
 
+    /**
+     * Two distinct SQL columns can sanitize to the same Protobuf identifier ({@code `a b`} and
+     * {@code `a-b`} both become {@code a_b}). The generated schema would then declare the field
+     * twice, which fails descriptor validation at {@code open()} on the write side and resolves
+     * both columns to the first field on the read side. Reject it up front with both column names.
+     */
+    static void requireUniqueSanitizedFieldNames(RowType rowType) {
+        java.util.Map<String, String> seen = new java.util.HashMap<>();
+        for (RowType.RowField field : rowType.getFields()) {
+            String sanitized = sanitizeFieldName(field.getName());
+            String previous = seen.putIfAbsent(sanitized, field.getName());
+            if (previous != null) {
+                throw new IllegalArgumentException(
+                        String.format(
+                                "Columns '%s' and '%s' both map to the Protobuf field name '%s'. "
+                                        + "Protobuf field names may only contain letters, digits "
+                                        + "and underscores; rename one of the columns.",
+                                previous, field.getName(), sanitized));
+            }
+        }
+    }
+
+    /**
+     * Timestamps and times travel as {@code int64}/{@code int32} milliseconds, so a precision above
+     * 3 would be silently truncated on write and could not be restored on read. Reject it at schema
+     * time instead of losing digits at runtime.
+     */
+    private static void requireMillisecondPrecision(LogicalType type) {
+        int precision;
+        switch (type.getTypeRoot()) {
+            case TIMESTAMP_WITHOUT_TIME_ZONE:
+                precision =
+                        ((org.apache.flink.table.types.logical.TimestampType) type).getPrecision();
+                break;
+            case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
+                precision =
+                        ((org.apache.flink.table.types.logical.LocalZonedTimestampType) type)
+                                .getPrecision();
+                break;
+            case TIME_WITHOUT_TIME_ZONE:
+                precision = ((org.apache.flink.table.types.logical.TimeType) type).getPrecision();
+                break;
+            default:
+                return;
+        }
+        if (precision > 3) {
+            throw new IllegalArgumentException(
+                    String.format(
+                            "Type %s is not supported by the protobuf-glue format: timestamps and "
+                                    + "times are encoded with millisecond precision, so a precision "
+                                    + "above 3 would lose data. Declare the column with precision "
+                                    + "3 or lower.",
+                            type.asSummaryString()));
+        }
+    }
+
     private static String toProtoType(LogicalType type) {
+        requireMillisecondPrecision(type);
         switch (type.getTypeRoot()) {
             case BOOLEAN:
                 return "bool";
@@ -339,6 +398,7 @@ public class ProtobufSchemaConverter {
     }
 
     private static DescriptorProtos.FieldDescriptorProto.Type toProtoFieldType(LogicalType type) {
+        requireMillisecondPrecision(type);
         switch (type.getTypeRoot()) {
             case BOOLEAN:
                 return DescriptorProtos.FieldDescriptorProto.Type.TYPE_BOOL;

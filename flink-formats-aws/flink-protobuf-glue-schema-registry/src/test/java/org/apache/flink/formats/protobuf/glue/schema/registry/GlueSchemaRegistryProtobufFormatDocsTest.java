@@ -250,7 +250,9 @@ class GlueSchemaRegistryProtobufFormatDocsTest {
             case "ROW":
                 return "ROW<a INT>";
             default:
-                return sqlType;
+                // The table documents parameterized types with a bound, e.g. "TIMESTAMP(p)" with
+                // p <= 3; instantiate them at that bound so the example is what the page promises.
+                return sqlType.replace("(p)", "(3)");
         }
     }
 

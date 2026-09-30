@@ -27,6 +27,8 @@ import org.apache.flink.table.types.logical.ArrayType;
 import org.apache.flink.table.types.logical.DateType;
 import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.table.types.logical.IntType;
+import org.apache.flink.table.types.logical.LocalZonedTimestampType;
+import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimeType;
 import org.apache.flink.table.types.logical.TimestampType;
@@ -131,6 +133,131 @@ class ProtobufTypeCoverageTest {
 
         RowData out = roundTrip(in, rowType);
         assertThat(out.getDecimal(0, 10, 2).toBigDecimal()).isEqualByComparingTo(value);
+    }
+
+    // ---- Review lenses: composition of writer and reader types, swallowed conditions ----------
+
+    /**
+     * Asymmetry: the writer serializes DECIMAL as text with its own scale; the reader rescales to
+     * its declared type. A narrower reader scale rounds like CAST does, a narrower reader precision
+     * must fail rather than yield null.
+     */
+    @Test
+    void testDecimalWrittenWiderThanReaderType() throws Exception {
+        RowType writer =
+                new RowType(
+                        false,
+                        Arrays.asList(new RowType.RowField("amount", new DecimalType(12, 4))));
+        Descriptors.Descriptor descriptor = buildDescriptor(writer);
+
+        // Same integer digits, more fractional digits: rounds HALF_UP to the reader's scale.
+        RowType readerNarrowScale =
+                new RowType(
+                        false,
+                        Arrays.asList(new RowType.RowField("amount", new DecimalType(12, 2))));
+        GenericRowData in = new GenericRowData(1);
+        in.setField(0, DecimalData.fromBigDecimal(new BigDecimal("1.2345"), 12, 4));
+        DynamicMessage message = RowDataToProtobufConverter.convertRowData(in, writer, descriptor);
+        RowData out =
+                ProtobufToRowDataConverter.convertToRowData(
+                        DynamicMessage.parseFrom(descriptor, message.toByteArray()),
+                        readerNarrowScale);
+        assertThat(out.getDecimal(0, 12, 2).toBigDecimal())
+                .isEqualByComparingTo(new BigDecimal("1.23"));
+
+        // Integer part does not fit the reader's precision: fail with the numbers, not null.
+        RowType readerNarrowPrecision =
+                new RowType(
+                        false,
+                        Arrays.asList(new RowType.RowField("amount", new DecimalType(4, 2))));
+        GenericRowData big = new GenericRowData(1);
+        big.setField(0, DecimalData.fromBigDecimal(new BigDecimal("12345.6789"), 12, 4));
+        DynamicMessage bigMessage =
+                RowDataToProtobufConverter.convertRowData(big, writer, descriptor);
+        assertThatThrownBy(
+                        () ->
+                                ProtobufToRowDataConverter.convertToRowData(
+                                        DynamicMessage.parseFrom(
+                                                descriptor, bigMessage.toByteArray()),
+                                        readerNarrowPrecision))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("12345.6789")
+                .hasMessageContaining("DECIMAL(4, 2)");
+    }
+
+    /**
+     * Swallow: timestamps travel as epoch millis, so TIMESTAMP(6)/(9) would lose digits silently.
+     * The schema converter must reject them; TIMESTAMP(3) and below stay supported.
+     */
+    @Test
+    void testTimestampPrecisionAboveMillisIsRejected() {
+        for (LogicalType type :
+                Arrays.asList(
+                        new TimestampType(6),
+                        new TimestampType(9),
+                        new LocalZonedTimestampType(6),
+                        new TimeType(6))) {
+            RowType rowType = new RowType(false, Arrays.asList(new RowType.RowField("ts", type)));
+            assertThatThrownBy(
+                            () ->
+                                    ProtobufSchemaConverter.convertToProtobufSchema(
+                                            rowType, SCHEMA_NAME))
+                    .as(type.asSummaryString())
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("millisecond precision");
+            assertThatThrownBy(() -> buildDescriptor(rowType))
+                    .as(type.asSummaryString() + " (descriptor)")
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+        for (LogicalType type :
+                Arrays.asList(new TimestampType(3), new TimestampType(0), new TimeType(0))) {
+            RowType rowType = new RowType(false, Arrays.asList(new RowType.RowField("ts", type)));
+            assertThat(buildDescriptor(rowType).findFieldByName("ts")).isNotNull();
+        }
+    }
+
+    /**
+     * Asymmetry: two columns that sanitize to the same proto identifier would produce a schema
+     * declaring the field twice. Reject it with both column names.
+     */
+    @Test
+    void testCollidingSanitizedFieldNamesAreRejected() {
+        RowType rowType =
+                new RowType(
+                        false,
+                        Arrays.asList(
+                                new RowType.RowField("a b", new IntType()),
+                                new RowType.RowField("a-b", new IntType())));
+        assertThatThrownBy(
+                        () -> ProtobufSchemaConverter.convertToProtobufSchema(rowType, SCHEMA_NAME))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("'a b'")
+                .hasMessageContaining("'a-b'")
+                .hasMessageContaining("'a_b'");
+        assertThatThrownBy(
+                        () ->
+                                ProtobufSchemaConverter.buildFileDescriptorProto(
+                                        rowType, SCHEMA_NAME))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    /** Swallow: a null in a NOT NULL column must not be written as the proto type default. */
+    @Test
+    void testNullInNotNullColumnFailsOnWrite() {
+        RowType rowType =
+                new RowType(
+                        false,
+                        Arrays.asList(
+                                new RowType.RowField("id", new IntType(false)),
+                                new RowType.RowField("name", new VarCharType(true, 10))));
+        Descriptors.Descriptor descriptor = buildDescriptor(rowType);
+        GenericRowData in = new GenericRowData(2);
+        in.setField(0, null);
+        in.setField(1, null);
+        assertThatThrownBy(() -> RowDataToProtobufConverter.convertRowData(in, rowType, descriptor))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("'id'")
+                .hasMessageContaining("NOT NULL");
     }
 
     /** C4: a column name with a space / leading digit is sanitized and still round-trips. */
