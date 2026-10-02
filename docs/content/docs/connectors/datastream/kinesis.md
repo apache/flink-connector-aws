@@ -120,11 +120,11 @@ val kinesisEvents = env.fromSource(kdsSource, WatermarkStrategy.forMonotonousTim
 from pyflink.common import Configuration, WatermarkStrategy, Duration
 from pyflink.common.serialization import SimpleStringSchema
 from pyflink.datastream import StreamExecutionEnvironment
-from pyflink.datastream.connectors import KinesisStreamsSource, KinesisShardAssigner
+from pyflink.datastream.connectors.kinesis import KinesisStreamsSource, KinesisShardAssigner
 
 # Configure the KinesisStreamsSource
 source_config = Configuration()
-# source_config.set_string("flink.stream.initpos", "TRIM_HORIZON")  # Optional, default is LATEST
+# source_config.set_string("source.init.position", "TRIM_HORIZON")  # Optional, default is LATEST
 
 # Create a new KinesisStreamsSource to read from specified Kinesis Stream.
 kds_source = KinesisStreamsSource.builder() \

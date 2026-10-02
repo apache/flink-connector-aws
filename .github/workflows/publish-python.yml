@@ -23,14 +23,14 @@ on:
     types: [published]
   workflow_dispatch:
     inputs:
-      dry_run:
-        description: 'Dry run (build but do not publish)'
-        required: false
-        default: 'true'
+      publish_target:
+        description: 'Where to publish the package'
+        required: true
+        default: 'testpypi'
         type: choice
         options:
-          - 'true'
-          - 'false'
+          - 'testpypi'
+          - 'pypi'
 
 jobs:
   build:
@@ -79,7 +79,7 @@ jobs:
 
   publish-to-pypi:
     name: Publish to PyPI
-    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
+    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_target == 'pypi')
     needs: build
     runs-on: ubuntu-latest
     environment:
@@ -100,7 +100,7 @@ jobs:
 
   publish-to-testpypi:
     name: Publish to TestPyPI
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true'
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.publish_target == 'testpypi'
     needs: build
     runs-on: ubuntu-latest
     environment:
