@@ -142,7 +142,7 @@ t_env.use_catalog("glue_catalog")
       <td><h5>http-client.*</h5></td>
       <td>No</td>
       <td style="word-wrap: break-word;">(none)</td>
-      <td>HTTP client options for the underlying AWS SDK client: <code>http-client.connection-timeout-ms</code>, <code>http-client.socket-timeout-ms</code>, <code>http-client.apache.max-connections</code>, <code>http-client.max-concurrency</code>, <code>http-client.read-timeout</code>, <code>http-client.protocol.version</code> (<code>HTTP1_1</code> or <code>HTTP2</code>) and <code>http-client.type</code> (only <code>apache</code> is supported). Unknown or invalid values are rejected when the catalog is created.</td>
+      <td>HTTP client options for the underlying AWS SDK client: <code>http-client.connection-timeout-ms</code>, <code>http-client.socket-timeout-ms</code>, <code>http-client.apache.max-connections</code>, <code>http-client.max-concurrency</code>, <code>http-client.read-timeout</code>, <code>http-client.protocol.version</code> (<code>HTTP1_1</code> or <code>HTTP2</code>) and <code>http-client.type</code> (only <code>apache</code> is supported). The Apache-specific options (<code>http-client.apache.max-connections</code>, <code>http-client.socket-timeout-ms</code>) take precedence over the generic <code>http-client.max-concurrency</code> and <code>http-client.read-timeout</code> when both are set. Unknown or invalid values are rejected when the catalog is created.</td>
     </tr>
     </tbody>
 </table>
@@ -255,6 +255,15 @@ DROP TABLE IF EXISTS orders;
 -- Show table details
 DESCRIBE orders;
 ```
+
+The Glue `StorageDescriptor.location` is set only when the connector's location option holds a URI
+(the `filesystem` connector's `path`, the `jdbc` connector's `url`, the `elasticsearch` and
+`opensearch` connectors' `hosts`, the `mongodb` connector's `uri`). Connectors addressed by a
+non-URI value, such as a Kinesis stream ARN, Kafka bootstrap servers or a DynamoDB table name, keep
+that value as a table option and get no Glue location, so other engines are not shown a path that
+does not exist. The one exception is a partitioned table of such a connector, which receives a
+synthetic `flink://<database>/<table>` location because Glue refuses to add partitions to a table
+without one.
 
 ### Partition Operations
 

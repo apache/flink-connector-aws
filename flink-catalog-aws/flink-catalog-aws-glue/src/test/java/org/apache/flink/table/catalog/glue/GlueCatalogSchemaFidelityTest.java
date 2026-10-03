@@ -53,6 +53,7 @@ import software.amazon.awssdk.services.glue.model.GetTableRequest;
 import software.amazon.awssdk.services.glue.model.StorageDescriptor;
 import software.amazon.awssdk.services.glue.model.Table;
 import software.amazon.awssdk.services.glue.model.TableInput;
+import software.amazon.awssdk.services.glue.model.UpdateTableRequest;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -257,6 +258,99 @@ class GlueCatalogSchemaFidelityTest {
         assertThat(physicalType(schema, 2)).isEqualTo(DataTypes.INT().notNull());
         assertThat(physicalType(schema, 3)).isEqualTo(DataTypes.DECIMAL(10, 2));
         assertThat(physicalType(schema, 4)).isEqualTo(DataTypes.TIMESTAMP_LTZ(3));
+    }
+
+    /**
+     * A column whose declared type needed a physical-type override (here {@code TIMESTAMP(3)},
+     * which Glue stores as a plain {@code timestamp}) is still a physical column. When another
+     * engine drops it from the Glue table, the Flink schema must omit it like any other dropped
+     * column instead of resurrecting it from the recorded override.
+     */
+    @Test
+    void testDroppedColumnWithPhysicalTypeOverrideIsOmitted() throws Exception {
+        String tableName = GlueTestClientFactory.uniqueName("droppedoverride");
+        ObjectPath path = new ObjectPath(databaseName, tableName);
+
+        ResolvedSchema resolvedSchema =
+                ResolvedSchema.of(
+                        Column.physical("id", DataTypes.INT().notNull()),
+                        Column.physical("ts", DataTypes.TIMESTAMP(3)),
+                        Column.physical("amount", DataTypes.DECIMAL(10, 2)));
+        CatalogTable catalogTable =
+                CatalogTable.newBuilder()
+                        .schema(Schema.newBuilder().fromResolvedSchema(resolvedSchema).build())
+                        .options(kinesisOptions("droppedoverride"))
+                        .build();
+        glueCatalog.createTable(
+                path, new ResolvedCatalogTable(catalogTable, resolvedSchema), false);
+
+        // Another engine drops "ts": the storage descriptor loses the column, the Flink schema
+        // parameters (declared order, physical override) are untouched.
+        Table glueTable = getRawGlueTable(tableName.toLowerCase());
+        List<software.amazon.awssdk.services.glue.model.Column> remaining =
+                glueTable.storageDescriptor().columns().stream()
+                        .filter(column -> !column.name().equals("ts"))
+                        .collect(java.util.stream.Collectors.toList());
+        glueClient.updateTable(
+                UpdateTableRequest.builder()
+                        .databaseName(glueDatabaseName)
+                        .tableInput(
+                                TableInput.builder()
+                                        .name(glueTable.name())
+                                        .tableType(glueTable.tableType())
+                                        .parameters(glueTable.parameters())
+                                        .storageDescriptor(
+                                                glueTable.storageDescriptor().toBuilder()
+                                                        .columns(remaining)
+                                                        .build())
+                                        .build())
+                        .build());
+
+        Schema schema = glueCatalog.getTable(path).getUnresolvedSchema();
+        assertThat(schema.getColumns())
+                .extracting(Schema.UnresolvedColumn::getName)
+                .containsExactly("id", "amount");
+        assertThat(physicalType(schema, 0)).isEqualTo(DataTypes.INT().notNull());
+        assertThat(physicalType(schema, 1)).isEqualTo(DataTypes.DECIMAL(10, 2));
+    }
+
+    /**
+     * Column names are recorded in comma-joined lists (declared order, NOT NULL columns, primary
+     * key). A backtick-quoted identifier may itself contain a comma or a backslash; such names must
+     * round-trip without being split into bogus entries or losing their constraints.
+     */
+    @Test
+    void testColumnNamesContainingListSeparatorsSurviveRoundTrip() throws Exception {
+        String tableName = GlueTestClientFactory.uniqueName("separatornames");
+        ObjectPath path = new ObjectPath(databaseName, tableName);
+
+        ResolvedSchema resolvedSchema =
+                new ResolvedSchema(
+                        Arrays.asList(
+                                Column.physical("first,second", DataTypes.STRING().notNull()),
+                                Column.physical("back\\slash", DataTypes.INT().notNull()),
+                                Column.physical("plain", DataTypes.STRING())),
+                        Collections.emptyList(),
+                        UniqueConstraint.primaryKey(
+                                "pk", Arrays.asList("first,second", "back\\slash")));
+        CatalogTable catalogTable =
+                CatalogTable.newBuilder()
+                        .schema(Schema.newBuilder().fromResolvedSchema(resolvedSchema).build())
+                        .options(kinesisOptions("separatornames"))
+                        .build();
+        glueCatalog.createTable(
+                path, new ResolvedCatalogTable(catalogTable, resolvedSchema), false);
+
+        Schema schema = glueCatalog.getTable(path).getUnresolvedSchema();
+        assertThat(schema.getColumns())
+                .extracting(Schema.UnresolvedColumn::getName)
+                .containsExactly("first,second", "back\\slash", "plain");
+        assertThat(physicalType(schema, 0)).isEqualTo(DataTypes.STRING().notNull());
+        assertThat(physicalType(schema, 1)).isEqualTo(DataTypes.INT().notNull());
+        assertThat(physicalType(schema, 2)).isEqualTo(DataTypes.STRING());
+        assertThat(schema.getPrimaryKey()).isPresent();
+        assertThat(schema.getPrimaryKey().get().getColumnNames())
+                .containsExactly("first,second", "back\\slash");
     }
 
     @Test

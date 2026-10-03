@@ -29,10 +29,12 @@ import java.util.Properties;
 
 class HttpClientOptionUtilsTest {
 
+    /**
+     * Two allowed types, so the tests exercise filtering against a list; {@code "urlconnection"} is
+     * a literal because no shipped client accepts it.
+     */
     private static final String[] ALLOWED_GLUE_HTTP_CLIENTS =
-            new String[] {
-                AWSConfigConstants.CLIENT_TYPE_URLCONNECTION, AWSConfigConstants.CLIENT_TYPE_APACHE
-            };
+            new String[] {"urlconnection", AWSConfigConstants.CLIENT_TYPE_APACHE};
 
     @Test
     public void testGoodHttpClientOptionsMapping() {

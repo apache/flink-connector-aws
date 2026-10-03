@@ -185,10 +185,10 @@ public class AWSConfigConstants {
      */
     public static final String HTTP_CLIENT_SOCKET_TIMEOUT_MS = "http-client.socket-timeout-ms";
 
-    /** {@code UrlConnectionHttpClient} client type. */
-    public static final String CLIENT_TYPE_URLCONNECTION = "urlconnection";
-
-    /** {@link software.amazon.awssdk.http.apache.ApacheHttpClient} client type. */
+    /**
+     * {@link software.amazon.awssdk.http.apache.ApacheHttpClient} client type, the only value of
+     * {@link #HTTP_CLIENT_TYPE} the synchronous clients accept.
+     */
     public static final String CLIENT_TYPE_APACHE = "apache";
 
     public static String accessKeyId(String prefix) {

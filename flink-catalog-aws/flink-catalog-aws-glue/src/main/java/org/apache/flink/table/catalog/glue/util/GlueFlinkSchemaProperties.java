@@ -18,6 +18,7 @@
 package org.apache.flink.table.catalog.glue.util;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.catalog.Column;
@@ -31,7 +32,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -97,6 +98,14 @@ public final class GlueFlinkSchemaProperties {
     private static final String NOT_NULL_COLUMNS = SCHEMA_PARAMETER_PREFIX + "not-null-columns";
 
     private static final String LIST_SEPARATOR = ",";
+
+    /**
+     * Escape character inside a {@link #LIST_SEPARATOR}-joined list of column names. Flink
+     * identifiers may contain any character when backtick-quoted, including the separator itself,
+     * so {@code ,} and {@code \} in a name are written as {@code \,} and {@code \\}. Values written
+     * before escaping existed contain neither character and decode unchanged.
+     */
+    private static final char LIST_ESCAPE = '\\';
 
     private static final GlueTypeConverter TYPE_CONVERTER = new GlueTypeConverter();
 
@@ -172,10 +181,10 @@ public final class GlueFlinkSchemaProperties {
             }
         }
 
-        targetParameters.put(COLUMN_ORDER, String.join(LIST_SEPARATOR, columnOrder));
+        targetParameters.put(COLUMN_ORDER, joinNames(columnOrder));
 
         if (!notNullColumns.isEmpty()) {
-            targetParameters.put(NOT_NULL_COLUMNS, String.join(LIST_SEPARATOR, notNullColumns));
+            targetParameters.put(NOT_NULL_COLUMNS, joinNames(notNullColumns));
         }
 
         List<WatermarkSpec> watermarkSpecs = resolvedSchema.getWatermarkSpecs();
@@ -194,8 +203,7 @@ public final class GlueFlinkSchemaProperties {
                         primaryKey -> {
                             targetParameters.put(PRIMARY_KEY_NAME, primaryKey.getName());
                             targetParameters.put(
-                                    PRIMARY_KEY_COLUMNS,
-                                    String.join(LIST_SEPARATOR, primaryKey.getColumns()));
+                                    PRIMARY_KEY_COLUMNS, joinNames(primaryKey.getColumns()));
                         });
     }
 
@@ -248,7 +256,7 @@ public final class GlueFlinkSchemaProperties {
         Set<String> notNullColumns = getNotNullColumns(parameters);
         Set<String> restored = new LinkedHashSet<>();
 
-        for (String name : parameters.get(COLUMN_ORDER).split(LIST_SEPARATOR, -1)) {
+        for (String name : splitNames(parameters.get(COLUMN_ORDER))) {
             if (name.isEmpty()) {
                 continue;
             }
@@ -267,9 +275,10 @@ public final class GlueFlinkSchemaProperties {
                         Boolean.parseBoolean(
                                 parameters.get(COLUMN_PREFIX + name + METADATA_VIRTUAL_SUFFIX)));
                 applyComment(schemaBuilder, parameters.get(COLUMN_PREFIX + name + COMMENT_SUFFIX));
-            } else if (declaredType != null) {
+            } else if (declaredType != null && glueColumns.containsKey(name)) {
                 // The declared type could not be represented exactly in Glue; restore the
-                // recorded original (it carries its own nullability).
+                // recorded original (it carries its own nullability). Like any physical column,
+                // it must still exist in Glue: see the final branch.
                 schemaBuilder.column(name, DataTypes.of(declaredType));
                 applyComment(schemaBuilder, comments.get(name));
             } else if (glueColumns.containsKey(name)) {
@@ -318,7 +327,7 @@ public final class GlueFlinkSchemaProperties {
         // Restore the primary key.
         String primaryKeyColumns = parameters.get(PRIMARY_KEY_COLUMNS);
         if (primaryKeyColumns != null && !primaryKeyColumns.isEmpty()) {
-            List<String> columns = Arrays.asList(primaryKeyColumns.split(LIST_SEPARATOR, -1));
+            List<String> columns = splitNames(primaryKeyColumns);
             String constraintName = parameters.get(PRIMARY_KEY_NAME);
             if (constraintName != null && !constraintName.isEmpty()) {
                 schemaBuilder.primaryKeyNamed(constraintName, columns);
@@ -339,14 +348,65 @@ public final class GlueFlinkSchemaProperties {
         if (parameters == null || !parameters.containsKey(NOT_NULL_COLUMNS)) {
             return Collections.emptySet();
         }
-        return new LinkedHashSet<>(
-                Arrays.asList(parameters.get(NOT_NULL_COLUMNS).split(LIST_SEPARATOR, -1)));
+        return new LinkedHashSet<>(splitNames(parameters.get(NOT_NULL_COLUMNS)));
     }
 
     private static void applyComment(Schema.Builder schemaBuilder, String comment) {
         if (comment != null && !comment.isEmpty()) {
             schemaBuilder.withComment(comment);
         }
+    }
+
+    /** Joins column names with {@link #LIST_SEPARATOR}, escaping separators inside a name. */
+    @VisibleForTesting
+    static String joinNames(Collection<String> names) {
+        StringBuilder joined = new StringBuilder();
+        boolean first = true;
+        for (String name : names) {
+            if (!first) {
+                joined.append(LIST_SEPARATOR);
+            }
+            first = false;
+            for (int i = 0; i < name.length(); i++) {
+                char c = name.charAt(i);
+                if (c == LIST_ESCAPE || LIST_SEPARATOR.indexOf(c) >= 0) {
+                    joined.append(LIST_ESCAPE);
+                }
+                joined.append(c);
+            }
+        }
+        return joined.toString();
+    }
+
+    /** Inverse of {@link #joinNames}: splits on unescaped separators and removes the escapes. */
+    @VisibleForTesting
+    static List<String> splitNames(String joined) {
+        List<String> names = new ArrayList<>();
+        if (joined.isEmpty()) {
+            return names;
+        }
+        StringBuilder current = new StringBuilder();
+        boolean escaped = false;
+        for (int i = 0; i < joined.length(); i++) {
+            char c = joined.charAt(i);
+            if (escaped) {
+                current.append(c);
+                escaped = false;
+            } else if (c == LIST_ESCAPE) {
+                escaped = true;
+            } else if (LIST_SEPARATOR.indexOf(c) >= 0) {
+                names.add(current.toString());
+                current.setLength(0);
+            } else {
+                current.append(c);
+            }
+        }
+        if (escaped) {
+            // A trailing escape has nothing to escape; keep it literally rather than drop it.
+            current.append(LIST_ESCAPE);
+        }
+        names.add(current.toString());
+        return names;
     }
 
     private static String serializeExpression(

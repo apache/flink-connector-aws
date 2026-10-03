@@ -30,26 +30,26 @@ import java.util.Map;
  * Maps Flink connector identifiers to the table option that names the connector's data location
  * (for example {@code path} for the filesystem connector). Used to populate the Glue {@code
  * StorageDescriptor.location} for connectors whose location is a URI.
+ *
+ * <p>Only connectors whose location option holds a URI belong here, because {@link
+ * GlueTableUtils#extractTableLocation} records a location only when the value contains {@code ://}.
+ * Connectors addressed by a non-URI value (a Kinesis stream ARN, Kafka bootstrap servers, a
+ * DynamoDB table name) keep that value as a table option and get no Glue location.
  */
 @Internal
 public final class ConnectorRegistry {
 
     private static final Logger LOG = LoggerFactory.getLogger(ConnectorRegistry.class);
 
-    /** Connector identifier to the option key holding its location. */
+    /** Connector identifier to the option key holding its location URI. */
     private static final Map<String, String> CONNECTOR_LOCATION_KEYS = new HashMap<>();
 
     static {
-        CONNECTOR_LOCATION_KEYS.put("kinesis", "stream.arn");
-        CONNECTOR_LOCATION_KEYS.put("kafka", "properties.bootstrap.servers");
         CONNECTOR_LOCATION_KEYS.put("jdbc", "url");
         CONNECTOR_LOCATION_KEYS.put("filesystem", "path");
         CONNECTOR_LOCATION_KEYS.put("elasticsearch", "hosts");
         CONNECTOR_LOCATION_KEYS.put("opensearch", "hosts");
-        CONNECTOR_LOCATION_KEYS.put("hbase", "zookeeper.quorum");
-        CONNECTOR_LOCATION_KEYS.put("dynamodb", "table.name");
         CONNECTOR_LOCATION_KEYS.put("mongodb", "uri");
-        CONNECTOR_LOCATION_KEYS.put("hive", "hive-conf-dir");
     }
 
     private ConnectorRegistry() {}
@@ -57,8 +57,8 @@ public final class ConnectorRegistry {
     /**
      * Retrieves the location option key for a given connector identifier.
      *
-     * @param connectorType The connector identifier (e.g., "kinesis", "kafka").
-     * @return The location option key, or null if the connector is not registered.
+     * @param connectorType The connector identifier (e.g., "filesystem", "jdbc").
+     * @return The location option key, or null if the connector has no URI location.
      */
     public static String getLocationKey(String connectorType) {
         String locationKey = CONNECTOR_LOCATION_KEYS.get(connectorType);

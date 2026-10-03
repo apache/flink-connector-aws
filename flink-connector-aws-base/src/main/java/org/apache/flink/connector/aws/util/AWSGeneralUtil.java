@@ -365,9 +365,24 @@ public class AWSGeneralUtil {
     public static SdkHttpClient createSyncHttpClient(
             final Properties configProperties, final ApacheHttpClient.Builder httpClientBuilder) {
         return createSyncHttpClient(
-                getSdkHttpConfigurationOptions(configProperties)
-                        .merge(getSyncHttpClientConfigurationOptions(configProperties)),
-                httpClientBuilder);
+                getSyncHttpClientConfiguration(configProperties), httpClientBuilder);
+    }
+
+    /**
+     * The complete configuration of the synchronous (Apache) HTTP client: the generic options from
+     * {@link #getSdkHttpConfigurationOptions} overlaid with the sync-specific ones from {@link
+     * #getSyncHttpClientConfigurationOptions}. Both sets can target the same attribute ({@code
+     * MAX_CONNECTIONS} from {@link AWSConfigConstants#HTTP_CLIENT_MAX_CONCURRENCY} and {@link
+     * AWSConfigConstants#HTTP_CLIENT_APACHE_MAX_CONNECTIONS}, {@code READ_TIMEOUT} from {@link
+     * AWSConfigConstants#HTTP_CLIENT_READ_TIMEOUT_MILLIS} and {@link
+     * AWSConfigConstants#HTTP_CLIENT_SOCKET_TIMEOUT_MS}); when a user sets both, the option that
+     * names this client wins over the generic one. {@link AttributeMap#merge} keeps the receiver's
+     * value for overlapping keys, so the sync-specific map must be the receiver.
+     */
+    @VisibleForTesting
+    static AttributeMap getSyncHttpClientConfiguration(final Properties configProperties) {
+        return getSyncHttpClientConfigurationOptions(configProperties)
+                .merge(getSdkHttpConfigurationOptions(configProperties));
     }
 
     /**
