@@ -55,6 +55,7 @@ public class GsrJsonRowDataSerializationSchema implements SerializationSchema<Ro
     private final String transportName;
     private final String schemaName;
     private final String jsonSchemaDefinition;
+    private final NotNullConstraintValidator notNullValidator;
     private final Map<String, Object> configs;
 
     private transient GlueSchemaRegistrySerializationFacade serializationFacade;
@@ -79,6 +80,7 @@ public class GsrJsonRowDataSerializationSchema implements SerializationSchema<Ro
         this.schemaName = schemaName != null ? schemaName : transportName;
         this.configs = configs;
         this.jsonSchemaDefinition = JsonSchemaConverter.convertToJsonSchema(rowType);
+        this.notNullValidator = new NotNullConstraintValidator(rowType);
     }
 
     @Override
@@ -98,6 +100,10 @@ public class GsrJsonRowDataSerializationSchema implements SerializationSchema<Ro
 
     @Override
     public byte[] serialize(RowData element) {
+        // Flink's JSON serializer writes null for a null field whatever the declared type, and
+        // encode() below skips payload validation, so a NOT NULL violation would otherwise be
+        // published as a record contradicting the schema registered for it. Reject it here.
+        notNullValidator.validate(element);
         byte[] jsonBytes = jsonSerializer.serialize(element);
         if (jsonBytes == null) {
             return null;

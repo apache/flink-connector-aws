@@ -248,6 +248,8 @@ Limitations
 * **`MAP` keys must be strings**: JSON object keys are strings, so a `MAP` whose key type is not `CHAR`/`VARCHAR` is rejected with the same exception.
 * **Lossy JSON Schema types**: the generated schema declares `integer` for every `INT` family type, `number` for `FLOAT`/`DOUBLE`/`DECIMAL`, and `string` (with a `format` or `contentEncoding` annotation) for temporal and binary types. Precision, scale and length are not part of the registered schema; they are enforced by the table definition on the Flink side only.
 * **Validation is structural**: records are (de)serialized with Flink's built-in JSON format; the registered schema is used for registry compatibility checks and for the GSR header, not for per-record JSON Schema validation.
+* **`NOT NULL` is enforced on write**: a `NOT NULL` column is registered as a `required` property with a non-nullable type. A row carrying `null` in such a column (top-level, nested `ROW` field, `ARRAY` element or `MAP` value) is rejected with an error naming the column path, instead of being published as a record that contradicts its own schema. SQL sinks enforce `NOT NULL` before the format; this guard matters for DataStream users wrapping the serialization schema directly.
+* **`DECIMAL` range is enforced on read**: a value whose integer part does not fit the table's `DECIMAL(p, s)` (for example `123456.78` read as `DECIMAL(5, 2)`) fails the record with the value, path and declared type, instead of the `null` that Flink's JSON reader would otherwise produce. A narrower scale is rounded `HALF_UP` like `CAST`.
 
 Usage with Kinesis and Firehose Connectors
 ------------------------------------------

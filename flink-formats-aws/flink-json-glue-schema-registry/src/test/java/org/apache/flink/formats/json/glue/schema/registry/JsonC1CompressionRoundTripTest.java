@@ -167,7 +167,7 @@ class JsonC1CompressionRoundTripTest {
                         rowType, InternalTypeInfo.of(rowType), false, false, TimestampFormat.SQL);
         GsrJsonRowDataDeserializationSchema deser =
                 new GsrJsonRowDataDeserializationSchema(
-                        jsonDeser, InternalTypeInfo.of(rowType), new HashMap<>());
+                        rowType, jsonDeser, InternalTypeInfo.of(rowType), new HashMap<>());
         deser.setReader(new CompressionAwareGsrJsonReader());
         deser.open(null);
         return deser;

@@ -85,7 +85,7 @@ class JsonRoundTripIntegrationTest {
                         rowType, InternalTypeInfo.of(rowType), false, false, TimestampFormat.SQL);
         GsrJsonRowDataDeserializationSchema gsrDeser =
                 new GsrJsonRowDataDeserializationSchema(
-                        jsonDeser, InternalTypeInfo.of(rowType), new HashMap<>());
+                        rowType, jsonDeser, InternalTypeInfo.of(rowType), new HashMap<>());
         gsrDeser.setReader(new HeaderStrippingGsrJsonReader());
         gsrDeser.open(null);
 
@@ -135,7 +135,7 @@ class JsonRoundTripIntegrationTest {
                         rowType, InternalTypeInfo.of(rowType), false, false, TimestampFormat.SQL);
         GsrJsonRowDataDeserializationSchema gsrDeser =
                 new GsrJsonRowDataDeserializationSchema(
-                        jsonDeser, InternalTypeInfo.of(rowType), new HashMap<>());
+                        rowType, jsonDeser, InternalTypeInfo.of(rowType), new HashMap<>());
         gsrDeser.setReader(new HeaderStrippingGsrJsonReader());
         gsrDeser.open(null);
 

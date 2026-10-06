@@ -88,7 +88,7 @@ public class GlueSchemaRegistryJsonFormatFactory
                                 rowType, rowDataTypeInfo, false, false, TimestampFormat.SQL);
 
                 return new GsrJsonRowDataDeserializationSchema(
-                        jsonDeserializer, rowDataTypeInfo, configMap);
+                        rowType, jsonDeserializer, rowDataTypeInfo, configMap);
             }
 
             @Override

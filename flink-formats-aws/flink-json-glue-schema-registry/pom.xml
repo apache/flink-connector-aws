@@ -62,6 +62,16 @@ under the License.
             <artifactId>flink-json</artifactId>
             <version>${flink.version}</version>
         </dependency>
+        <!-- Shaded Jackson is what flink-json exposes in its public API (JsonNode in
+             JsonRowDataDeserializationSchema#deserializeToJsonNode / convertToRowData). flink-json
+             declares it provided, so it is not transitive; declare it the same way (ships in
+             flink-dist, same version for Flink 2.1 and 2.2). -->
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-shaded-jackson</artifactId>
+            <version>2.18.2-20.0</version>
+            <scope>provided</scope>
+        </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-avro-glue-schema-registry</artifactId>
