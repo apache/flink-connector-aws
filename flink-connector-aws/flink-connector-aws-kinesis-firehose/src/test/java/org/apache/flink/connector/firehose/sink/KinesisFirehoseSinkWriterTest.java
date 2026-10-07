@@ -50,7 +50,7 @@ public class KinesisFirehoseSinkWriterTest {
     @BeforeEach
     void setup() throws IOException {
         TestSinkInitContext sinkInitContext = new TestSinkInitContext();
-        Properties sinkProperties = AWSServicesTestUtils.createConfig("https://fake_aws_endpoint");
+        Properties sinkProperties = AWSServicesTestUtils.createConfig("https://fake-aws-endpoint");
         KinesisFirehoseSink<String> sink =
                 new KinesisFirehoseSink<>(
                         ELEMENT_CONVERTER_PLACEHOLDER,

@@ -32,6 +32,7 @@ import org.apache.flink.connector.aws.util.AWSClientUtil;
 import org.apache.flink.connector.aws.util.AWSGeneralUtil;
 import org.apache.flink.connector.base.source.reader.fetcher.SingleThreadFetcherManager;
 import org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants;
+import org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigUtil;
 import org.apache.flink.connector.dynamodb.source.enumerator.DynamoDbStreamsShardAssigner;
 import org.apache.flink.connector.dynamodb.source.enumerator.DynamoDbStreamsSourceEnumerator;
 import org.apache.flink.connector.dynamodb.source.enumerator.DynamoDbStreamsSourceEnumeratorState;
@@ -110,6 +111,7 @@ public class DynamoDbStreamsSource<T>
         Preconditions.checkNotNull(sourceConfig);
         Preconditions.checkNotNull(deserializationSchema);
         Preconditions.checkNotNull(dynamoDbStreamsShardAssigner);
+        DynamodbStreamsSourceConfigUtil.validateStreamSourceConfiguration(sourceConfig);
         this.streamArn = streamArn;
         this.sourceConfig = sourceConfig;
         this.deserializationSchema = deserializationSchema;

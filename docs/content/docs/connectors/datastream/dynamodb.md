@@ -118,6 +118,24 @@ The above is a simple example of using the `DynamoDbStreamsSource`.
 To specify the starting position of the `DynamodbStreamsSource`, users can set the `DynamodbStreamsSourceConfigConstants.STREAM_INITIAL_POSITION` in configuration.
 - `LATEST`: read all shards of the stream starting from the latest record.
 - `TRIM_HORIZON`: read all shards of the stream starting from the earliest record possible (data is trimmed by DynamoDB after 24 hours).
+- `AT_TIMESTAMP`: read all shards of the stream starting from the first record at or after a given timestamp.
+  The timestamp is set with `DynamodbStreamsSourceConfigConstants.STREAM_INITIAL_TIMESTAMP`, either as a date string in the
+  format given by `DynamodbStreamsSourceConfigConstants.STREAM_INITIAL_TIMESTAMP_FORMAT` (default `yyyy-MM-dd'T'HH:mm:ss.SSSXXX`)
+  or as epoch seconds. The timestamp must not be in the future. A timestamp older than the stream's retention starts each
+  shard from its earliest available record, like `TRIM_HORIZON`.
+
+{{< tabs "dynamodb-streams-source-at-timestamp" >}}
+{{< tab "Java" >}}
+```java
+Configuration sourceConfig = new Configuration();
+sourceConfig.set(DynamodbStreamsSourceConfigConstants.STREAM_INITIAL_POSITION, DynamodbStreamsSourceConfigConstants.InitialPosition.AT_TIMESTAMP);
+sourceConfig.set(DynamodbStreamsSourceConfigConstants.STREAM_INITIAL_TIMESTAMP, "2024-05-01T12:00:00.000Z");
+```
+{{< /tab >}}
+{{< /tabs >}}
+
+The starting position applies only when the job starts without state. When a job is restored from a checkpoint or savepoint,
+each shard resumes from its checkpointed position and the configured timestamp is not used.
 
 ### Deserialization Schema
 
