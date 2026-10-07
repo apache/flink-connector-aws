@@ -40,6 +40,7 @@ import software.amazon.awssdk.services.dynamodb.streams.DynamoDbStreamsClient;
 import javax.annotation.Nullable;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
@@ -224,6 +225,16 @@ public class DynamoDbStreamsProxy implements StreamProxy {
         switch (startingPosition.getShardIteratorType()) {
             case TRIM_HORIZON:
             case LATEST:
+                break;
+            case AT_TIMESTAMP:
+                if (startingPosition.getStartingMarker() instanceof Instant) {
+                    requestBuilder =
+                            requestBuilder.timestamp(
+                                    (Instant) startingPosition.getStartingMarker());
+                } else {
+                    throw new IllegalArgumentException(
+                            "Invalid object given for GetShardIteratorRequest() when ShardIteratorType is AT_TIMESTAMP. Must be an Instant.");
+                }
                 break;
             case AT_SEQUENCE_NUMBER:
             case AFTER_SEQUENCE_NUMBER:

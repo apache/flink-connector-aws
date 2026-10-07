@@ -45,6 +45,7 @@ import software.amazon.awssdk.services.dynamodb.model.StreamDescription;
 import software.amazon.awssdk.services.dynamodb.model.StreamStatus;
 import software.amazon.awssdk.services.dynamodb.model.TrimmedDataAccessException;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -440,6 +441,44 @@ public class DynamoDbStreamsProxyTest {
             shards.add(Shard.builder().shardId(generateShardId(i)).build());
         }
         return shards;
+    }
+
+    @Test
+    void testGetRecordsInitialReadFromAtTimestamp() {
+        final String streamArn =
+                "arn:aws:dynamodb:us-east-1:1231231230:table/test/stream/2024-01-01T00:00:00.826";
+        final String shardId = "shardId-000000000002";
+        final Instant atTimestamp = Instant.ofEpochMilli(1704067200000L);
+        final StartingPosition startingPosition = StartingPosition.atTimestamp(atTimestamp);
+
+        final String expectedShardIterator = "some-shard-iterator";
+        final GetRecordsResponse expectedGetRecordsResponse =
+                GetRecordsResponse.builder()
+                        .records(Record.builder().build())
+                        .nextShardIterator("next-iterator")
+                        .build();
+
+        TestingDynamoDbStreamsClient testingDynamoDbStreamsClient =
+                new TestingDynamoDbStreamsClient();
+        testingDynamoDbStreamsClient.setNextShardIterator(expectedShardIterator);
+        testingDynamoDbStreamsClient.setShardIteratorValidation(
+                validateEqual(
+                        GetShardIteratorRequest.builder()
+                                .streamArn(streamArn)
+                                .shardId(shardId)
+                                .shardIteratorType(ShardIteratorType.AT_TIMESTAMP)
+                                .timestamp(atTimestamp)
+                                .build()));
+        testingDynamoDbStreamsClient.setGetRecordsResponse(expectedGetRecordsResponse);
+        testingDynamoDbStreamsClient.setGetRecordsValidation(
+                validateEqual(
+                        GetRecordsRequest.builder().shardIterator(expectedShardIterator).build()));
+
+        DynamoDbStreamsProxy dynamoDbStreamsProxy =
+                new DynamoDbStreamsProxy(testingDynamoDbStreamsClient, HTTP_CLIENT);
+
+        assertThat(dynamoDbStreamsProxy.getRecords(streamArn, shardId, startingPosition))
+                .isEqualTo(expectedGetRecordsResponse);
     }
 
     private Consumer<DescribeStreamRequest> getDescribeStreamRequestValidation(

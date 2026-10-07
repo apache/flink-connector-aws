@@ -30,7 +30,8 @@ public class DynamodbStreamsSourceConfigConstants {
     /** Marks the initial position to use when reading from the Dynamodb stream. */
     public enum InitialPosition {
         LATEST,
-        TRIM_HORIZON
+        TRIM_HORIZON,
+        AT_TIMESTAMP
     }
 
     public static final ConfigOption<InitialPosition> STREAM_INITIAL_POSITION =
@@ -38,6 +39,23 @@ public class DynamodbStreamsSourceConfigConstants {
                     .enumType(InitialPosition.class)
                     .defaultValue(InitialPosition.LATEST)
                     .withDescription("The initial position to start reading Dynamodb streams.");
+
+    public static final ConfigOption<String> STREAM_INITIAL_TIMESTAMP =
+            ConfigOptions.key("flink.stream.initpos.timestamp")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "The initial timestamp at which to start reading from the DynamoDB stream. "
+                                    + "Used only when the initial position is AT_TIMESTAMP.");
+
+    public static final ConfigOption<String> STREAM_INITIAL_TIMESTAMP_FORMAT =
+            ConfigOptions.key("flink.stream.initpos.timestamp.format")
+                    .stringType()
+                    .defaultValue("yyyy-MM-dd'T'HH:mm:ss.SSSXXX")
+                    .withDescription(
+                            "The date format of the initial timestamp. Used to parse "
+                                    + "flink.stream.initpos.timestamp when it is not an epoch-second "
+                                    + "value. Used only when the initial position is AT_TIMESTAMP.");
 
     public static final ConfigOption<Duration> SHARD_DISCOVERY_INTERVAL =
             ConfigOptions.key("flink.shard.discovery.intervalmillis")

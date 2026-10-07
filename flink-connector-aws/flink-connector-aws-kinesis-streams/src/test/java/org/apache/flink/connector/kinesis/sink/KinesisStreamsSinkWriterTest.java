@@ -58,7 +58,7 @@ public class KinesisStreamsSinkWriterTest {
     void testCreateKinesisStreamsSinkWriterInitializesRateLimitingStrategyWithExpectedParameters()
             throws IOException {
         TestSinkInitContext sinkInitContext = new TestSinkInitContext();
-        Properties sinkProperties = AWSServicesTestUtils.createConfig("https://fake_aws_endpoint");
+        Properties sinkProperties = AWSServicesTestUtils.createConfig("https://fake-aws-endpoint");
         KinesisStreamsSink<String> sink =
                 new KinesisStreamsSink<>(
                         ELEMENT_CONVERTER_PLACEHOLDER,

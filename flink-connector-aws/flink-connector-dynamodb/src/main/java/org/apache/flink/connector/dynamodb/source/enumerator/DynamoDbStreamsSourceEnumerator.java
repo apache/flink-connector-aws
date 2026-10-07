@@ -33,6 +33,7 @@ import org.apache.flink.connector.dynamodb.source.exception.DynamoDbStreamsSourc
 import org.apache.flink.connector.dynamodb.source.proxy.StreamProxy;
 import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplit;
 import org.apache.flink.connector.dynamodb.source.util.ListShardsResult;
+import org.apache.flink.util.Preconditions;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -82,6 +83,7 @@ public class DynamoDbStreamsSourceEnumerator
             SplitEnumeratorContext<DynamoDbStreamsShardSplit> context,
             String streamArn,
             Configuration sourceConfig,
+            @Nullable Instant initialTimestamp,
             StreamProxy streamProxy,
             DynamoDbStreamsShardAssigner shardAssigner,
             DynamoDbStreamsSourceEnumeratorState state) {
@@ -93,7 +95,12 @@ public class DynamoDbStreamsSourceEnumerator
         this.shardAssignerContext = new ShardAssignerContext(splitAssignment, context);
         InitialPosition initialPosition = sourceConfig.get(STREAM_INITIAL_POSITION);
         if (state == null) {
-            this.startTimestamp = Instant.now();
+            this.startTimestamp =
+                    initialPosition == InitialPosition.AT_TIMESTAMP
+                            ? Preconditions.checkNotNull(
+                                    initialTimestamp,
+                                    "initialTimestamp must be set when the initial position is AT_TIMESTAMP")
+                            : Instant.now();
             this.splitTracker = new SplitTracker(streamArn, initialPosition, this.startTimestamp);
         } else {
             this.splitTracker =

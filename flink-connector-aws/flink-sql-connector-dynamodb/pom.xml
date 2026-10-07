@@ -78,6 +78,9 @@ under the License.
                                     <include>commons-logging:commons-logging</include>
                                     <include>commons-codec:commons-codec</include>
                                 </includes>
+                                <excludes>
+                                    <exclude>software.amazon.awssdk:apache5-client</exclude>
+                                </excludes>
                             </artifactSet>
                             <relocations>
                                 <relocation>
