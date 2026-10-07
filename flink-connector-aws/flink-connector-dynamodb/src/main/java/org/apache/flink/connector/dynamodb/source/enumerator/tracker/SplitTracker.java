@@ -43,6 +43,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.InitialPosition.AT_TIMESTAMP;
 import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.InitialPosition.LATEST;
 import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.InitialPosition.TRIM_HORIZON;
 import static org.apache.flink.connector.dynamodb.source.enumerator.SplitAssignmentStatus.ASSIGNED;
@@ -95,15 +96,24 @@ public class SplitTracker {
      * @param shardsToAdd collection of splits to add to tracking
      */
     public void addSplits(Collection<Shard> shardsToAdd) {
-        if (TRIM_HORIZON.equals(initialPosition)) {
-            addSplitsForTrimHorizon(shardsToAdd);
+        if (AT_TIMESTAMP.equals(initialPosition)) {
+            addSplitsForAtTimestamp(shardsToAdd);
             return;
         }
-        addSplitsForLatest(shardsToAdd);
+        if (LATEST.equals(initialPosition)) {
+            addSplitsForLatest(shardsToAdd);
+            return;
+        }
+        addSplitsWithPosition(shardsToAdd, initialPosition);
     }
 
     public void addChildSplits(Collection<Shard> childShardsToAdd) {
-        addSplitsForTrimHorizon(childShardsToAdd);
+        // Under AT_TIMESTAMP, children from the finish-handoff also start at AT_TIMESTAMP, so
+        // they match shards found by periodic discovery and never emit pre-timestamp records.
+        // Other initial positions keep the TRIM_HORIZON handoff.
+        InitialPosition childPosition =
+                AT_TIMESTAMP.equals(initialPosition) ? AT_TIMESTAMP : TRIM_HORIZON;
+        addSplitsWithPosition(childShardsToAdd, childPosition);
     }
 
     private void addSplitsForLatest(Collection<Shard> shardsToAdd) {
@@ -159,15 +169,22 @@ public class SplitTracker {
         return null;
     }
 
-    private void addSplitsForTrimHorizon(Collection<Shard> shardsToAdd) {
+    /** Tracks each shard (if not already known) with the given initial position. */
+    private void addSplitsWithPosition(Collection<Shard> shardsToAdd, InitialPosition position) {
         for (Shard shard : shardsToAdd) {
-            String shardId = shard.shardId();
-            if (!knownSplits.containsKey(shardId)) {
-                DynamoDbStreamsShardSplit newSplit = mapToSplit(shard, TRIM_HORIZON);
-                knownSplits.put(shardId, newSplit);
-                addSplitToMapping(newSplit);
-            }
+            trackSplit(shard, position);
         }
+    }
+
+    /** Adds a single shard to tracking with the given initial position, unless already tracked. */
+    private void trackSplit(Shard shard, InitialPosition position) {
+        String shardId = shard.shardId();
+        if (knownSplits.containsKey(shardId)) {
+            return;
+        }
+        DynamoDbStreamsShardSplit newSplit = mapToSplit(shard, position);
+        knownSplits.put(shardId, newSplit);
+        addSplitToMapping(newSplit);
     }
 
     private void addSplitToMapping(DynamoDbStreamsShardSplit split) {
@@ -179,12 +196,67 @@ public class SplitTracker {
                 .add(split.splitId());
     }
 
+    /**
+     * Adds shards discovered under the AT_TIMESTAMP initial position. Each newly discovered shard
+     * (one that is not already tracked and is not an ancestor of an already-tracked shard) is added
+     * at AT_TIMESTAMP: the service resolves the correct per-record position via
+     * GetShardIterator(AT_TIMESTAMP), so a shard that straddles the timestamp never emits
+     * pre-timestamp records and the position is independent of the discovery path or restore
+     * timing. Ancestors of already-tracked shards are skipped because they have already been
+     * processed.
+     */
+    private void addSplitsForAtTimestamp(Collection<Shard> shardsToAdd) {
+        Map<String, Shard> shardIdToShardMap =
+                shardsToAdd.stream()
+                        .collect(Collectors.toMap(Shard::shardId, shard -> shard, (a, b) -> a));
+
+        Set<String> ancestorsOfTrackedSplits = findAncestorsOfTrackedSplits(shardIdToShardMap);
+
+        // Every shard under AT_TIMESTAMP starts at the timestamp; the service filters
+        // per-record via GetShardIterator(AT_TIMESTAMP), so a straddling shard never emits
+        // pre-timestamp records. Ancestors already consumed are skipped; parent-before-child
+        // ordering is enforced later by the assignment gate.
+        List<Shard> eligibleShards =
+                shardsToAdd.stream()
+                        .filter(shard -> shard.shardId() != null)
+                        .filter(shard -> !ancestorsOfTrackedSplits.contains(shard.shardId()))
+                        .collect(Collectors.toList());
+        addSplitsWithPosition(eligibleShards, AT_TIMESTAMP);
+    }
+
+    private Set<String> findAncestorsOfTrackedSplits(Map<String, Shard> shardIdToShardMap) {
+        Set<String> ancestorsOfTrackedSplits = new HashSet<>();
+        // knownSplits already contains finished splits (they are removed from both only on
+        // cleanup), so its key set covers every tracked shard.
+        Set<String> trackedShardIds = new HashSet<>(knownSplits.keySet());
+
+        for (String trackedShardId : trackedShardIds) {
+            Shard shard = shardIdToShardMap.get(trackedShardId);
+            if (shard == null) {
+                continue;
+            }
+            String currentParentId = shard.parentShardId();
+            while (currentParentId != null && !ancestorsOfTrackedSplits.contains(currentParentId)) {
+                ancestorsOfTrackedSplits.add(currentParentId);
+                Shard parentShard = shardIdToShardMap.get(currentParentId);
+                if (parentShard == null) {
+                    break;
+                }
+                currentParentId = parentShard.parentShardId();
+            }
+        }
+        return ancestorsOfTrackedSplits;
+    }
+
     private DynamoDbStreamsShardSplit mapToSplit(
             Shard shard, DynamodbStreamsSourceConfigConstants.InitialPosition initialPosition) {
         StartingPosition startingPosition;
         switch (initialPosition) {
             case LATEST:
                 startingPosition = StartingPosition.latest();
+                break;
+            case AT_TIMESTAMP:
+                startingPosition = StartingPosition.atTimestamp(startTimestamp);
                 break;
             case TRIM_HORIZON:
             default:
@@ -296,6 +368,10 @@ public class SplitTracker {
     @VisibleForTesting
     public Map<String, DynamoDbStreamsShardSplit> getKnownSplits() {
         return knownSplits;
+    }
+
+    public Set<String> getFinishedSplits() {
+        return finishedSplits;
     }
 
     /**

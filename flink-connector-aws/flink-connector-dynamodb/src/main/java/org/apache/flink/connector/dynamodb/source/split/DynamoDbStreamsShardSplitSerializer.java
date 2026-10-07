@@ -31,6 +31,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -45,8 +46,9 @@ import java.util.Set;
 public class DynamoDbStreamsShardSplitSerializer
         implements SimpleVersionedSerializer<DynamoDbStreamsShardSplit> {
 
-    private static final Set<Integer> COMPATIBLE_VERSIONS = new HashSet<>(Arrays.asList(0, 1, 2));
-    private static final int CURRENT_VERSION = 2;
+    private static final Set<Integer> COMPATIBLE_VERSIONS =
+            new HashSet<>(Arrays.asList(0, 1, 2, 3));
+    private static final int CURRENT_VERSION = 3;
 
     @Override
     public int getVersion() {
@@ -69,6 +71,12 @@ public class DynamoDbStreamsShardSplitSerializer
                 out.writeBoolean(startingMarker instanceof String);
                 if (startingMarker instanceof String) {
                     out.writeUTF((String) startingMarker);
+                } else if (startingMarker instanceof Instant) {
+                    out.writeLong(((Instant) startingMarker).toEpochMilli());
+                } else {
+                    throw new IOException(
+                            "Unsupported starting marker type: "
+                                    + startingMarker.getClass().getName());
                 }
             }
             if (split.getParentShardId() == null) {
@@ -116,8 +124,11 @@ public class DynamoDbStreamsShardSplitSerializer
 
             final boolean hasStartingMarker = in.readBoolean();
             if (hasStartingMarker) {
-                if (in.readBoolean()) {
+                boolean isString = in.readBoolean();
+                if (isString) {
                     startingMarker = in.readUTF();
+                } else if (version >= 3) {
+                    startingMarker = Instant.ofEpochMilli(in.readLong());
                 }
             }
 
