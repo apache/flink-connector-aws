@@ -20,6 +20,7 @@ package org.apache.flink.connector.dynamodb.sink;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.connector.base.sink.writer.AsyncSinkWriterStateSerializer;
+import org.apache.flink.connector.base.sink.writer.BufferedRequestState;
 import org.apache.flink.connector.dynamodb.util.DynamoDbSerializationUtil;
 
 import java.io.DataInputStream;
@@ -30,6 +31,12 @@ import java.io.IOException;
 @Internal
 public class DynamoDbWriterStateSerializer
         extends AsyncSinkWriterStateSerializer<DynamoDbWriteRequest> {
+
+    // The parent class does not pass the version to deserializeRequestFromStream(),
+    // so we stash it here before calling super.deserialize() and read it back in
+    // deserializeRequestFromStream().
+    private final ThreadLocal<Integer> deserializingVersion =
+            ThreadLocal.withInitial(this::getVersion);
 
     /**
      * Serializes {@link DynamoDbWriteRequest} in form of
@@ -44,11 +51,22 @@ public class DynamoDbWriterStateSerializer
     @Override
     protected DynamoDbWriteRequest deserializeRequestFromStream(
             long requestSize, DataInputStream in) throws IOException {
-        return DynamoDbSerializationUtil.deserializeWriteRequest(in);
+        return DynamoDbSerializationUtil.deserializeWriteRequest(in, deserializingVersion.get());
+    }
+
+    @Override
+    public BufferedRequestState<DynamoDbWriteRequest> deserialize(int version, byte[] serialized)
+            throws IOException {
+        deserializingVersion.set(version);
+        try {
+            return super.deserialize(version, serialized);
+        } finally {
+            deserializingVersion.set(getVersion());
+        }
     }
 
     @Override
     public int getVersion() {
-        return 1;
+        return 2;
     }
 }
