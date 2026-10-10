@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.time.Instant;
 import java.util.stream.Stream;
 
 import static org.apache.flink.connector.dynamodb.source.util.TestUtil.SHARD_ID;
@@ -76,11 +77,38 @@ class DynamoDbStreamsShardSplitSerializerTest {
         assertThat(deserializedSplit).usingRecursiveComparison().isEqualTo(initialSplit);
     }
 
+    @Test
+    void testSerializeAtTimestampUsesVersion3AndRoundTrips() throws Exception {
+        final DynamoDbStreamsShardSplit initialSplit =
+                getTestSplit(StartingPosition.atTimestamp(Instant.ofEpochMilli(1704067200000L)));
+        DynamoDbStreamsShardSplitSerializer serializer = new DynamoDbStreamsShardSplitSerializer();
+
+        assertThat(serializer.getVersion()).isEqualTo(3);
+        byte[] serialized = serializer.serialize(initialSplit);
+        DynamoDbStreamsShardSplit deserialized =
+                serializer.deserialize(serializer.getVersion(), serialized);
+        assertThat(deserialized).usingRecursiveComparison().isEqualTo(initialSplit);
+    }
+
+    @Test
+    void testBackwardCompatibilityVersion2SplitDeserializesUnderVersion3() throws Exception {
+        // A split without an Instant marker is written identically under schema v2 and v3, so the
+        // v3 deserializer must read data tagged as version 2 (an older checkpoint) correctly.
+        final DynamoDbStreamsShardSplit initialSplit =
+                getTestSplit(StartingPosition.continueFromSequenceNumber("some-sequence-number"));
+        DynamoDbStreamsShardSplitSerializer serializer = new DynamoDbStreamsShardSplitSerializer();
+
+        byte[] serialized = serializer.serialize(initialSplit);
+        DynamoDbStreamsShardSplit deserialized = serializer.deserialize(2, serialized);
+        assertThat(deserialized).usingRecursiveComparison().isEqualTo(initialSplit);
+    }
+
     private static Stream<StartingPosition> provideStartingPositions() {
         return Stream.of(
                 StartingPosition.fromStart(),
                 StartingPosition.continueFromSequenceNumber("some-sequence-number"),
-                StartingPosition.latest());
+                StartingPosition.latest(),
+                StartingPosition.atTimestamp(Instant.ofEpochMilli(1704067200000L)));
     }
 
     @Test

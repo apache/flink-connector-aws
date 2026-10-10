@@ -44,11 +44,13 @@ import software.amazon.awssdk.services.dynamodb.model.ShardIteratorType;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
 
 import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.STREAM_INITIAL_POSITION;
+import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.STREAM_INITIAL_TIMESTAMP;
 import static org.apache.flink.connector.dynamodb.source.util.DynamoDbStreamsProxyProvider.getTestStreamProxy;
 import static org.apache.flink.connector.dynamodb.source.util.TestUtil.generateShard;
 import static org.apache.flink.connector.dynamodb.source.util.TestUtil.generateShardId;
@@ -137,6 +139,214 @@ class DynamoDbStreamsSourceEnumeratorTest {
             SplitsAssignment<DynamoDbStreamsShardSplit> noUpdateSplitAssignment =
                     context.getSplitsAssignmentSequence().get(1);
             assertThat(noUpdateSplitAssignment.assignment()).isEmpty();
+        }
+    }
+
+    @Test
+    void testStartWithAtTimestampListsAllShardsAndAssignsAtTimestamp() throws Throwable {
+        try (MockSplitEnumeratorContext<DynamoDbStreamsShardSplit> context =
+                new MockSplitEnumeratorContext<>(NUM_SUBTASKS)) {
+            DynamoDbStreamsProxyProvider.TestDynamoDbStreamsProxy streamProxy =
+                    getTestStreamProxy();
+            final Configuration sourceConfig = new Configuration();
+            sourceConfig.set(
+                    STREAM_INITIAL_POSITION,
+                    DynamodbStreamsSourceConfigConstants.InitialPosition.AT_TIMESTAMP);
+            sourceConfig.set(STREAM_INITIAL_TIMESTAMP, "2024-01-01T00:00:00.000Z");
+
+            DynamoDbStreamsSourceEnumerator enumerator =
+                    new DynamoDbStreamsSourceEnumerator(
+                            context,
+                            STREAM_ARN,
+                            sourceConfig,
+                            streamProxy,
+                            ShardAssignerFactory.uniformShardAssigner(),
+                            null);
+            enumerator.start();
+
+            final int subtaskId = 1;
+            context.registerReader(TestUtil.getTestReaderInfo(subtaskId));
+            enumerator.addReader(subtaskId);
+            Shard[] shards =
+                    new Shard[] {
+                        generateShard(0, "1200", null, null), generateShard(1, "1300", null, null)
+                    };
+            streamProxy.addShards(shards);
+
+            // Discovery lists all shards; every one is assigned at AT_TIMESTAMP.
+            context.runNextOneTimeCallable();
+
+            SplitsAssignment<DynamoDbStreamsShardSplit> initialSplitAssignment =
+                    context.getSplitsAssignmentSequence().get(0);
+            // Every discovered shard is assigned with the AT_TIMESTAMP starting position; the
+            // per-shard GetShardIterator(AT_TIMESTAMP) resolves the position at read time.
+            assertThat(
+                            initialSplitAssignment.assignment().get(subtaskId).stream()
+                                    .map(DynamoDbStreamsShardSplit::getStartingPosition))
+                    .allSatisfy(
+                            s ->
+                                    assertThat(s.getShardIteratorType())
+                                            .isEqualTo(ShardIteratorType.AT_TIMESTAMP));
+        }
+    }
+
+    @Test
+    void testAtTimestampSecondDiscoveryAddsNoDuplicates() throws Throwable {
+        try (MockSplitEnumeratorContext<DynamoDbStreamsShardSplit> context =
+                new MockSplitEnumeratorContext<>(NUM_SUBTASKS)) {
+            DynamoDbStreamsProxyProvider.TestDynamoDbStreamsProxy streamProxy =
+                    getTestStreamProxy();
+            final Configuration sourceConfig = new Configuration();
+            sourceConfig.set(
+                    STREAM_INITIAL_POSITION,
+                    DynamodbStreamsSourceConfigConstants.InitialPosition.AT_TIMESTAMP);
+            sourceConfig.set(STREAM_INITIAL_TIMESTAMP, "2024-01-01T00:00:00.000Z");
+            DynamoDbStreamsSourceEnumerator enumerator =
+                    new DynamoDbStreamsSourceEnumerator(
+                            context,
+                            STREAM_ARN,
+                            sourceConfig,
+                            streamProxy,
+                            ShardAssignerFactory.uniformShardAssigner(),
+                            null);
+            enumerator.start();
+            final int subtaskId = 0;
+            context.registerReader(TestUtil.getTestReaderInfo(subtaskId));
+            enumerator.addReader(subtaskId);
+            streamProxy.addShards(
+                    generateShard(0, "1200", null, null), generateShard(1, "1300", null, null));
+
+            // Bootstrap assigns both shards.
+            context.runNextOneTimeCallable();
+            assertThat(context.getSplitsAssignmentSequence().get(0).assignment().get(subtaskId))
+                    .hasSize(2);
+
+            // A periodic shard discovery over the SAME shard set adds/assigns nothing new (dedup
+            // keeps sync
+            // idempotent even though the full listing returns every shard again).
+            context.runPeriodicCallable(0);
+            assertThat(context.getSplitsAssignmentSequence().get(1).assignment().get(subtaskId))
+                    .isNullOrEmpty();
+        }
+    }
+
+    @Test
+    void testAtTimestampChildIsGatedBehindParentAndNotDuplicated() throws Throwable {
+        try (MockSplitEnumeratorContext<DynamoDbStreamsShardSplit> context =
+                new MockSplitEnumeratorContext<>(NUM_SUBTASKS)) {
+            DynamoDbStreamsProxyProvider.TestDynamoDbStreamsProxy streamProxy =
+                    getTestStreamProxy();
+            final Configuration sourceConfig = new Configuration();
+            sourceConfig.set(
+                    STREAM_INITIAL_POSITION,
+                    DynamodbStreamsSourceConfigConstants.InitialPosition.AT_TIMESTAMP);
+            sourceConfig.set(STREAM_INITIAL_TIMESTAMP, "2024-01-01T00:00:00.000Z");
+            DynamoDbStreamsSourceEnumerator enumerator =
+                    new DynamoDbStreamsSourceEnumerator(
+                            context,
+                            STREAM_ARN,
+                            sourceConfig,
+                            streamProxy,
+                            ShardAssignerFactory.uniformShardAssigner(),
+                            null);
+            enumerator.start();
+            final int subtaskId = 0;
+            context.registerReader(TestUtil.getTestReaderInfo(subtaskId));
+            enumerator.addReader(subtaskId);
+
+            // Parent (closed) and its child (open) are both present at bootstrap.
+            Shard parent = generateShard(1, "100", "200", null);
+            Shard child = generateShard(2, "300", null, parent.shardId());
+            streamProxy.addShards(parent, child);
+
+            // Bootstrap: only the parent is assigned; the child is gated behind it.
+            context.runNextOneTimeCallable();
+            SplitsAssignment<DynamoDbStreamsShardSplit> bootstrap =
+                    context.getSplitsAssignmentSequence().get(0);
+            assertThat(
+                            bootstrap.assignment().get(subtaskId).stream()
+                                    .map(DynamoDbStreamsShardSplit::getShardId))
+                    .containsExactly(parent.shardId());
+            assertThat(
+                            bootstrap.assignment().get(subtaskId).stream()
+                                    .map(DynamoDbStreamsShardSplit::getStartingPosition)
+                                    .map(StartingPosition::getShardIteratorType))
+                    .containsExactly(ShardIteratorType.AT_TIMESTAMP);
+
+            // When the parent finishes, the child is assigned — still with its bootstrap
+            // AT_TIMESTAMP position: the child-handoff TRIM_HORIZON does not override an
+            // already-tracked split (dedup).
+            enumerator.handleSourceEvent(
+                    subtaskId,
+                    new SplitsFinishedEvent(
+                            Collections.singleton(
+                                    new SplitsFinishedEventContext(
+                                            parent.shardId(), Collections.singletonList(child)))));
+            SplitsAssignment<DynamoDbStreamsShardSplit> afterFinish =
+                    context.getSplitsAssignmentSequence().get(1);
+            assertThat(
+                            afterFinish.assignment().get(subtaskId).stream()
+                                    .map(DynamoDbStreamsShardSplit::getShardId))
+                    .containsExactly(child.shardId());
+            assertThat(
+                            afterFinish.assignment().get(subtaskId).stream()
+                                    .map(DynamoDbStreamsShardSplit::getStartingPosition)
+                                    .map(StartingPosition::getShardIteratorType))
+                    .containsExactly(ShardIteratorType.AT_TIMESTAMP);
+        }
+    }
+
+    @Test
+    void testAtTimestampChildDiscoveredViaHandoffGetsAtTimestamp() throws Throwable {
+        try (MockSplitEnumeratorContext<DynamoDbStreamsShardSplit> context =
+                new MockSplitEnumeratorContext<>(NUM_SUBTASKS)) {
+            DynamoDbStreamsProxyProvider.TestDynamoDbStreamsProxy streamProxy =
+                    getTestStreamProxy();
+            final Configuration sourceConfig = new Configuration();
+            sourceConfig.set(
+                    STREAM_INITIAL_POSITION,
+                    DynamodbStreamsSourceConfigConstants.InitialPosition.AT_TIMESTAMP);
+            sourceConfig.set(STREAM_INITIAL_TIMESTAMP, "2024-01-01T00:00:00.000Z");
+            DynamoDbStreamsSourceEnumerator enumerator =
+                    new DynamoDbStreamsSourceEnumerator(
+                            context,
+                            STREAM_ARN,
+                            sourceConfig,
+                            streamProxy,
+                            ShardAssignerFactory.uniformShardAssigner(),
+                            null);
+            enumerator.start();
+            final int subtaskId = 0;
+            context.registerReader(TestUtil.getTestReaderInfo(subtaskId));
+            enumerator.addReader(subtaskId);
+
+            // Only the parent is present at bootstrap; the child appears later via the
+            // finish-handoff.
+            Shard parent = generateShard(1, "100", "200", null);
+            streamProxy.addShards(parent);
+            context.runNextOneTimeCallable();
+
+            Shard child = generateShard(2, "300", null, parent.shardId());
+            enumerator.handleSourceEvent(
+                    subtaskId,
+                    new SplitsFinishedEvent(
+                            Collections.singleton(
+                                    new SplitsFinishedEventContext(
+                                            parent.shardId(), Collections.singletonList(child)))));
+
+            // A child discovered only via the handoff still starts at AT_TIMESTAMP
+            // (not TRIM_HORIZON), so a straddling shard can never emit pre-timestamp records.
+            SplitsAssignment<DynamoDbStreamsShardSplit> afterFinish =
+                    context.getSplitsAssignmentSequence().get(1);
+            assertThat(
+                            afterFinish.assignment().get(subtaskId).stream()
+                                    .map(DynamoDbStreamsShardSplit::getShardId))
+                    .containsExactly(child.shardId());
+            assertThat(
+                            afterFinish.assignment().get(subtaskId).stream()
+                                    .map(DynamoDbStreamsShardSplit::getStartingPosition)
+                                    .map(StartingPosition::getShardIteratorType))
+                    .containsExactly(ShardIteratorType.AT_TIMESTAMP);
         }
     }
 

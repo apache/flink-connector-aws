@@ -539,4 +539,190 @@ class SplitTrackerTest {
         return new DynamoDbStreamsShardSplit(
                 STREAM_ARN, shard.shardId(), StartingPosition.fromStart(), shard.parentShardId());
     }
+
+    @Test
+    public void testAtTimestampBootstrapAddsAllShardsWithTimestampPosition() {
+        Instant startTime = Instant.now();
+        SplitTracker splitTracker =
+                new SplitTracker(STREAM_ARN, InitialPosition.AT_TIMESTAMP, startTime);
+
+        List<Shard> shards =
+                Arrays.asList(
+                        generateShard(5, "5000", null, null), generateShard(6, "6000", null, null));
+
+        splitTracker.addSplits(shards);
+
+        assertThat(splitTracker.getKnownSplits()).hasSize(2);
+        splitTracker
+                .getKnownSplits()
+                .values()
+                .forEach(
+                        split ->
+                                assertThat(split.getStartingPosition())
+                                        .isEqualTo(StartingPosition.atTimestamp(startTime)));
+    }
+
+    @Test
+    public void testAtTimestampRootShardGetsAtTimestamp() {
+        Instant startTime = Instant.now();
+        SplitTracker splitTracker =
+                new SplitTracker(STREAM_ARN, InitialPosition.AT_TIMESTAMP, startTime);
+
+        // A shard with no tracked parent starts at AT_TIMESTAMP.
+        splitTracker.addSplits(Collections.singletonList(generateShard(0, "100", null, null)));
+
+        assertThat(splitTracker.getKnownSplits().get(generateShardId(0)).getStartingPosition())
+                .isEqualTo(StartingPosition.atTimestamp(startTime));
+    }
+
+    @Test
+    public void testAtTimestampChildOfPreExistingParentGetsAtTimestamp() {
+        Instant startTime = Instant.now();
+        SplitTracker splitTracker =
+                new SplitTracker(STREAM_ARN, InitialPosition.AT_TIMESTAMP, startTime);
+
+        // Cycle 1: parent (root) is tracked.
+        splitTracker.addSplits(Collections.singletonList(generateShard(0, "100", null, null)));
+
+        // Cycle 2: parent has closed and a child appears. The child starts at
+        // AT_TIMESTAMP (not TRIM_HORIZON) regardless of the parent being tracked before this cycle.
+        splitTracker.addSplits(
+                Arrays.asList(
+                        generateShard(0, "100", "200", null),
+                        generateShard(1, "200", null, generateShardId(0))));
+
+        assertThat(splitTracker.getKnownSplits().get(generateShardId(1)).getStartingPosition())
+                .isEqualTo(StartingPosition.atTimestamp(startTime));
+    }
+
+    @Test
+    public void testAtTimestampChildInheritsNewlyAddedParentPosition() {
+        Instant startTime = Instant.now();
+        SplitTracker splitTracker =
+                new SplitTracker(STREAM_ARN, InitialPosition.AT_TIMESTAMP, startTime);
+
+        // Cycle 1: grandparent (root) is tracked.
+        splitTracker.addSplits(Collections.singletonList(generateShard(0, "100", null, null)));
+
+        // Cycle 2: grandparent(0) closed; parent(1) and child(2) both appear new in this cycle.
+        splitTracker.addSplits(
+                Arrays.asList(
+                        generateShard(0, "100", "200", null),
+                        generateShard(1, "200", "300", generateShardId(0)),
+                        generateShard(2, "300", null, generateShardId(1))));
+
+        // parent(1): every shard starts at AT_TIMESTAMP.
+        assertThat(splitTracker.getKnownSplits().get(generateShardId(1)).getStartingPosition())
+                .isEqualTo(StartingPosition.atTimestamp(startTime));
+        // child(2): its parent(1) was added in THIS cycle at AT_TIMESTAMP, so it inherits
+        // AT_TIMESTAMP too.
+        assertThat(splitTracker.getKnownSplits().get(generateShardId(2)).getStartingPosition())
+                .isEqualTo(StartingPosition.atTimestamp(startTime));
+    }
+
+    @Test
+    public void testAtTimestampPeriodicDiscoverySkipsAncestors() {
+        Instant startTime = Instant.now();
+        SplitTracker splitTracker =
+                new SplitTracker(STREAM_ARN, InitialPosition.AT_TIMESTAMP, startTime);
+
+        // Bootstrap: only shards 5 and 6 (active at T)
+        List<Shard> bootstrapShards =
+                Arrays.asList(
+                        generateShard(5, "5000", null, generateShardId(3)),
+                        generateShard(6, "6000", null, generateShardId(3)));
+        splitTracker.addSplits(bootstrapShards);
+
+        assertThat(splitTracker.getKnownSplits()).hasSize(2);
+
+        // Periodic discovery: returns all shards including ancestors
+        List<Shard> allShards =
+                Arrays.asList(
+                        generateShard(0, "100", "500", null), // root
+                        generateShard(1, "500", "1000", generateShardId(0)), // child of 0
+                        generateShard(3, "1000", "3000", generateShardId(1)), // parent of 5,6
+                        generateShard(5, "5000", null, generateShardId(3)),
+                        generateShard(6, "6000", null, generateShardId(3)));
+        splitTracker.addSplits(allShards);
+
+        // Ancestors 0, 1, 3 should be skipped
+        assertThat(splitTracker.getKnownSplits()).hasSize(2);
+        assertThat(splitTracker.getKnownSplits().containsKey(generateShardId(0))).isFalse();
+        assertThat(splitTracker.getKnownSplits().containsKey(generateShardId(1))).isFalse();
+        assertThat(splitTracker.getKnownSplits().containsKey(generateShardId(3))).isFalse();
+    }
+
+    @Test
+    public void testAtTimestampMissedShardAddedByPeriodicDiscovery() {
+        Instant startTime = Instant.now();
+        SplitTracker splitTracker =
+                new SplitTracker(STREAM_ARN, InitialPosition.AT_TIMESTAMP, startTime);
+
+        // Bootstrap: shard 5 and 6 returned, shard 7 missed
+        //     Shard 0
+        //    /       \
+        // Shard 1   Shard 2
+        //   |          |
+        // Shard 3   Shard 7 (missed)
+        //  / \
+        // 5   6
+        List<Shard> bootstrapShards =
+                Arrays.asList(
+                        generateShard(5, "5000", null, generateShardId(3)),
+                        generateShard(6, "6000", null, generateShardId(3)));
+        splitTracker.addSplits(bootstrapShards);
+
+        // Periodic discovery returns all including missed shard 7
+        List<Shard> allShards =
+                Arrays.asList(
+                        generateShard(0, "100", "500", null),
+                        generateShard(1, "500", "1000", generateShardId(0)),
+                        generateShard(2, "500", "4000", generateShardId(0)),
+                        generateShard(3, "1000", "3000", generateShardId(1)),
+                        generateShard(5, "5000", null, generateShardId(3)),
+                        generateShard(6, "6000", null, generateShardId(3)),
+                        generateShard(7, "7000", null, generateShardId(2)));
+        splitTracker.addSplits(allShards);
+
+        // Shard 7 should be added (missed, not an ancestor of anything tracked). Its parent
+        // (shard 2) is added in this same cycle with AT_TIMESTAMP, so shard 7 inherits it.
+        assertThat(splitTracker.getKnownSplits().containsKey(generateShardId(7))).isTrue();
+        assertThat(splitTracker.getKnownSplits().get(generateShardId(7)).getStartingPosition())
+                .isEqualTo(StartingPosition.atTimestamp(startTime));
+
+        // Shard 2 should also be added (parent of missed shard 7). Its parent (shard 0) is neither
+        // tracked before this cycle nor added this cycle, so shard 2 starts at AT_TIMESTAMP.
+        assertThat(splitTracker.getKnownSplits().containsKey(generateShardId(2))).isTrue();
+        assertThat(splitTracker.getKnownSplits().get(generateShardId(2)).getStartingPosition())
+                .isEqualTo(StartingPosition.atTimestamp(startTime));
+
+        // Ancestors of tracked shards (0, 1, 3) should be skipped
+        assertThat(splitTracker.getKnownSplits().containsKey(generateShardId(0))).isFalse();
+        assertThat(splitTracker.getKnownSplits().containsKey(generateShardId(1))).isFalse();
+        assertThat(splitTracker.getKnownSplits().containsKey(generateShardId(3))).isFalse();
+    }
+
+    @Test
+    public void testAtTimestampChildSplitsGetTimestampPosition() {
+        Instant startTime = Instant.now();
+        SplitTracker splitTracker =
+                new SplitTracker(STREAM_ARN, InitialPosition.AT_TIMESTAMP, startTime);
+
+        List<Shard> bootstrapShards =
+                Collections.singletonList(generateShard(5, "5000", null, null));
+        splitTracker.addSplits(bootstrapShards);
+
+        // Child shards discovered via the finish-handoff. They start at
+        // AT_TIMESTAMP so a straddling child never emits pre-timestamp records.
+        List<Shard> childShards =
+                Arrays.asList(
+                        generateShard(8, "8000", null, generateShardId(5)),
+                        generateShard(9, "9000", null, generateShardId(5)));
+        splitTracker.addChildSplits(childShards);
+
+        assertThat(splitTracker.getKnownSplits().get(generateShardId(8)).getStartingPosition())
+                .isEqualTo(StartingPosition.atTimestamp(startTime));
+        assertThat(splitTracker.getKnownSplits().get(generateShardId(9)).getStartingPosition())
+                .isEqualTo(StartingPosition.atTimestamp(startTime));
+    }
 }
