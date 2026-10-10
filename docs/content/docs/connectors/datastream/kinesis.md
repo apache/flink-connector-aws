@@ -370,10 +370,6 @@ This may require a different retry strategy compared to other API calls used dur
 - *[RegisterStreamConsumer](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_RegisterStreamConsumer.html)*:
   this is called once per stream during stream consumer registration, unless the `SELF_MANAGED` consumer lifecycle is configured.
 
-- *[DeregisterStreamConsumer](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_DeregisterStreamConsumer.html)*:
-  this is called once per stream during stream consumer deregistration, unless the `SELF_MANAGED` registration strategy is configured.
-
-
 ## Kinesis Consumer
 
 {{< hint warning >}}
