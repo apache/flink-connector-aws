@@ -47,6 +47,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -59,10 +60,10 @@ import java.util.concurrent.atomic.AtomicReference;
 @Internal
 public class FanOutKinesisShardSubscription {
     private static final Logger LOG = LoggerFactory.getLogger(FanOutKinesisShardSubscription.class);
+    // ResourceNotFoundException is handled separately in nextEvent() (always fatal).
     private static final List<Class<? extends Throwable>> RECOVERABLE_EXCEPTIONS =
             Arrays.asList(
                     InternalFailureException.class,
-                    ResourceNotFoundException.class,
                     KinesisException.class,
                     ResourceInUseException.class,
                     ReadTimeoutException.class,
@@ -74,6 +75,16 @@ public class FanOutKinesisShardSubscription {
     private final String consumerArn;
     private final String shardId;
     private final Duration subscriptionTimeout;
+
+    /** Max consecutive recoverable exceptions before giving up instead of retrying forever. */
+    private final int maxRecoverableAttempts;
+
+    private final Duration recoverableExceptionBaseBackoff;
+    private final Duration recoverableExceptionMaxBackoff;
+
+    // Guarded by lockObject. Reset to 0 on a successful onSubscribe; incremented on each
+    // recoverable exception handled by nextEvent().
+    private int consecutiveRecoverableExceptions = 0;
 
     /**
      * Number of events to keep in flight per subscriber. Pipelining the fetch overlaps the server's
@@ -99,13 +110,19 @@ public class FanOutKinesisShardSubscription {
             String shardId,
             StartingPosition startingPosition,
             Duration subscriptionTimeout,
-            ScheduledExecutorService timeoutScheduler) {
+            ScheduledExecutorService timeoutScheduler,
+            int maxRecoverableAttempts,
+            Duration recoverableExceptionBaseBackoff,
+            Duration recoverableExceptionMaxBackoff) {
         this.kinesis = kinesis;
         this.consumerArn = consumerArn;
         this.shardId = shardId;
         this.startingPosition = startingPosition;
         this.subscriptionTimeout = subscriptionTimeout;
         this.timeoutScheduler = timeoutScheduler;
+        this.maxRecoverableAttempts = maxRecoverableAttempts;
+        this.recoverableExceptionBaseBackoff = recoverableExceptionBaseBackoff;
+        this.recoverableExceptionMaxBackoff = recoverableExceptionMaxBackoff;
     }
 
     /** Method to allow eager activation of the subscription. */
@@ -247,10 +264,23 @@ public class FanOutKinesisShardSubscription {
     public SubscribeToShardEvent nextEvent() {
         Throwable throwable = subscriptionException.getAndSet(null);
         if (throwable != null) {
-            // We don't want to wrap ResourceNotFoundExceptions because it is handled via a
-            // try-catch loop
-            if (throwable instanceof ResourceNotFoundException) {
-                throw (ResourceNotFoundException) throwable;
+            // Search the whole cause chain, not just the top-level type — the SDK often
+            // delivers this wrapped (e.g. in CompletionException).
+            Optional<ResourceNotFoundException> resourceNotFound =
+                    ExceptionUtils.findThrowable(throwable, ResourceNotFoundException.class);
+            if (resourceNotFound.isPresent()) {
+                ResourceNotFoundException rnfe = resourceNotFound.get();
+                if (isConsumerNotFound(rnfe)) {
+                    // Consumer gone, not the shard: fatal. Wrap it so
+                    // KinesisShardSplitReaderBase's own ResourceNotFoundException handling
+                    // (which means "the shard is gone" — a normal resharding event) doesn't
+                    // swallow this as "mark split complete", silently abandoning the shard.
+                    throw new KinesisStreamsSourceException(
+                            "EFO consumer not found while subscribing to shard " + shardId + ".",
+                            rnfe);
+                }
+                // Shard itself is gone (e.g. resharding) — expected, let the caller handle it.
+                throw rnfe;
             }
             Optional<? extends Throwable> recoverableException =
                     RECOVERABLE_EXCEPTIONS.stream()
@@ -259,11 +289,39 @@ public class FanOutKinesisShardSubscription {
                             .map(Optional::get)
                             .findFirst();
             if (recoverableException.isPresent()) {
+                int attempt;
+                synchronized (lockObject) {
+                    attempt = ++consecutiveRecoverableExceptions;
+                }
+                if (attempt > maxRecoverableAttempts) {
+                    LOG.error(
+                            "Exceeded {} consecutive recoverable exceptions while subscribing to "
+                                    + "shard {}; treating as unrecoverable so the task can fail "
+                                    + "and be retried from a clean state instead of retrying "
+                                    + "forever with no progress.",
+                            maxRecoverableAttempts,
+                            shardId,
+                            recoverableException.get());
+                    throw new KinesisStreamsSourceException(
+                            "Exceeded "
+                                    + maxRecoverableAttempts
+                                    + " consecutive recoverable exceptions while subscribing to "
+                                    + "shard "
+                                    + shardId
+                                    + ".",
+                            recoverableException.get());
+                }
+                long backoffMillis = computeRecoverableBackoffMillis(attempt);
                 LOG.warn(
-                        "Recoverable exception encountered for shard {} while subscribing to shard. Ignoring: {}",
+                        "Recoverable exception encountered for shard {} while subscribing to "
+                                + "shard (attempt {}/{}); retrying in {}ms. Ignoring: {}",
                         shardId,
+                        attempt,
+                        maxRecoverableAttempts,
+                        backoffMillis,
                         recoverableException.get());
-                activateSubscription();
+                timeoutScheduler.schedule(
+                        this::activateSubscription, backoffMillis, TimeUnit.MILLISECONDS);
                 return null;
             }
             LOG.error("Subscription encountered unrecoverable exception. {}", shardId, throwable);
@@ -272,6 +330,21 @@ public class FanOutKinesisShardSubscription {
         }
 
         return pollAndRequestNext();
+    }
+
+    // AWS doesn't expose a resource-type field on ResourceNotFoundException, so this is the
+    // only available signal distinguishing "no such consumer" from "no such shard".
+    private static boolean isConsumerNotFound(ResourceNotFoundException e) {
+        String message = e.getMessage();
+        return message != null && message.contains("Consumer");
+    }
+
+    /** Full-jitter exponential backoff: random duration between 0 and min(base*2^(n-1), max). */
+    private long computeRecoverableBackoffMillis(int attempt) {
+        long exponential =
+                recoverableExceptionBaseBackoff.toMillis() * (1L << Math.min(attempt - 1, 20));
+        long capped = Math.min(exponential, recoverableExceptionMaxBackoff.toMillis());
+        return ThreadLocalRandom.current().nextLong(capped + 1);
     }
 
     private SubscribeToShardEvent pollAndRequestNext() {
@@ -320,6 +393,7 @@ public class FanOutKinesisShardSubscription {
                 }
                 cancelTimeoutFuture();
                 this.subscription = subscription;
+                consecutiveRecoverableExceptions = 0;
 
                 int priming = PREFETCH - eventQueue.size();
                 if (priming > 0) {
