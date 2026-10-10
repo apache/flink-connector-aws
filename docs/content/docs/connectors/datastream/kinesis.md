@@ -39,6 +39,22 @@ For use in PyFlink jobs, use the following dependency:
 
 {{< py_connector_download_link "kinesis" >}}
 
+### Python Package Installation
+
+For Python applications, install the connector package from PyPI:
+
+```bash
+pip install apache-flink-connector-aws
+```
+
+This package provides Python wrappers for `KinesisStreamsSource`, `KinesisStreamsSink`, and `KinesisFirehoseSink`.
+The package requires `apache-flink` to be installed, which will be installed automatically as a dependency.
+
+{{< hint info >}}
+The Python package wraps the Java connector via Py4J. You still need to include the Java JAR in your Flink cluster's classpath
+or submit it with your job using the `--jarfile` option.
+{{< /hint >}}
+
 
 ## Kinesis Streams Source
 The `KinesisStreamsSource` is an exactly-once, parallel streaming data source based on the [FLIP-27 source interface](https://cwiki.apache.org/confluence/display/FLINK/FLIP-27%3A+Refactor+Source+Interface).
@@ -97,6 +113,36 @@ val kdsSource = KinesisStreamsSource.builder[String]()
 
 val kinesisEvents = env.fromSource(kdsSource, WatermarkStrategy.forMonotonousTimestamps().withIdleness(Duration.ofSeconds(1)), "Kinesis source")
             .uid("custom-uid")
+```
+{{< /tab >}}
+{{< tab "Python" >}}
+```python
+from pyflink.common import Configuration, WatermarkStrategy, Duration
+from pyflink.common.serialization import SimpleStringSchema
+from pyflink.datastream import StreamExecutionEnvironment
+from pyflink.datastream.connectors.kinesis import KinesisStreamsSource, KinesisShardAssigner
+
+# Configure the KinesisStreamsSource
+source_config = Configuration()
+# source_config.set_string("source.init.position", "TRIM_HORIZON")  # Optional, default is LATEST
+
+# Create a new KinesisStreamsSource to read from specified Kinesis Stream.
+kds_source = KinesisStreamsSource.builder() \
+    .set_stream_arn("arn:aws:kinesis:us-east-1:123456789012:stream/test-stream") \
+    .set_source_config(source_config) \
+    .set_deserialization_schema(SimpleStringSchema()) \
+    .set_kinesis_shard_assigner(KinesisShardAssigner.uniform_shard_assigner()) \
+    .build()
+
+env = StreamExecutionEnvironment.get_execution_environment()
+
+# Specify watermarking strategy and the name of the Kinesis Source operator.
+# Specify UID of operator in line with Flink best practice.
+kinesis_stream = env.from_source(
+    source=kds_source,
+    watermark_strategy=WatermarkStrategy.for_monotonous_timestamps().with_idleness(Duration.of_seconds(1)),
+    source_name="Kinesis source"
+).uid("custom-uid")
 ```
 {{< /tab >}}
 {{< /tabs >}}
