@@ -31,4 +31,15 @@ public class MetricConstants {
     public static final String ACCOUNT_ID_METRIC_GROUP = "accountId";
 
     public static final String MILLIS_BEHIND_LATEST = "millisBehindLatest";
+
+    /**
+     * Number of records the source still has to read before it has caught up with the stream tip.
+     *
+     * <p>This is the metric the Flink Kubernetes Operator autoscaler reads to decide whether a
+     * source vertex needs to be scaled up. Upstream Flink Kinesis source 5.1.0 does NOT register
+     * this gauge; this connector publishes it as part of an Atlassian patch. The value is an
+     * estimate computed per shard from {@code millisBehindLatest * recentRecordsPerMs} and then
+     * summed across shards at the operator-level metric group.
+     */
+    public static final String PENDING_RECORDS = "pendingRecords";
 }
