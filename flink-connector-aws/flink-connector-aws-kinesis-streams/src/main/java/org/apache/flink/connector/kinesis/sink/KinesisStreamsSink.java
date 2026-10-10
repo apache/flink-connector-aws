@@ -24,7 +24,11 @@ import org.apache.flink.api.connector.sink2.WriterInitContext;
 import org.apache.flink.connector.base.sink.AsyncSinkBase;
 import org.apache.flink.connector.base.sink.writer.BufferedRequestState;
 import org.apache.flink.connector.base.sink.writer.ElementConverter;
+import org.apache.flink.connector.kinesis.lineage.KinesisLineageUtil;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
+import org.apache.flink.streaming.api.lineage.LineageDataset;
+import org.apache.flink.streaming.api.lineage.LineageVertex;
+import org.apache.flink.streaming.api.lineage.LineageVertexProvider;
 import org.apache.flink.util.Preconditions;
 
 import software.amazon.awssdk.arns.Arn;
@@ -67,7 +71,8 @@ import java.util.Properties;
  * @param <InputT> Type of the elements handled by this sink
  */
 @PublicEvolving
-public class KinesisStreamsSink<InputT> extends AsyncSinkBase<InputT, PutRecordsRequestEntry> {
+public class KinesisStreamsSink<InputT> extends AsyncSinkBase<InputT, PutRecordsRequestEntry>
+        implements LineageVertexProvider {
 
     private final boolean failOnError;
     private final String streamName;
@@ -173,5 +178,20 @@ public class KinesisStreamsSink<InputT> extends AsyncSinkBase<InputT, PutRecords
                 streamArn,
                 kinesisClientProperties,
                 recoveredState);
+    }
+
+    // ---- Lineage support ----
+
+    @Override
+    public LineageVertex getLineageVertex() {
+        final LineageDataset dataset;
+        if (streamArn != null) {
+            dataset = KinesisLineageUtil.datasetOf(streamArn);
+        } else {
+            // Only the stream name is known; derive the namespace region from the client
+            // properties so the dataset stays under the same namespace scheme.
+            dataset = KinesisLineageUtil.datasetOfStreamName(streamName, kinesisClientProperties);
+        }
+        return KinesisLineageUtil.sinkLineageVertexOf(Collections.singletonList(dataset));
     }
 }
