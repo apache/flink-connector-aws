@@ -29,6 +29,7 @@ import java.util.stream.Collectors;
 
 import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 class DynamoDbWriteRequestTest {
 
@@ -44,6 +45,62 @@ class DynamoDbWriteRequestTest {
                         "If this test fails the DynamoDB AWS SDK may have changed. "
                                 + "We need to check this, and update the DynamoDbWriterStateSerializer if required.")
                 .hasSize(11);
+    }
+
+    @Test
+    public void testUpdateRequiresUpdateExpression() {
+        assertThatExceptionOfType(NullPointerException.class)
+                .isThrownBy(
+                        () ->
+                                DynamoDbWriteRequest.builder()
+                                        .setType(DynamoDbWriteRequestType.UPDATE)
+                                        .setItem(
+                                                singletonMap(
+                                                        "pk",
+                                                        AttributeValue.builder()
+                                                                .s("1")
+                                                                .build()))
+                                        .build())
+                .withMessageContaining("updateExpression");
+    }
+
+    @Test
+    public void testUpdateBuildsWithAllFields() {
+        DynamoDbWriteRequest request =
+                DynamoDbWriteRequest.builder()
+                        .setType(DynamoDbWriteRequestType.UPDATE)
+                        .setItem(
+                                singletonMap(
+                                        "pk", AttributeValue.builder().s("1").build()))
+                        .setUpdateExpression("SET #c = :val")
+                        .setConditionExpression("attribute_exists(pk)")
+                        .setExpressionAttributeNames(singletonMap("#c", "counter"))
+                        .setExpressionAttributeValues(
+                                singletonMap(
+                                        ":val", AttributeValue.builder().n("1").build()))
+                        .build();
+
+        assertThat(request.getType()).isEqualTo(DynamoDbWriteRequestType.UPDATE);
+        assertThat(request.getUpdateExpression()).isEqualTo("SET #c = :val");
+        assertThat(request.getConditionExpression()).isEqualTo("attribute_exists(pk)");
+        assertThat(request.getExpressionAttributeNames()).containsEntry("#c", "counter");
+        assertThat(request.getExpressionAttributeValues()).containsKey(":val");
+    }
+
+    @Test
+    public void testPutBuildsWithConditionExpression() {
+        DynamoDbWriteRequest request =
+                DynamoDbWriteRequest.builder()
+                        .setType(DynamoDbWriteRequestType.PUT)
+                        .setItem(
+                                singletonMap(
+                                        "pk", AttributeValue.builder().s("1").build()))
+                        .setConditionExpression("attribute_not_exists(pk)")
+                        .build();
+
+        assertThat(request.getType()).isEqualTo(DynamoDbWriteRequestType.PUT);
+        assertThat(request.getConditionExpression()).isEqualTo("attribute_not_exists(pk)");
+        assertThat(request.getUpdateExpression()).isNull();
     }
 
     @Test
