@@ -25,6 +25,7 @@ import org.apache.flink.connector.kinesis.source.split.StartingPosition;
 import org.junit.jupiter.api.Test;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
+import software.amazon.awssdk.services.kinesis.model.LimitExceededException;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
@@ -34,6 +35,7 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHan
 import java.io.IOException;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -56,6 +58,8 @@ class FanOutKinesisShardSubscriptionTest {
 
     private static final Duration DEFAULT_TIMEOUT = Duration.ofMillis(500);
     private static final Duration LONG_TIMEOUT = Duration.ofSeconds(10);
+    private static final int DEFAULT_MAX_RECOVERABLE_ATTEMPTS = 100;
+    private static final Duration DEFAULT_RECOVERABLE_BACKOFF = Duration.ofMillis(10);
 
     // ----- Happy path -----
 
@@ -232,6 +236,148 @@ class FanOutKinesisShardSubscriptionTest {
         s1.completeExceptionally(ResourceNotFoundException.builder().message("gone").build());
 
         assertThatThrownBy(subscription::nextEvent).isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void wrappedShardGoneIsAlsoRethrownDirectlyWithoutBackoffRetry() throws Exception {
+        // Wrapped, unlike the test above — must still fail fast, not backoff-retry.
+        ScriptedProxy proxy = new ScriptedProxy();
+        FanOutKinesisShardSubscription subscription = newSubscription(proxy);
+
+        subscription.activateSubscription();
+        ScriptedSubscription s1 = proxy.awaitSubscription();
+
+        s1.completeExceptionally(
+                new CompletionException(
+                        ResourceNotFoundException.builder().message("gone").build()));
+
+        assertThatThrownBy(subscription::nextEvent).isInstanceOf(ResourceNotFoundException.class);
+        // And no retry was scheduled for it.
+        waitShort();
+        assertThat(proxy.subscribeCallCount()).isEqualTo(1);
+    }
+
+    @Test
+    void consumerNotFoundIsWrappedInsteadOfRethrownRaw() throws Exception {
+        // Unlike a shard-gone ResourceNotFoundException, a consumer-gone one must not be
+        // rethrown raw — KinesisShardSplitReaderBase catches raw ResourceNotFoundException and
+        // marks the split complete (correct for "shard is gone", wrong for "consumer is gone":
+        // that would silently abandon the shard forever instead of failing the task). Wrapping
+        // it in KinesisStreamsSourceException lets it propagate as a real failure instead.
+        ScriptedProxy proxy = new ScriptedProxy();
+        FanOutKinesisShardSubscription subscription = newSubscription(proxy);
+
+        subscription.activateSubscription();
+        ScriptedSubscription s1 = proxy.awaitSubscription();
+
+        s1.completeExceptionally(
+                new CompletionException(
+                        ResourceNotFoundException.builder()
+                                .message("Consumer my-consumer under stream: x not found.")
+                                .build()));
+
+        assertThatThrownBy(subscription::nextEvent)
+                .isInstanceOf(KinesisStreamsSourceException.class)
+                .hasCauseInstanceOf(ResourceNotFoundException.class);
+        waitShort();
+        assertThat(proxy.subscribeCallCount()).isEqualTo(1);
+    }
+
+    // ----- Recoverable exception backoff and ceiling -----
+    // Uses LimitExceededException as a representative recoverable exception (unlike
+    // ResourceNotFoundException, it's not subject to the fail-fast special case).
+
+    @Test
+    void recoverableExceptionSchedulesRetryWithBackoffInsteadOfImmediately() throws Exception {
+        ScriptedProxy proxy = new ScriptedProxy();
+        Duration backoff = Duration.ofMillis(300);
+        FanOutKinesisShardSubscription subscription =
+                newSubscription(
+                        proxy, DEFAULT_TIMEOUT, DEFAULT_MAX_RECOVERABLE_ATTEMPTS, backoff, backoff);
+
+        subscription.activateSubscription();
+        ScriptedSubscription s1 = proxy.awaitSubscription();
+        s1.completeExceptionally(LimitExceededException.builder().message("rate exceeded").build());
+
+        assertThat(subscription.nextEvent()).isNull();
+
+        // Immediately after handling the recoverable exception, the retry must not have fired yet.
+        assertThat(proxy.subscribeCallCount()).isEqualTo(1);
+
+        // But it does fire once the backoff elapses.
+        await().atMost(Duration.ofSeconds(2)).until(() -> proxy.subscribeCallCount() == 2);
+    }
+
+    @Test
+    void recoverableExceptionEventuallyThrowsAfterMaxAttempts() throws Exception {
+        ScriptedProxy proxy = new ScriptedProxy();
+        int maxAttempts = 3;
+        FanOutKinesisShardSubscription subscription =
+                newSubscription(
+                        proxy,
+                        DEFAULT_TIMEOUT,
+                        maxAttempts,
+                        Duration.ofMillis(5),
+                        Duration.ofMillis(20));
+
+        subscription.activateSubscription();
+
+        // The first `maxAttempts` recoverable failures are retried (nextEvent returns null).
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            ScriptedSubscription s = proxy.awaitSubscription();
+            s.completeExceptionally(
+                    LimitExceededException.builder().message("rate exceeded #" + attempt).build());
+            assertThat(subscription.nextEvent()).isNull();
+        }
+
+        // The (maxAttempts + 1)-th consecutive failure exceeds the ceiling and surfaces loudly
+        // instead of scheduling yet another silent retry.
+        ScriptedSubscription finalAttempt = proxy.awaitSubscription();
+        finalAttempt.completeExceptionally(
+                LimitExceededException.builder().message("rate exceeded, final").build());
+
+        assertThatThrownBy(subscription::nextEvent)
+                .isInstanceOf(KinesisStreamsSourceException.class)
+                .hasMessageContaining("Exceeded")
+                .hasMessageContaining(String.valueOf(maxAttempts));
+    }
+
+    @Test
+    void successfulSubscriptionResetsRecoverableExceptionCounter() throws Exception {
+        ScriptedProxy proxy = new ScriptedProxy();
+        int maxAttempts = 2;
+        FanOutKinesisShardSubscription subscription =
+                newSubscription(
+                        proxy,
+                        DEFAULT_TIMEOUT,
+                        maxAttempts,
+                        Duration.ofMillis(5),
+                        Duration.ofMillis(20));
+
+        subscription.activateSubscription();
+
+        // One recoverable failure — below the ceiling of 2.
+        ScriptedSubscription s1 = proxy.awaitSubscription();
+        s1.completeExceptionally(LimitExceededException.builder().message("first").build());
+        assertThat(subscription.nextEvent()).isNull();
+
+        // It recovers: the retried subscription succeeds.
+        ScriptedSubscription s2 = proxy.awaitSubscription();
+        s2.onSubscribeDelivered();
+
+        // Now it can absorb `maxAttempts` more consecutive failures without throwing, proving
+        // the earlier failure didn't count towards this run's ceiling. The first post-recovery
+        // failure is injected directly on the now-live s2 (it's already subscribed, so no new
+        // attempt appears until this fails); later ones come from the retries it triggers.
+        ScriptedSubscription current = s2;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            current.completeExceptionally(
+                    LimitExceededException.builder().message("post-recovery #" + attempt).build());
+            assertThat(subscription.nextEvent()).isNull();
+            if (attempt < maxAttempts) {
+                current = proxy.awaitSubscription();
+            }
+        }
     }
 
     // ----- Dual error path dedup (disposeIfActive identity check) -----
@@ -620,6 +766,20 @@ class FanOutKinesisShardSubscriptionTest {
 
     private FanOutKinesisShardSubscription newSubscription(
             AsyncStreamProxy proxy, Duration subscriptionTimeout) {
+        return newSubscription(
+                proxy,
+                subscriptionTimeout,
+                DEFAULT_MAX_RECOVERABLE_ATTEMPTS,
+                DEFAULT_RECOVERABLE_BACKOFF,
+                DEFAULT_RECOVERABLE_BACKOFF);
+    }
+
+    private FanOutKinesisShardSubscription newSubscription(
+            AsyncStreamProxy proxy,
+            Duration subscriptionTimeout,
+            int maxRecoverableAttempts,
+            Duration recoverableExceptionBaseBackoff,
+            Duration recoverableExceptionMaxBackoff) {
         ScheduledThreadPoolExecutor timeoutScheduler = new ScheduledThreadPoolExecutor(1);
         timeoutScheduler.setRemoveOnCancelPolicy(true);
         return new FanOutKinesisShardSubscription(
@@ -628,7 +788,10 @@ class FanOutKinesisShardSubscriptionTest {
                 SHARD_ID,
                 StartingPosition.fromStart(),
                 subscriptionTimeout,
-                timeoutScheduler);
+                timeoutScheduler,
+                maxRecoverableAttempts,
+                recoverableExceptionBaseBackoff,
+                recoverableExceptionMaxBackoff);
     }
 
     private static Record record(String sequenceNumber) {
