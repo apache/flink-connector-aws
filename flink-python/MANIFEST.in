@@ -17,4 +17,5 @@
 ################################################################################
 
 graft pyflink
+prune pyflink/datastream/connectors/tests
 global-exclude *.py[cod] __pycache__ .DS_Store

@@ -21,7 +21,7 @@ import io
 import os
 import sys
 
-from setuptools import setup
+from setuptools import setup, find_namespace_packages
 from shutil import rmtree
 from xml.etree import ElementTree as ET
 
@@ -148,9 +148,10 @@ setup(
     long_description=long_description,
     long_description_content_type='text/plain',
     zip_safe=False,
-    py_modules=[
-        "pyflink"
-    ],
+    packages=find_namespace_packages(
+        include=['pyflink', 'pyflink.*'],
+        exclude=['pyflink.datastream.connectors.tests',
+                 'pyflink.datastream.connectors.tests.*']),
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         'License :: OSI Approved :: Apache Software License',
