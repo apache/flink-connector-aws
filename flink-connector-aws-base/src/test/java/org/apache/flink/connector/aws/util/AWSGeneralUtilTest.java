@@ -942,6 +942,66 @@ class AWSGeneralUtilTest {
                 .isNotSameAs(credentialsProvider2);
     }
 
+    @Test
+    void testSyncHttpClientOptionsAreAppliedToTheApacheClient() {
+        Properties properties = new Properties();
+        properties.setProperty(AWSConfigConstants.HTTP_CLIENT_CONNECTION_TIMEOUT_MS, "1500");
+        properties.setProperty(AWSConfigConstants.HTTP_CLIENT_SOCKET_TIMEOUT_MS, "2500");
+        properties.setProperty(AWSConfigConstants.HTTP_CLIENT_APACHE_MAX_CONNECTIONS, "7");
+
+        AttributeMap options = AWSGeneralUtil.getSyncHttpClientConfigurationOptions(properties);
+
+        assertThat(options.get(SdkHttpConfigurationOption.CONNECTION_TIMEOUT))
+                .isEqualTo(Duration.ofMillis(1500));
+        assertThat(options.get(SdkHttpConfigurationOption.READ_TIMEOUT))
+                .isEqualTo(Duration.ofMillis(2500));
+        assertThat(options.get(SdkHttpConfigurationOption.MAX_CONNECTIONS)).isEqualTo(7);
+    }
+
+    @Test
+    void testSyncHttpClientOptionsDefaultToSdkDefaultsWhenUnset() {
+        AttributeMap options =
+                AWSGeneralUtil.getSyncHttpClientConfigurationOptions(new Properties());
+
+        assertThat(options.containsKey(SdkHttpConfigurationOption.CONNECTION_TIMEOUT)).isFalse();
+        assertThat(options.containsKey(SdkHttpConfigurationOption.READ_TIMEOUT)).isFalse();
+        assertThat(options.containsKey(SdkHttpConfigurationOption.MAX_CONNECTIONS)).isFalse();
+    }
+
+    @Test
+    void testSyncSpecificOptionsWinOverGenericOnesWhenBothAreSet() {
+        Properties properties = new Properties();
+        properties.setProperty(AWSConfigConstants.HTTP_CLIENT_MAX_CONCURRENCY, "100");
+        properties.setProperty(AWSConfigConstants.HTTP_CLIENT_APACHE_MAX_CONNECTIONS, "7");
+        properties.setProperty(AWSConfigConstants.HTTP_CLIENT_READ_TIMEOUT_MILLIS, "60000");
+        properties.setProperty(AWSConfigConstants.HTTP_CLIENT_SOCKET_TIMEOUT_MS, "2500");
+
+        AttributeMap options = AWSGeneralUtil.getSyncHttpClientConfiguration(properties);
+
+        assertThat(options.get(SdkHttpConfigurationOption.MAX_CONNECTIONS)).isEqualTo(7);
+        assertThat(options.get(SdkHttpConfigurationOption.READ_TIMEOUT))
+                .isEqualTo(Duration.ofMillis(2500));
+    }
+
+    @Test
+    void testGenericOptionsStillApplyToTheSyncClientWhenNoSpecificOneIsSet() {
+        Properties properties = new Properties();
+        properties.setProperty(AWSConfigConstants.HTTP_CLIENT_MAX_CONCURRENCY, "100");
+        properties.setProperty(AWSConfigConstants.HTTP_CLIENT_READ_TIMEOUT_MILLIS, "60000");
+        properties.setProperty(AWSConfigConstants.TRUST_ALL_CERTIFICATES, "true");
+        properties.setProperty(AWSConfigConstants.HTTP_CLIENT_CONNECTION_TIMEOUT_MS, "1500");
+
+        AttributeMap options = AWSGeneralUtil.getSyncHttpClientConfiguration(properties);
+
+        assertThat(options.get(SdkHttpConfigurationOption.MAX_CONNECTIONS)).isEqualTo(100);
+        assertThat(options.get(SdkHttpConfigurationOption.READ_TIMEOUT))
+                .isEqualTo(Duration.ofMillis(60000));
+        assertThat(options.get(SdkHttpConfigurationOption.TRUST_ALL_CERTIFICATES)).isTrue();
+        assertThat(options.get(SdkHttpConfigurationOption.CONNECTION_TIMEOUT))
+                .isEqualTo(Duration.ofMillis(1500));
+        assertThat(options.get(SdkHttpConfigurationOption.TCP_KEEPALIVE)).isTrue();
+    }
+
     private WebIdentityTokenFileCredentialsProvider.Builder
             mockWebIdentityTokenFileCredentialsProviderBuilder() {
         WebIdentityTokenFileCredentialsProvider.Builder builder =
