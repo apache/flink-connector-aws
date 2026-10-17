@@ -26,6 +26,7 @@ import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.api.connector.source.SplitsAssignment;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.InitialPosition;
+import org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigUtil;
 import org.apache.flink.connector.dynamodb.source.enumerator.event.SplitsFinishedEvent;
 import org.apache.flink.connector.dynamodb.source.enumerator.event.SplitsFinishedEventContext;
 import org.apache.flink.connector.dynamodb.source.enumerator.tracker.SplitTracker;
@@ -93,7 +94,10 @@ public class DynamoDbStreamsSourceEnumerator
         this.shardAssignerContext = new ShardAssignerContext(splitAssignment, context);
         InitialPosition initialPosition = sourceConfig.get(STREAM_INITIAL_POSITION);
         if (state == null) {
-            this.startTimestamp = Instant.now();
+            this.startTimestamp =
+                    initialPosition == InitialPosition.AT_TIMESTAMP
+                            ? DynamodbStreamsSourceConfigUtil.parseInitialTimestamp(sourceConfig)
+                            : Instant.now();
             this.splitTracker = new SplitTracker(streamArn, initialPosition, this.startTimestamp);
         } else {
             this.splitTracker =
