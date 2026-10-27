@@ -111,6 +111,11 @@ jobs:
             | tee ${{ env.MVN_BUILD_OUTPUT_FILE }}
 
       - name: Run e2e tests
+        env:
+          # FlinkImageBuilder reuses an existing "flink-base" image. Newer Testcontainers only
+          # remove it via Ryuk shortly after the JVM exits, so the next e2e module can lose it
+          # mid-build ("pull access denied for flink-base").
+          TESTCONTAINERS_RYUK_DISABLED: true
         run: |
           set -o pipefail
 
@@ -125,6 +130,9 @@ jobs:
 
       - name: Run AWS e2e tests
         if: env.HAS_AWS_CREDS == 'true'
+        env:
+          # See "Run e2e tests".
+          TESTCONTAINERS_RYUK_DISABLED: true
         run: |
           set -o pipefail
 
