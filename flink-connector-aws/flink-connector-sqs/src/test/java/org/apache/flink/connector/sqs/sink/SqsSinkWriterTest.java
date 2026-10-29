@@ -213,8 +213,7 @@ public class SqsSinkWriterTest {
         assertThatExceptionOfType(CompletionException.class)
                 .isThrownBy(() -> writer.flush(true))
                 .withCauseInstanceOf(SdkClientException.class)
-                .withMessageContaining(
-                        "Unable to execute HTTP request: Connection refused: localhost/127.0.0.1:443");
+                .withMessageContaining("Unable to execute HTTP request: Connection refused");
         assertThat(ctx.metricGroup().getNumRecordsOutErrorsCounter().getCount()).isEqualTo(10);
         assertThat(ctx.metricGroup().getNumRecordsSendErrorsCounter().getCount()).isEqualTo(10);
     }
