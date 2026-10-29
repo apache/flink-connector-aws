@@ -33,6 +33,7 @@ import org.apache.flink.connector.aws.util.AWSClientUtil;
 import org.apache.flink.connector.aws.util.AWSGeneralUtil;
 import org.apache.flink.connector.base.source.reader.fetcher.SingleThreadFetcherManager;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitReader;
+import org.apache.flink.connector.kinesis.lineage.KinesisLineageUtil;
 import org.apache.flink.connector.kinesis.sink.KinesisStreamsConfigConstants;
 import org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions;
 import org.apache.flink.connector.kinesis.source.enumerator.KinesisShardAssigner;
@@ -54,6 +55,8 @@ import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplitSerializer;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
 import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.streaming.api.lineage.LineageVertexProvider;
+import org.apache.flink.streaming.api.lineage.SourceLineageVertex;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.UserCodeClassLoader;
 
@@ -74,6 +77,7 @@ import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
@@ -105,7 +109,8 @@ import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConf
  */
 @Experimental
 public class KinesisStreamsSource<T>
-        implements Source<T, KinesisShardSplit, KinesisStreamsSourceEnumeratorState> {
+        implements Source<T, KinesisShardSplit, KinesisStreamsSourceEnumeratorState>,
+                LineageVertexProvider {
 
     private final String streamArn;
     private final Configuration sourceConfig;
@@ -353,5 +358,15 @@ public class KinesisStreamsSource<T>
                 .circuitBreakerEnabled(false)
                 .retryOnExceptionOrCauseInstanceOf(LimitExceededException.class)
                 .maxAttempts(maxAttempts);
+    }
+
+    // ---- Lineage support ----
+
+    @Override
+    public SourceLineageVertex getLineageVertex() {
+        return KinesisLineageUtil.sourceLineageVertexOf(
+                Collections.singletonList(
+                        KinesisLineageUtil.datasetOf(
+                                streamArn, deserializationSchema.getProducedType())));
     }
 }
