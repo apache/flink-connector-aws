@@ -24,6 +24,7 @@ import software.amazon.awssdk.services.dynamodb.model.ShardIteratorType;
 
 import javax.annotation.Nullable;
 
+import java.time.Instant;
 import java.util.Objects;
 
 import static software.amazon.awssdk.services.dynamodb.model.ShardIteratorType.AFTER_SEQUENCE_NUMBER;
@@ -61,6 +62,10 @@ public final class StartingPosition {
 
     public static StartingPosition latest() {
         return new StartingPosition(LATEST, null);
+    }
+
+    public static StartingPosition atTimestamp(Instant timestamp) {
+        return new StartingPosition(ShardIteratorType.AT_TIMESTAMP, timestamp);
     }
 
     @Override

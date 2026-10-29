@@ -32,6 +32,7 @@ import org.apache.flink.connector.aws.util.AWSClientUtil;
 import org.apache.flink.connector.aws.util.AWSGeneralUtil;
 import org.apache.flink.connector.base.source.reader.fetcher.SingleThreadFetcherManager;
 import org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants;
+import org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigUtil;
 import org.apache.flink.connector.dynamodb.source.enumerator.DynamoDbStreamsShardAssigner;
 import org.apache.flink.connector.dynamodb.source.enumerator.DynamoDbStreamsSourceEnumerator;
 import org.apache.flink.connector.dynamodb.source.enumerator.DynamoDbStreamsSourceEnumeratorState;
@@ -60,7 +61,10 @@ import software.amazon.awssdk.services.dynamodb.model.Shard;
 import software.amazon.awssdk.services.dynamodb.streams.DynamoDbStreamsClient;
 import software.amazon.awssdk.utils.AttributeMap;
 
+import javax.annotation.Nullable;
+
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -100,6 +104,12 @@ public class DynamoDbStreamsSource<T>
     protected final DynamoDbStreamsDeserializationSchema<T> deserializationSchema;
     protected final DynamoDbStreamsShardAssigner dynamoDbStreamsShardAssigner;
 
+    /**
+     * The AT_TIMESTAMP initial timestamp, resolved and validated once when the source is built, so
+     * the enumerator uses exactly the value that was validated. Null for other initial positions.
+     */
+    @Nullable private final Instant initialTimestamp;
+
     DynamoDbStreamsSource(
             String streamArn,
             Configuration sourceConfig,
@@ -110,6 +120,8 @@ public class DynamoDbStreamsSource<T>
         Preconditions.checkNotNull(sourceConfig);
         Preconditions.checkNotNull(deserializationSchema);
         Preconditions.checkNotNull(dynamoDbStreamsShardAssigner);
+        this.initialTimestamp =
+                DynamodbStreamsSourceConfigUtil.validateStreamSourceConfiguration(sourceConfig);
         this.streamArn = streamArn;
         this.sourceConfig = sourceConfig;
         this.deserializationSchema = deserializationSchema;
@@ -203,6 +215,7 @@ public class DynamoDbStreamsSource<T>
                 enumContext,
                 streamArn,
                 sourceConfig,
+                initialTimestamp,
                 createDynamoDbStreamsProxy(sourceConfig, adaptiveRetryStrategy),
                 dynamoDbStreamsShardAssigner,
                 checkpoint);

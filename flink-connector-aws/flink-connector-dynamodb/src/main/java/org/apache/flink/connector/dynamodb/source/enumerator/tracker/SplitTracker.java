@@ -33,6 +33,7 @@ import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.dynamodb.model.Shard;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -43,6 +44,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.InitialPosition.AT_TIMESTAMP;
 import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.InitialPosition.LATEST;
 import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.InitialPosition.TRIM_HORIZON;
 import static org.apache.flink.connector.dynamodb.source.enumerator.SplitAssignmentStatus.ASSIGNED;
@@ -58,6 +60,9 @@ public class SplitTracker {
     private final Map<String, Set<String>> parentChildSplitMap = new ConcurrentHashMap<>();
     private final Set<String> assignedSplits = new HashSet<>();
     private final Set<String> finishedSplits = new HashSet<>();
+    // Untracked ancestors already warned about, so the warning is logged once per shard rather
+    // than on every discovery while the shard is still listed.
+    private final Set<String> warnedSkippedAncestors = new HashSet<>();
     private final String streamArn;
     private final InitialPosition initialPosition;
     private final Instant startTimestamp;
@@ -95,15 +100,24 @@ public class SplitTracker {
      * @param shardsToAdd collection of splits to add to tracking
      */
     public void addSplits(Collection<Shard> shardsToAdd) {
-        if (TRIM_HORIZON.equals(initialPosition)) {
-            addSplitsForTrimHorizon(shardsToAdd);
+        if (AT_TIMESTAMP.equals(initialPosition)) {
+            addSplitsForAtTimestamp(shardsToAdd);
             return;
         }
-        addSplitsForLatest(shardsToAdd);
+        if (LATEST.equals(initialPosition)) {
+            addSplitsForLatest(shardsToAdd);
+            return;
+        }
+        addSplitsWithPosition(shardsToAdd, initialPosition);
     }
 
     public void addChildSplits(Collection<Shard> childShardsToAdd) {
-        addSplitsForTrimHorizon(childShardsToAdd);
+        // Under AT_TIMESTAMP, children from the finish-handoff also start at AT_TIMESTAMP, so
+        // they match shards found by periodic discovery and never emit pre-timestamp records.
+        // Other initial positions keep the TRIM_HORIZON handoff.
+        InitialPosition childPosition =
+                AT_TIMESTAMP.equals(initialPosition) ? AT_TIMESTAMP : TRIM_HORIZON;
+        addSplitsWithPosition(childShardsToAdd, childPosition);
     }
 
     private void addSplitsForLatest(Collection<Shard> shardsToAdd) {
@@ -159,15 +173,22 @@ public class SplitTracker {
         return null;
     }
 
-    private void addSplitsForTrimHorizon(Collection<Shard> shardsToAdd) {
+    /** Tracks each shard (if not already known) with the given initial position. */
+    private void addSplitsWithPosition(Collection<Shard> shardsToAdd, InitialPosition position) {
         for (Shard shard : shardsToAdd) {
-            String shardId = shard.shardId();
-            if (!knownSplits.containsKey(shardId)) {
-                DynamoDbStreamsShardSplit newSplit = mapToSplit(shard, TRIM_HORIZON);
-                knownSplits.put(shardId, newSplit);
-                addSplitToMapping(newSplit);
-            }
+            trackSplit(shard, position);
         }
+    }
+
+    /** Adds a single shard to tracking with the given initial position, unless already tracked. */
+    private void trackSplit(Shard shard, InitialPosition position) {
+        String shardId = shard.shardId();
+        if (knownSplits.containsKey(shardId)) {
+            return;
+        }
+        DynamoDbStreamsShardSplit newSplit = mapToSplit(shard, position);
+        knownSplits.put(shardId, newSplit);
+        addSplitToMapping(newSplit);
     }
 
     private void addSplitToMapping(DynamoDbStreamsShardSplit split) {
@@ -179,12 +200,74 @@ public class SplitTracker {
                 .add(split.splitId());
     }
 
+    /**
+     * Adds shards discovered under the AT_TIMESTAMP initial position. Each shard that is not
+     * already tracked is added at AT_TIMESTAMP: GetShardIterator(AT_TIMESTAMP) resolves the
+     * per-record position, so a shard that straddles the timestamp never emits pre-timestamp
+     * records, and the position does not depend on the discovery path or restore timing.
+     *
+     * <p>Ancestors of already-tracked shards are not added, to keep the parent-before-child order.
+     * Usually they have already been read. An ancestor that was never tracked (for example, one an
+     * earlier discovery did not return) is skipped too, so any of its records at or after the
+     * timestamp are not read; a warning is logged once per such shard.
+     */
+    private void addSplitsForAtTimestamp(Collection<Shard> shardsToAdd) {
+        Map<String, Shard> shardIdToShardMap =
+                shardsToAdd.stream().collect(Collectors.toMap(Shard::shardId, shard -> shard));
+
+        Set<String> ancestorsOfTrackedSplits = findAncestorsOfTrackedSplits(shardIdToShardMap);
+
+        List<Shard> eligibleShards = new ArrayList<>();
+        for (Shard shard : shardsToAdd) {
+            String shardId = shard.shardId();
+            if (!ancestorsOfTrackedSplits.contains(shardId)) {
+                eligibleShards.add(shard);
+            } else if (!knownSplits.containsKey(shardId) && warnedSkippedAncestors.add(shardId)) {
+                LOG.warn(
+                        "Skipping shard {} of stream {}: it was never tracked but is an ancestor of "
+                                + "a tracked shard, so it is not read to keep the parent-before-child "
+                                + "order. Records in it at or after {} are not read.",
+                        shardId,
+                        streamArn,
+                        startTimestamp);
+            }
+        }
+        addSplitsWithPosition(eligibleShards, AT_TIMESTAMP);
+    }
+
+    private Set<String> findAncestorsOfTrackedSplits(Map<String, Shard> shardIdToShardMap) {
+        Set<String> ancestorsOfTrackedSplits = new HashSet<>();
+        // knownSplits already contains finished splits (they are removed from both only on
+        // cleanup), so its key set covers every tracked shard.
+        Set<String> trackedShardIds = new HashSet<>(knownSplits.keySet());
+
+        for (String trackedShardId : trackedShardIds) {
+            Shard shard = shardIdToShardMap.get(trackedShardId);
+            if (shard == null) {
+                continue;
+            }
+            String currentParentId = shard.parentShardId();
+            while (currentParentId != null && !ancestorsOfTrackedSplits.contains(currentParentId)) {
+                ancestorsOfTrackedSplits.add(currentParentId);
+                Shard parentShard = shardIdToShardMap.get(currentParentId);
+                if (parentShard == null) {
+                    break;
+                }
+                currentParentId = parentShard.parentShardId();
+            }
+        }
+        return ancestorsOfTrackedSplits;
+    }
+
     private DynamoDbStreamsShardSplit mapToSplit(
             Shard shard, DynamodbStreamsSourceConfigConstants.InitialPosition initialPosition) {
         StartingPosition startingPosition;
         switch (initialPosition) {
             case LATEST:
                 startingPosition = StartingPosition.latest();
+                break;
+            case AT_TIMESTAMP:
+                startingPosition = StartingPosition.atTimestamp(startTimestamp);
                 break;
             case TRIM_HORIZON:
             default:

@@ -223,7 +223,7 @@ public class SqsSinkWriterTest {
             final boolean failOnError, TestSqsAsyncClientProvider testSqsAsyncClientProvider)
             throws IOException {
         TestSinkInitContext sinkInitContext = new TestSinkInitContext();
-        Properties sinkProperties = AWSServicesTestUtils.createConfig("https://fake_aws_endpoint");
+        Properties sinkProperties = AWSServicesTestUtils.createConfig("https://fake-aws-endpoint");
         SqsSink<String> sink =
                 new SqsSink<>(
                         ELEMENT_CONVERTER_PLACEHOLDER,
