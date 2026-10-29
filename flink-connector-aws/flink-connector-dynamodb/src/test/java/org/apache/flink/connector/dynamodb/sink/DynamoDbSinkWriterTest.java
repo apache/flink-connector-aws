@@ -31,11 +31,17 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse;
 import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException;
+import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest;
+import software.amazon.awssdk.services.dynamodb.model.DeleteItemResponse;
 import software.amazon.awssdk.services.dynamodb.model.DeleteRequest;
 import software.amazon.awssdk.services.dynamodb.model.DynamoDbException;
 import software.amazon.awssdk.services.dynamodb.model.ProvisionedThroughputExceededException;
+import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
+import software.amazon.awssdk.services.dynamodb.model.PutItemResponse;
 import software.amazon.awssdk.services.dynamodb.model.PutRequest;
 import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
+import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest;
+import software.amazon.awssdk.services.dynamodb.model.UpdateItemResponse;
 import software.amazon.awssdk.services.dynamodb.model.WriteRequest;
 import software.amazon.awssdk.services.sts.model.StsException;
 
@@ -321,6 +327,235 @@ public class DynamoDbSinkWriterTest {
         assertThat(testAsyncDynamoDbClientProvider.getCloseCount()).isEqualTo(1);
     }
 
+    @Test
+    public void testUpdateRequestUsesUpdateItemApi() throws Exception {
+        TrackingDynamoDbAsyncClient trackingClient = new TrackingDynamoDbAsyncClient();
+        DynamoDbSinkWriter<Map<String, AttributeValue>> dynamoDbSinkWriter =
+                getDefaultSinkWriter(
+                        true, Collections.emptyList(), () -> trackingClient);
+        TestingResultHandler resultHandler = new TestingResultHandler();
+
+        Map<String, AttributeValue> key = singletonMap(
+                PARTITION_KEY, AttributeValue.builder().s("pk1").build());
+        DynamoDbWriteRequest updateRequest =
+                DynamoDbWriteRequest.builder()
+                        .setType(DynamoDbWriteRequestType.UPDATE)
+                        .setItem(key)
+                        .setUpdateExpression("SET #a = :val")
+                        .setExpressionAttributeNames(singletonMap("#a", "counter"))
+                        .setExpressionAttributeValues(
+                                singletonMap(":val", AttributeValue.builder().n("1").build()))
+                        .build();
+
+        dynamoDbSinkWriter.submitRequestEntries(singletonList(updateRequest), resultHandler);
+
+        assertThat(resultHandler.isComplete()).isTrue();
+        assertThat(trackingClient.getUpdateItemRequests()).hasSize(1);
+        assertThat(trackingClient.getUpdateItemRequests().get(0).updateExpression())
+                .isEqualTo("SET #a = :val");
+        assertThat(trackingClient.getRequestHistory()).isEmpty();
+    }
+
+    @Test
+    public void testConditionalPutUsesIndividualPutItemApi() throws Exception {
+        TrackingDynamoDbAsyncClient trackingClient = new TrackingDynamoDbAsyncClient();
+        DynamoDbSinkWriter<Map<String, AttributeValue>> dynamoDbSinkWriter =
+                getDefaultSinkWriter(
+                        true, Collections.emptyList(), () -> trackingClient);
+        TestingResultHandler resultHandler = new TestingResultHandler();
+
+        DynamoDbWriteRequest conditionalPut =
+                DynamoDbWriteRequest.builder()
+                        .setType(DynamoDbWriteRequestType.PUT)
+                        .setItem(item("pk", "1"))
+                        .setConditionExpression("attribute_not_exists(pk)")
+                        .build();
+
+        dynamoDbSinkWriter.submitRequestEntries(singletonList(conditionalPut), resultHandler);
+
+        assertThat(resultHandler.isComplete()).isTrue();
+        assertThat(trackingClient.getPutItemRequests()).hasSize(1);
+        assertThat(trackingClient.getPutItemRequests().get(0).conditionExpression())
+                .isEqualTo("attribute_not_exists(pk)");
+        assertThat(trackingClient.getRequestHistory()).isEmpty();
+    }
+
+    @Test
+    public void testConditionalDeleteUsesIndividualDeleteItemApi() throws Exception {
+        TrackingDynamoDbAsyncClient trackingClient = new TrackingDynamoDbAsyncClient();
+        DynamoDbSinkWriter<Map<String, AttributeValue>> dynamoDbSinkWriter =
+                getDefaultSinkWriter(
+                        true, Collections.emptyList(), () -> trackingClient);
+        TestingResultHandler resultHandler = new TestingResultHandler();
+
+        DynamoDbWriteRequest conditionalDelete =
+                DynamoDbWriteRequest.builder()
+                        .setType(DynamoDbWriteRequestType.DELETE)
+                        .setItem(item("pk", "1"))
+                        .setConditionExpression("attribute_exists(pk)")
+                        .build();
+
+        dynamoDbSinkWriter.submitRequestEntries(singletonList(conditionalDelete), resultHandler);
+
+        assertThat(resultHandler.isComplete()).isTrue();
+        assertThat(trackingClient.getDeleteItemRequests()).hasSize(1);
+        assertThat(trackingClient.getDeleteItemRequests().get(0).conditionExpression())
+                .isEqualTo("attribute_exists(pk)");
+        assertThat(trackingClient.getRequestHistory()).isEmpty();
+    }
+
+    @Test
+    public void testMixedBatchAndSingleRequests() throws Exception {
+        TrackingDynamoDbAsyncClient trackingClient = new TrackingDynamoDbAsyncClient();
+        DynamoDbSinkWriter<Map<String, AttributeValue>> dynamoDbSinkWriter =
+                getDefaultSinkWriter(
+                        true, Collections.emptyList(), () -> trackingClient);
+        TestingResultHandler resultHandler = new TestingResultHandler();
+
+        Map<String, AttributeValue> key = singletonMap(
+                PARTITION_KEY, AttributeValue.builder().s("pk1").build());
+        List<DynamoDbWriteRequest> inputRequests =
+                Arrays.asList(
+                        sinkPutRequest(item("pk", "1")),
+                        DynamoDbWriteRequest.builder()
+                                .setType(DynamoDbWriteRequestType.UPDATE)
+                                .setItem(key)
+                                .setUpdateExpression("SET #a = :val")
+                                .setExpressionAttributeNames(singletonMap("#a", "counter"))
+                                .setExpressionAttributeValues(
+                                        singletonMap(
+                                                ":val",
+                                                AttributeValue.builder().n("1").build()))
+                                .build());
+
+        dynamoDbSinkWriter.submitRequestEntries(inputRequests, resultHandler);
+
+        assertThat(resultHandler.isComplete()).isTrue();
+        assertThat(trackingClient.getRequestHistory()).hasSize(1);
+        assertThat(trackingClient.getUpdateItemRequests()).hasSize(1);
+    }
+
+    @Test
+    public void testPutWithoutConditionUsesBatchPath() throws Exception {
+        TrackingDynamoDbAsyncClient trackingClient = new TrackingDynamoDbAsyncClient();
+        DynamoDbSinkWriter<Map<String, AttributeValue>> dynamoDbSinkWriter =
+                getDefaultSinkWriter(
+                        true, Collections.emptyList(), () -> trackingClient);
+        TestingResultHandler resultHandler = new TestingResultHandler();
+
+        dynamoDbSinkWriter.submitRequestEntries(
+                singletonList(sinkPutRequest(item("pk", "1"))), resultHandler);
+
+        assertThat(resultHandler.isComplete()).isTrue();
+        assertThat(trackingClient.getRequestHistory()).hasSize(1);
+        assertThat(trackingClient.getPutItemRequests()).isEmpty();
+    }
+
+    @Test
+    public void testDeleteWithoutConditionUsesBatchPath() throws Exception {
+        TrackingDynamoDbAsyncClient trackingClient = new TrackingDynamoDbAsyncClient();
+        DynamoDbSinkWriter<Map<String, AttributeValue>> dynamoDbSinkWriter =
+                getDefaultSinkWriter(
+                        true, Collections.emptyList(), () -> trackingClient);
+        TestingResultHandler resultHandler = new TestingResultHandler();
+
+        dynamoDbSinkWriter.submitRequestEntries(
+                singletonList(sinkDeleteRequest(item("pk", "1"))), resultHandler);
+
+        assertThat(resultHandler.isComplete()).isTrue();
+        assertThat(trackingClient.getRequestHistory()).hasSize(1);
+        assertThat(trackingClient.getDeleteItemRequests()).isEmpty();
+    }
+
+    @Test
+    public void testConditionalCheckFailedOnSingleRequestIsNonRetryable() throws Exception {
+        TrackingDynamoDbAsyncClient trackingClient =
+                new TrackingDynamoDbAsyncClient() {
+                    @Override
+                    public CompletableFuture<PutItemResponse> putItem(
+                            PutItemRequest putItemRequest) {
+                        CompletableFuture<PutItemResponse> future = new CompletableFuture<>();
+                        future.completeExceptionally(
+                                DynamoDbException.builder()
+                                        .cause(
+                                                ConditionalCheckFailedException.builder()
+                                                        .build())
+                                        .build());
+                        return future;
+                    }
+                };
+        DynamoDbSinkWriter<Map<String, AttributeValue>> dynamoDbSinkWriter =
+                getDefaultSinkWriter(
+                        false, Collections.emptyList(), () -> trackingClient);
+        TestingResultHandler resultHandler = new TestingResultHandler();
+
+        DynamoDbWriteRequest conditionalPut =
+                DynamoDbWriteRequest.builder()
+                        .setType(DynamoDbWriteRequestType.PUT)
+                        .setItem(item("pk", "1"))
+                        .setConditionExpression("attribute_not_exists(pk)")
+                        .build();
+
+        dynamoDbSinkWriter.submitRequestEntries(singletonList(conditionalPut), resultHandler);
+
+        assertThat(resultHandler.isComplete()).isFalse();
+        assertThat(resultHandler.getRetryEntries()).isEmpty();
+        assertThat(resultHandler.getException()).isNotNull();
+    }
+
+    @Test
+    public void testMixedBatchAndSingleRetryableExceptionRetriesBoth() throws Exception {
+        TrackingDynamoDbAsyncClient failingClient =
+                new TrackingDynamoDbAsyncClient() {
+                    @Override
+                    public CompletableFuture<BatchWriteItemResponse> batchWriteItem(
+                            BatchWriteItemRequest batchWriteItemRequest) {
+                        CompletableFuture<BatchWriteItemResponse> future =
+                                new CompletableFuture<>();
+                        future.completeExceptionally(
+                                DynamoDbException.builder()
+                                        .cause(getGenericRetryableException().get())
+                                        .build());
+                        return future;
+                    }
+
+                    @Override
+                    public CompletableFuture<UpdateItemResponse> updateItem(
+                            UpdateItemRequest updateItemRequest) {
+                        CompletableFuture<UpdateItemResponse> future = new CompletableFuture<>();
+                        future.completeExceptionally(
+                                DynamoDbException.builder()
+                                        .cause(getGenericRetryableException().get())
+                                        .build());
+                        return future;
+                    }
+                };
+        DynamoDbSinkWriter<Map<String, AttributeValue>> dynamoDbSinkWriter =
+                getDefaultSinkWriter(
+                        false, Collections.emptyList(), () -> failingClient);
+        TestingResultHandler resultHandler = new TestingResultHandler();
+
+        Map<String, AttributeValue> key =
+                singletonMap(PARTITION_KEY, AttributeValue.builder().s("pk1").build());
+        DynamoDbWriteRequest batchPut = sinkPutRequest(item("pk", "1"));
+        DynamoDbWriteRequest updateRequest =
+                DynamoDbWriteRequest.builder()
+                        .setType(DynamoDbWriteRequestType.UPDATE)
+                        .setItem(key)
+                        .setUpdateExpression("SET #a = :val")
+                        .setExpressionAttributeNames(singletonMap("#a", "counter"))
+                        .setExpressionAttributeValues(
+                                singletonMap(":val", AttributeValue.builder().n("1").build()))
+                        .build();
+
+        dynamoDbSinkWriter.submitRequestEntries(
+                Arrays.asList(batchPut, updateRequest), resultHandler);
+
+        assertThat(resultHandler.isComplete()).isFalse();
+        assertThat(resultHandler.getRetryEntries())
+                .containsExactlyInAnyOrder(batchPut, updateRequest);
+    }
+
     private void assertThatRequestsAreNotRetried(
             boolean failOnError, Optional<Exception> exceptionToThrow) throws IOException {
         ThrowingDynamoDbAsyncClient<Exception> throwingDynamoDbAsyncClient =
@@ -507,6 +742,9 @@ public class DynamoDbSinkWriterTest {
     private static class TrackingDynamoDbAsyncClient implements DynamoDbAsyncClient {
 
         private List<List<WriteRequest>> requestHistory = new ArrayList<>();
+        private List<PutItemRequest> putItemRequests = new ArrayList<>();
+        private List<DeleteItemRequest> deleteItemRequests = new ArrayList<>();
+        private List<UpdateItemRequest> updateItemRequests = new ArrayList<>();
 
         @Override
         public String serviceName() {
@@ -524,12 +762,44 @@ public class DynamoDbSinkWriterTest {
         }
 
         @Override
+        public CompletableFuture<PutItemResponse> putItem(PutItemRequest putItemRequest) {
+            putItemRequests.add(putItemRequest);
+            return CompletableFuture.completedFuture(PutItemResponse.builder().build());
+        }
+
+        @Override
+        public CompletableFuture<DeleteItemResponse> deleteItem(
+                DeleteItemRequest deleteItemRequest) {
+            deleteItemRequests.add(deleteItemRequest);
+            return CompletableFuture.completedFuture(DeleteItemResponse.builder().build());
+        }
+
+        @Override
+        public CompletableFuture<UpdateItemResponse> updateItem(
+                UpdateItemRequest updateItemRequest) {
+            updateItemRequests.add(updateItemRequest);
+            return CompletableFuture.completedFuture(UpdateItemResponse.builder().build());
+        }
+
+        @Override
         public DynamoDbServiceClientConfiguration serviceClientConfiguration() {
             return DynamoDbServiceClientConfiguration.builder().build();
         }
 
         public List<List<WriteRequest>> getRequestHistory() {
             return requestHistory;
+        }
+
+        public List<PutItemRequest> getPutItemRequests() {
+            return putItemRequests;
+        }
+
+        public List<DeleteItemRequest> getDeleteItemRequests() {
+            return deleteItemRequests;
+        }
+
+        public List<UpdateItemRequest> getUpdateItemRequests() {
+            return updateItemRequests;
         }
     }
 

@@ -43,20 +43,112 @@ public class DynamoDbSerializationUtil {
     public static void serializeWriteRequest(
             DynamoDbWriteRequest dynamoDbWriteRequest, DataOutputStream out) throws IOException {
         out.writeByte(dynamoDbWriteRequest.getType().toByteValue());
-        Map<String, AttributeValue> item = dynamoDbWriteRequest.getItem();
-        serializeItem(item, out);
+        serializeItem(dynamoDbWriteRequest.getItem(), out);
+        serializeNullableString(dynamoDbWriteRequest.getUpdateExpression(), out);
+        serializeNullableString(dynamoDbWriteRequest.getConditionExpression(), out);
+        serializeNullableStringMap(dynamoDbWriteRequest.getExpressionAttributeNames(), out);
+        serializeNullableAttributeValueMap(
+                dynamoDbWriteRequest.getExpressionAttributeValues(), out);
     }
 
     public static DynamoDbWriteRequest deserializeWriteRequest(DataInputStream in)
+            throws IOException {
+        return deserializeWriteRequest(in, 2);
+    }
+
+    public static DynamoDbWriteRequest deserializeWriteRequest(DataInputStream in, int version)
             throws IOException {
         int writeRequestType = in.read();
         DynamoDbWriteRequestType dynamoDbWriteRequestType =
                 DynamoDbWriteRequestType.fromByteValue((byte) writeRequestType);
         Map<String, AttributeValue> item = deserializeItem(in);
-        return DynamoDbWriteRequest.builder()
-                .setType(dynamoDbWriteRequestType)
-                .setItem(item)
-                .build();
+
+        DynamoDbWriteRequest.Builder builder =
+                DynamoDbWriteRequest.builder()
+                        .setType(dynamoDbWriteRequestType)
+                        .setItem(item);
+
+        // Version 2 added expression fields for conditional and update writes
+        if (version >= 2) {
+            String updateExpression = deserializeNullableString(in);
+            String conditionExpression = deserializeNullableString(in);
+            Map<String, String> expressionAttributeNames = deserializeNullableStringMap(in);
+            Map<String, AttributeValue> expressionAttributeValues =
+                    deserializeNullableAttributeValueMap(in);
+            if (updateExpression != null) {
+                builder.setUpdateExpression(updateExpression);
+            }
+            if (conditionExpression != null) {
+                builder.setConditionExpression(conditionExpression);
+            }
+            if (expressionAttributeNames != null) {
+                builder.setExpressionAttributeNames(expressionAttributeNames);
+            }
+            if (expressionAttributeValues != null) {
+                builder.setExpressionAttributeValues(expressionAttributeValues);
+            }
+        }
+
+        return builder.build();
+    }
+
+    private static void serializeNullableString(String value, DataOutputStream out)
+            throws IOException {
+        if (value == null) {
+            out.writeBoolean(false);
+        } else {
+            out.writeBoolean(true);
+            out.writeUTF(value);
+        }
+    }
+
+    private static String deserializeNullableString(DataInputStream in) throws IOException {
+        boolean present = in.readBoolean();
+        return present ? in.readUTF() : null;
+    }
+
+    private static void serializeNullableStringMap(Map<String, String> map, DataOutputStream out)
+            throws IOException {
+        if (map == null) {
+            out.writeBoolean(false);
+        } else {
+            out.writeBoolean(true);
+            out.writeInt(map.size());
+            for (Map.Entry<String, String> entry : map.entrySet()) {
+                out.writeUTF(entry.getKey());
+                out.writeUTF(entry.getValue());
+            }
+        }
+    }
+
+    private static Map<String, String> deserializeNullableStringMap(DataInputStream in)
+            throws IOException {
+        boolean present = in.readBoolean();
+        if (!present) {
+            return null;
+        }
+        int size = in.readInt();
+        Map<String, String> map = new HashMap<>(size);
+        for (int i = 0; i < size; i++) {
+            map.put(in.readUTF(), in.readUTF());
+        }
+        return map;
+    }
+
+    private static void serializeNullableAttributeValueMap(
+            Map<String, AttributeValue> map, DataOutputStream out) throws IOException {
+        if (map == null) {
+            out.writeBoolean(false);
+        } else {
+            out.writeBoolean(true);
+            serializeItem(map, out);
+        }
+    }
+
+    private static Map<String, AttributeValue> deserializeNullableAttributeValueMap(
+            DataInputStream in) throws IOException {
+        boolean present = in.readBoolean();
+        return present ? deserializeItem(in) : null;
     }
 
     private static void serializeItem(Map<String, AttributeValue> item, DataOutputStream out)
