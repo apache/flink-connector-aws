@@ -154,6 +154,43 @@ public class AWSConfigConstants {
     /** Read Request timeout for {@link SdkAsyncHttpClient}. */
     public static final String HTTP_CLIENT_READ_TIMEOUT_MILLIS = "aws.http-client.read-timeout";
 
+    /**
+     * The type of {@link software.amazon.awssdk.http.SdkHttpClient} a connector should build. Only
+     * the values a connector lists as allowed are accepted; see the CLIENT_TYPE_* constants below.
+     */
+    public static final String HTTP_CLIENT_TYPE = "http-client.type";
+
+    // ---- synchronous (Apache) HTTP client options
+
+    /**
+     * Connection timeout in milliseconds for the {@link
+     * software.amazon.awssdk.http.apache.ApacheHttpClient}. Honoured by {@link
+     * org.apache.flink.connector.aws.util.AWSGeneralUtil#createSyncHttpClient}.
+     */
+    public static final String HTTP_CLIENT_CONNECTION_TIMEOUT_MS =
+            "http-client.connection-timeout-ms";
+
+    /**
+     * Maximum number of pooled connections for the {@link
+     * software.amazon.awssdk.http.apache.ApacheHttpClient}. Honoured by {@link
+     * org.apache.flink.connector.aws.util.AWSGeneralUtil#createSyncHttpClient}.
+     */
+    public static final String HTTP_CLIENT_APACHE_MAX_CONNECTIONS =
+            "http-client.apache.max-connections";
+
+    /**
+     * Socket (read) timeout in milliseconds for the {@link
+     * software.amazon.awssdk.http.apache.ApacheHttpClient}. Honoured by {@link
+     * org.apache.flink.connector.aws.util.AWSGeneralUtil#createSyncHttpClient}.
+     */
+    public static final String HTTP_CLIENT_SOCKET_TIMEOUT_MS = "http-client.socket-timeout-ms";
+
+    /**
+     * {@link software.amazon.awssdk.http.apache.ApacheHttpClient} client type, the only value of
+     * {@link #HTTP_CLIENT_TYPE} the synchronous clients accept.
+     */
+    public static final String CLIENT_TYPE_APACHE = "apache";
+
     public static String accessKeyId(String prefix) {
         return prefix + ".basic.accesskeyid";
     }

@@ -365,7 +365,66 @@ public class AWSGeneralUtil {
     public static SdkHttpClient createSyncHttpClient(
             final Properties configProperties, final ApacheHttpClient.Builder httpClientBuilder) {
         return createSyncHttpClient(
-                getSdkHttpConfigurationOptions(configProperties), httpClientBuilder);
+                getSyncHttpClientConfiguration(configProperties), httpClientBuilder);
+    }
+
+    /**
+     * The complete configuration of the synchronous (Apache) HTTP client: the generic options from
+     * {@link #getSdkHttpConfigurationOptions} overlaid with the sync-specific ones from {@link
+     * #getSyncHttpClientConfigurationOptions}. Both sets can target the same attribute ({@code
+     * MAX_CONNECTIONS} from {@link AWSConfigConstants#HTTP_CLIENT_MAX_CONCURRENCY} and {@link
+     * AWSConfigConstants#HTTP_CLIENT_APACHE_MAX_CONNECTIONS}, {@code READ_TIMEOUT} from {@link
+     * AWSConfigConstants#HTTP_CLIENT_READ_TIMEOUT_MILLIS} and {@link
+     * AWSConfigConstants#HTTP_CLIENT_SOCKET_TIMEOUT_MS}); when a user sets both, the option that
+     * names this client wins over the generic one. {@link AttributeMap#merge} keeps the receiver's
+     * value for overlapping keys, so the sync-specific map must be the receiver.
+     */
+    @VisibleForTesting
+    static AttributeMap getSyncHttpClientConfiguration(final Properties configProperties) {
+        return getSyncHttpClientConfigurationOptions(configProperties)
+                .merge(getSdkHttpConfigurationOptions(configProperties));
+    }
+
+    /**
+     * Options that only apply to the synchronous (Apache) HTTP client: {@link
+     * AWSConfigConstants#HTTP_CLIENT_CONNECTION_TIMEOUT_MS}, {@link
+     * AWSConfigConstants#HTTP_CLIENT_SOCKET_TIMEOUT_MS} and {@link
+     * AWSConfigConstants#HTTP_CLIENT_APACHE_MAX_CONNECTIONS}.
+     */
+    @VisibleForTesting
+    static AttributeMap getSyncHttpClientConfigurationOptions(final Properties configProperties) {
+        final AttributeMap.Builder clientConfiguration = AttributeMap.builder();
+
+        Optional.ofNullable(
+                        configProperties.getProperty(
+                                AWSConfigConstants.HTTP_CLIENT_CONNECTION_TIMEOUT_MS))
+                .map(Integer::parseInt)
+                .map(Duration::ofMillis)
+                .ifPresent(
+                        timeout ->
+                                clientConfiguration.put(
+                                        SdkHttpConfigurationOption.CONNECTION_TIMEOUT, timeout));
+
+        Optional.ofNullable(
+                        configProperties.getProperty(
+                                AWSConfigConstants.HTTP_CLIENT_SOCKET_TIMEOUT_MS))
+                .map(Integer::parseInt)
+                .map(Duration::ofMillis)
+                .ifPresent(
+                        timeout ->
+                                clientConfiguration.put(
+                                        SdkHttpConfigurationOption.READ_TIMEOUT, timeout));
+
+        Optional.ofNullable(
+                        configProperties.getProperty(
+                                AWSConfigConstants.HTTP_CLIENT_APACHE_MAX_CONNECTIONS))
+                .map(Integer::parseInt)
+                .ifPresent(
+                        integer ->
+                                clientConfiguration.put(
+                                        SdkHttpConfigurationOption.MAX_CONNECTIONS, integer));
+
+        return clientConfiguration.build();
     }
 
     public static SdkHttpClient createSyncHttpClient(
