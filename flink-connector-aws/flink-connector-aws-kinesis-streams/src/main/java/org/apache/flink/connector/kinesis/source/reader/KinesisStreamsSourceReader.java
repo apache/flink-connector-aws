@@ -26,6 +26,7 @@ import org.apache.flink.connector.base.source.reader.SingleThreadMultiplexSource
 import org.apache.flink.connector.base.source.reader.fetcher.SingleThreadFetcherManager;
 import org.apache.flink.connector.kinesis.source.event.SplitsFinishedEvent;
 import org.apache.flink.connector.kinesis.source.metrics.KinesisShardMetrics;
+import org.apache.flink.connector.kinesis.source.metrics.MetricConstants;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
 import org.apache.flink.connector.kinesis.source.split.KinesisShardSplitState;
 
@@ -67,6 +68,27 @@ public class KinesisStreamsSourceReader<T>
         this.shardMetricGroupMap = shardMetricGroupMap;
         this.finishedSplits = new TreeMap<>();
         this.currentCheckpointId = Long.MIN_VALUE;
+
+        // Register an operator-level `pendingRecords` gauge that aggregates the
+        // per-shard estimates published by KinesisShardMetrics. The Flink Kubernetes Operator
+        // autoscaler reads this gauge on the source operator's MetricGroup to decide whether to
+        // scale the vertex up. Without it, the autoscaler logs
+        //   "pendingRecords metric for <vertexId> could not be found.
+        //    Either a legacy source or an idle source. Assuming no pending records."
+        // and never accounts for source lag, even when there is a real backlog.
+        context.metricGroup()
+                .gauge(
+                        MetricConstants.PENDING_RECORDS,
+                        () -> {
+                            long total = 0L;
+                            // shardMetricGroupMap is mutated from the source-fetcher thread;
+                            // iterate the values snapshot defensively to avoid CME. Sum is
+                            // monotonic and order-independent so we do not need a lock.
+                            for (KinesisShardMetrics metrics : shardMetricGroupMap.values()) {
+                                total += metrics.getEstimatedPendingRecords();
+                            }
+                            return total;
+                        });
     }
 
     @Override
