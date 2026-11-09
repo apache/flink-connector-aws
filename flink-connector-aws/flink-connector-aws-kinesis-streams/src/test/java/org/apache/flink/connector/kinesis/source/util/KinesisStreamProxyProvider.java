@@ -240,6 +240,7 @@ public class KinesisStreamProxyProvider {
                                 ConsumerDescription.builder()
                                         .consumerName(consumerName)
                                         .consumerStatus(ConsumerStatus.ACTIVE)
+                                        .consumerARN(getConsumerArnFromName(consumerName))
                                         .build())
                         .build();
             }
@@ -251,6 +252,10 @@ public class KinesisStreamProxyProvider {
 
         public void setConsumersCurrentlyDeleting(String consumerName) {
             consumersCurrentlyDeleting.add(consumerName);
+        }
+
+        public void unsetConsumersCurrentlyDeleting(String consumerName) {
+            consumersCurrentlyDeleting.remove(consumerName);
         }
 
         private String convertConsumerArnToStreamArn(String consumerArn) {

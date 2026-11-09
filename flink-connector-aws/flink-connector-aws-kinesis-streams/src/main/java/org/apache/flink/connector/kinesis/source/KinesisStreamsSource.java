@@ -79,6 +79,8 @@ import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
+import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.ConsumerLifecycle.JOB_MANAGED;
+import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.EFO_CONSUMER_LIFECYCLE;
 import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.EFO_CONSUMER_NAME;
 import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.EFO_DESCRIBE_CONSUMER_RETRY_STRATEGY_MAX_ATTEMPTS_OPTION;
 import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions.EFO_DESCRIBE_CONSUMER_RETRY_STRATEGY_MAX_DELAY_OPTION;
@@ -233,6 +235,27 @@ public class KinesisStreamsSource<T>
     }
 
     private String getConsumerArn(final String streamArn, final String consumerName) {
+        if (sourceConfig.get(EFO_CONSUMER_LIFECYCLE) == JOB_MANAGED) {
+            // JOB_MANAGED: self-heal by re-registering if the consumer is missing.
+            try (StreamProxy streamProxy = createKinesisStreamProxy(sourceConfig)) {
+                return StreamConsumerRegistrar.ensureActiveConsumer(
+                        streamProxy,
+                        streamArn,
+                        consumerName,
+                        sourceConfig.get(EFO_DESCRIBE_CONSUMER_RETRY_STRATEGY_MIN_DELAY_OPTION),
+                        sourceConfig.get(EFO_DESCRIBE_CONSUMER_RETRY_STRATEGY_MAX_DELAY_OPTION),
+                        sourceConfig.get(EFO_DESCRIBE_CONSUMER_RETRY_STRATEGY_MAX_ATTEMPTS_OPTION));
+            } catch (Exception e) {
+                throw new KinesisStreamsSourceException(
+                        "Unable to resolve an ACTIVE consumer ARN for stream "
+                                + streamArn
+                                + " and consumer "
+                                + consumerName,
+                        e);
+            }
+        }
+
+        // SELF_MANAGED: never register ourselves; fail fast if it doesn't exist.
         StandardRetryStrategy.Builder retryStrategyBuilder =
                 createExpBackoffRetryStrategyBuilder(
                         sourceConfig.get(EFO_DESCRIBE_CONSUMER_RETRY_STRATEGY_MIN_DELAY_OPTION),

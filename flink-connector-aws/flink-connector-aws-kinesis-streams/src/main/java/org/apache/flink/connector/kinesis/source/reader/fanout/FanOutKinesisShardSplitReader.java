@@ -42,6 +42,12 @@ import static org.apache.flink.connector.kinesis.source.config.KinesisSourceConf
  */
 @Internal
 public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
+
+    // See FanOutKinesisShardSubscription#maxRecoverableAttempts.
+    private static final int MAX_RECOVERABLE_SUBSCRIBE_ATTEMPTS = 100;
+    private static final Duration RECOVERABLE_SUBSCRIBE_BASE_BACKOFF = Duration.ofMillis(500);
+    private static final Duration RECOVERABLE_SUBSCRIBE_MAX_BACKOFF = Duration.ofSeconds(30);
+
     private final AsyncStreamProxy asyncStreamProxy;
     private final String consumerArn;
     private final Duration subscriptionTimeout;
@@ -98,7 +104,10 @@ public class FanOutKinesisShardSplitReader extends KinesisShardSplitReaderBase {
                             split.getShardId(),
                             split.getStartingPosition(),
                             subscriptionTimeout,
-                            timeoutScheduler);
+                            timeoutScheduler,
+                            MAX_RECOVERABLE_SUBSCRIBE_ATTEMPTS,
+                            RECOVERABLE_SUBSCRIBE_BASE_BACKOFF,
+                            RECOVERABLE_SUBSCRIBE_MAX_BACKOFF);
             subscription.activateSubscription();
             splitSubscriptions.put(split.splitId(), subscription);
         }
