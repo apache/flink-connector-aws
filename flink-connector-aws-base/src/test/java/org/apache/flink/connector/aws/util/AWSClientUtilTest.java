@@ -43,6 +43,7 @@ import software.amazon.awssdk.retries.internal.DefaultAdaptiveRetryStrategy;
 import software.amazon.awssdk.retries.internal.DefaultLegacyRetryStrategy;
 import software.amazon.awssdk.retries.internal.circuitbreaker.TokenBucketStore;
 import software.amazon.awssdk.retries.internal.ratelimiter.RateLimiterTokenBucketStore;
+import software.amazon.awssdk.services.s3.S3AsyncClient;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.utils.AttributeMap;
 
@@ -209,6 +210,45 @@ class AWSClientUtilTest {
                                 .advancedOption(SdkAdvancedClientOption.USER_AGENT_PREFIX)
                                 .isPresent())
                 .isTrue();
+    }
+
+    @Test
+    void testCreateAwsAsyncClientWithOverrideConfiguration() {
+        Properties properties = TestUtil.properties(AWS_REGION, "eu-west-2");
+        RetryStrategy overrideRetryStrategy =
+                DefaultAdaptiveRetryStrategy.builder()
+                        .maxAttempts(10)
+                        .backoffStrategy(BackoffStrategy.fixedDelay(Duration.ofMillis(500)))
+                        .throttlingBackoffStrategy(
+                                BackoffStrategy.fixedDelay(Duration.ofMillis(500)))
+                        .tokenBucketStore(TokenBucketStore.builder().build())
+                        .rateLimiterTokenBucketStore(RateLimiterTokenBucketStore.builder().build())
+                        .tokenBucketExceptionCost(5)
+                        .build();
+
+        try (SdkAsyncHttpClient httpClient = NettyNioAsyncHttpClient.builder().build();
+                S3AsyncClient s3AsyncClient =
+                        AWSClientUtil.createAwsAsyncClient(
+                                properties,
+                                httpClient,
+                                S3AsyncClient.builder(),
+                                ClientOverrideConfiguration.builder()
+                                        .retryStrategy(overrideRetryStrategy),
+                                DEFAULT_USER_AGENT_PREFIX_FORMAT,
+                                formatFlinkUserAgentPrefix(
+                                        DEFAULT_USER_AGENT_PREFIX_FORMAT
+                                                + AWSClientUtil.V2_USER_AGENT_SUFFIX))) {
+            ClientOverrideConfiguration resultOverrideConfiguration =
+                    s3AsyncClient.serviceClientConfiguration().overrideConfiguration();
+            assertThat(resultOverrideConfiguration.retryStrategy()).isPresent();
+            assertThat(resultOverrideConfiguration.retryStrategy().get().maxAttempts())
+                    .isEqualTo(10);
+            assertThat(
+                            resultOverrideConfiguration
+                                    .advancedOption(SdkAdvancedClientOption.USER_AGENT_PREFIX)
+                                    .isPresent())
+                    .isTrue();
+        }
     }
 
     @Test

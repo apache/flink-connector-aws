@@ -122,6 +122,42 @@ public class AWSClientUtil extends AWSGeneralUtil {
         return createAwsAsyncClient(configProps, clientBuilder, httpClient, overrideConfiguration);
     }
 
+    /**
+     * Creates an AWS Async Client.
+     *
+     * @param configProps configuration properties
+     * @param httpClient the underlying HTTP client used to talk to AWS
+     * @param clientBuilder the builder for the AWS SDK client
+     * @param clientOverrideConfigurationBuilder the builder for custom override configuration
+     * @param awsUserAgentPrefixFormat user agent prefix for Flink
+     * @param awsClientUserAgentPrefix user agent prefix for kinesis client
+     * @return a new AWS Async Client
+     */
+    public static <
+                    S extends SdkClient,
+                    T extends
+                            AwsAsyncClientBuilder<? extends T, S>
+                                    & AwsClientBuilder<? extends T, S>>
+            S createAwsAsyncClient(
+                    final Properties configProps,
+                    final SdkAsyncHttpClient httpClient,
+                    final T clientBuilder,
+                    final ClientOverrideConfiguration.Builder clientOverrideConfigurationBuilder,
+                    final String awsUserAgentPrefixFormat,
+                    final String awsClientUserAgentPrefix) {
+        String flinkUserAgentPrefix =
+                getFlinkUserAgentPrefix(
+                        configProps, awsUserAgentPrefixFormat, awsClientUserAgentPrefix);
+
+        final ClientOverrideConfiguration overrideConfiguration =
+                createClientOverrideConfiguration(
+                        SdkClientConfiguration.builder().build(),
+                        clientOverrideConfigurationBuilder,
+                        flinkUserAgentPrefix);
+
+        return createAwsAsyncClient(configProps, clientBuilder, httpClient, overrideConfiguration);
+    }
+
     @VisibleForTesting
     static ClientOverrideConfiguration createClientOverrideConfiguration(
             final SdkClientConfiguration config,

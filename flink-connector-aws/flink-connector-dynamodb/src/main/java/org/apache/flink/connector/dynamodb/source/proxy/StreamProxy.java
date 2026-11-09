@@ -28,6 +28,7 @@ import software.amazon.awssdk.services.dynamodb.model.ShardFilter;
 import javax.annotation.Nullable;
 
 import java.io.Closeable;
+import java.util.concurrent.CompletableFuture;
 
 /** Interface for a StreamProxy to interact with Streams service in a given region. */
 @Internal
@@ -62,4 +63,32 @@ public interface StreamProxy extends Closeable {
      */
     GetRecordsResponse getRecords(
             String streamArn, String shardId, StartingPosition startingPosition);
+
+    /**
+     * Non-blocking version of {@link #getRecords(String, String, StartingPosition)}. The method
+     * returns before the call completes. The future completes with the response that {@link
+     * #getRecords(String, String, StartingPosition)} returns, or fails with the exception that it
+     * throws.
+     *
+     * <p>The caller must not start a second call for a shard while a call for the same shard is in
+     * progress.
+     *
+     * @param streamArn the ARN of the stream
+     * @param shardId the shard to subscribe from
+     * @param startingPosition the starting position to read from
+     * @return a future of the response with records
+     */
+    CompletableFuture<GetRecordsResponse> getRecordsAsync(
+            String streamArn, String shardId, StartingPosition startingPosition);
+
+    /**
+     * Non-blocking version of {@link #listShardsWithFilter(String, ShardFilter)}. The future
+     * completes with the result that {@link #listShardsWithFilter(String, ShardFilter)} returns.
+     *
+     * @param streamArn the ARN of the stream
+     * @param shardFilter the filter for the shards
+     * @return a future of the shard list
+     */
+    CompletableFuture<ListShardsResult> listShardsWithFilterAsync(
+            String streamArn, ShardFilter shardFilter);
 }

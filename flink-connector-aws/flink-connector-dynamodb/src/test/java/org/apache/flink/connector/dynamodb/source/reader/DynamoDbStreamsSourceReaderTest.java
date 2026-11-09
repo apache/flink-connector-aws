@@ -24,11 +24,13 @@ import org.apache.flink.connector.base.source.reader.fetcher.SingleThreadFetcher
 import org.apache.flink.connector.dynamodb.source.enumerator.event.SplitsFinishedEvent;
 import org.apache.flink.connector.dynamodb.source.enumerator.event.SplitsFinishedEventContext;
 import org.apache.flink.connector.dynamodb.source.metrics.DynamoDbStreamsShardMetrics;
+import org.apache.flink.connector.dynamodb.source.proxy.LazyStreamProxy;
 import org.apache.flink.connector.dynamodb.source.proxy.StreamProxy;
 import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplit;
 import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplitState;
 import org.apache.flink.connector.dynamodb.source.split.StartingPosition;
 import org.apache.flink.connector.dynamodb.source.util.DynamoDbStreamsContextProvider;
+import org.apache.flink.connector.dynamodb.source.util.DynamoDbStreamsProxyProvider;
 import org.apache.flink.connector.dynamodb.source.util.TestUtil;
 import org.apache.flink.connector.testutils.source.reader.TestingReaderContext;
 import org.apache.flink.metrics.testutils.MetricListener;
@@ -49,6 +51,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static org.apache.flink.connector.dynamodb.source.config.DynamodbStreamsSourceConfigConstants.DYNAMODB_STREAMS_GET_RECORDS_MAX_IN_FLIGHT;
 import static org.apache.flink.connector.dynamodb.source.util.DynamoDbStreamsProxyProvider.getTestStreamProxy;
 import static org.apache.flink.connector.dynamodb.source.util.TestUtil.STREAM_ARN;
 import static org.apache.flink.connector.dynamodb.source.util.TestUtil.getTestSplit;
@@ -76,7 +79,9 @@ class DynamoDbStreamsSourceReaderTest {
                                 NON_EMPTY_POLLING_DELAY_MILLIS,
                                 EMPTY_POLLING_DELAY_MILLIS,
                                 new ConcurrentHashMap<>(),
-                                shardMetricGroupMap);
+                                shardMetricGroupMap,
+                                false,
+                                DYNAMODB_STREAMS_GET_RECORDS_MAX_IN_FLIGHT.defaultValue());
 
         testingReaderContext =
                 DynamoDbStreamsContextProvider.DynamoDbStreamsTestingContext
@@ -88,7 +93,40 @@ class DynamoDbStreamsSourceReaderTest {
                         new Configuration(),
                         testingReaderContext,
                         new ConcurrentHashMap<>(),
-                        shardMetricGroupMap);
+                        shardMetricGroupMap,
+                        null);
+    }
+
+    @Test
+    void testCloseClosesSharedStreamProxy() throws Exception {
+        DynamoDbStreamsProxyProvider.TestDynamoDbStreamsProxy sharedStreamProxy =
+                getTestStreamProxy();
+        LazyStreamProxy streamProxy = new LazyStreamProxy(() -> sharedStreamProxy);
+        // A split reader has created the proxy.
+        streamProxy.get();
+        DynamoDbStreamsSourceReader<TestData> reader =
+                new DynamoDbStreamsSourceReader<>(
+                        new SingleThreadFetcherManager<>(
+                                () ->
+                                        new PollingDynamoDbStreamsShardSplitReader(
+                                                sharedStreamProxy,
+                                                NON_EMPTY_POLLING_DELAY_MILLIS,
+                                                EMPTY_POLLING_DELAY_MILLIS,
+                                                new ConcurrentHashMap<>(),
+                                                shardMetricGroupMap,
+                                                false,
+                                                DYNAMODB_STREAMS_GET_RECORDS_MAX_IN_FLIGHT
+                                                        .defaultValue())),
+                        new DynamoDbStreamsRecordEmitter<>(null),
+                        new Configuration(),
+                        testingReaderContext,
+                        new ConcurrentHashMap<>(),
+                        shardMetricGroupMap,
+                        streamProxy);
+
+        reader.close();
+
+        assertThat(sharedStreamProxy.isClosed()).isTrue();
     }
 
     @Test

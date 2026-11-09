@@ -27,6 +27,7 @@ import org.apache.flink.connector.base.source.reader.fetcher.SingleThreadFetcher
 import org.apache.flink.connector.dynamodb.source.enumerator.event.SplitsFinishedEvent;
 import org.apache.flink.connector.dynamodb.source.enumerator.event.SplitsFinishedEventContext;
 import org.apache.flink.connector.dynamodb.source.metrics.DynamoDbStreamsShardMetrics;
+import org.apache.flink.connector.dynamodb.source.proxy.LazyStreamProxy;
 import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplit;
 import org.apache.flink.connector.dynamodb.source.split.DynamoDbStreamsShardSplitState;
 
@@ -34,6 +35,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.dynamodb.model.Record;
 import software.amazon.awssdk.services.dynamodb.model.Shard;
+
+import javax.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -59,16 +62,26 @@ public class DynamoDbStreamsSourceReader<T>
     private final Map<String, DynamoDbStreamsShardMetrics> shardMetricGroupMap;
     private final NavigableMap<Long, Set<DynamoDbStreamsShardSplit>> splitFinishedEvents;
     private final Map<String, List<Shard>> childShardIdMap;
+
+    /** Stream proxy that the split readers share. {@code null} if the caller closes it. */
+    @Nullable private final LazyStreamProxy streamProxy;
+
     private long currentCheckpointId;
 
+    /**
+     * Creates a source reader that closes {@code streamProxy} in {@link #close()}, after the split
+     * fetchers that use it.
+     */
     public DynamoDbStreamsSourceReader(
             SingleThreadFetcherManager<Record, DynamoDbStreamsShardSplit> splitFetcherManager,
             RecordEmitter<Record, T, DynamoDbStreamsShardSplitState> recordEmitter,
             Configuration config,
             SourceReaderContext context,
             Map<String, List<Shard>> childShardIdMap,
-            Map<String, DynamoDbStreamsShardMetrics> shardMetricGroupMap) {
+            Map<String, DynamoDbStreamsShardMetrics> shardMetricGroupMap,
+            @Nullable LazyStreamProxy streamProxy) {
         super(splitFetcherManager, recordEmitter, config, context);
+        this.streamProxy = streamProxy;
         this.shardMetricGroupMap = shardMetricGroupMap;
         this.splitFinishedEvents = new TreeMap<>();
         this.childShardIdMap = childShardIdMap;
@@ -193,8 +206,14 @@ public class DynamoDbStreamsSourceReader<T>
 
     @Override
     public void close() throws Exception {
-        super.close();
-        this.shardMetricGroupMap.keySet().forEach(this::unregisterShardMetricGroup);
+        try {
+            super.close();
+            this.shardMetricGroupMap.keySet().forEach(this::unregisterShardMetricGroup);
+        } finally {
+            if (streamProxy != null) {
+                streamProxy.close();
+            }
+        }
     }
 
     private void registerShardMetricGroup(DynamoDbStreamsShardSplit split) {

@@ -40,6 +40,7 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -67,6 +68,8 @@ public class DynamoDbStreamsProxyProvider {
         private final Map<ShardHandle, Deque<List<Record>>> storedRecords = new HashMap<>();
         private boolean shouldCompleteNextShard = false;
         private boolean closed = false;
+        private int getRecordsCallCount = 0;
+        private int getRecordsAsyncCallCount = 0;
 
         @Override
         public ListShardsResult listShards(String streamArn, @Nullable String lastSeenShardId) {
@@ -108,8 +111,44 @@ public class DynamoDbStreamsProxyProvider {
         }
 
         @Override
+        public CompletableFuture<ListShardsResult> listShardsWithFilterAsync(
+                String streamArn, ShardFilter shardFilter) {
+            try {
+                return CompletableFuture.completedFuture(
+                        listShardsWithFilter(streamArn, shardFilter));
+            } catch (RuntimeException e) {
+                return CompletableFuture.failedFuture(e);
+            }
+        }
+
+        @Override
         public GetRecordsResponse getRecords(
                 String streamArn, String shardId, StartingPosition startingPosition) {
+            getRecordsCallCount++;
+            return createGetRecordsResponse(streamArn, shardId);
+        }
+
+        @Override
+        public CompletableFuture<GetRecordsResponse> getRecordsAsync(
+                String streamArn, String shardId, StartingPosition startingPosition) {
+            getRecordsAsyncCallCount++;
+            try {
+                return CompletableFuture.completedFuture(
+                        createGetRecordsResponse(streamArn, shardId));
+            } catch (RuntimeException e) {
+                return CompletableFuture.failedFuture(e);
+            }
+        }
+
+        public int getGetRecordsCallCount() {
+            return getRecordsCallCount;
+        }
+
+        public int getGetRecordsAsyncCallCount() {
+            return getRecordsAsyncCallCount;
+        }
+
+        private GetRecordsResponse createGetRecordsResponse(String streamArn, String shardId) {
             ShardHandle shardHandle = new ShardHandle(streamArn, shardId);
 
             if (getRecordsExceptionSupplier != null) {
