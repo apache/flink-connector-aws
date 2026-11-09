@@ -22,15 +22,22 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeDefinition;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.CreateTableRequest;
+import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.DeleteTableRequest;
+import software.amazon.awssdk.services.dynamodb.model.DescribeTableRequest;
+import software.amazon.awssdk.services.dynamodb.model.DescribeTableResponse;
 import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement;
 import software.amazon.awssdk.services.dynamodb.model.KeyType;
 import software.amazon.awssdk.services.dynamodb.model.ProvisionedThroughput;
+import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.ScalarAttributeType;
 import software.amazon.awssdk.services.dynamodb.model.ScanRequest;
+import software.amazon.awssdk.services.dynamodb.model.StreamSpecification;
+import software.amazon.awssdk.services.dynamodb.model.StreamViewType;
 import software.amazon.awssdk.services.dynamodb.waiters.DynamoDbAsyncWaiter;
 
 import java.util.Collections;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 /** Helper methods to call dynamoDB service. */
@@ -42,6 +49,12 @@ public class DynamoDBHelpers {
     }
 
     public void createTable(String tableName, String partitionKey, String sortKey)
+            throws ExecutionException, InterruptedException {
+        this.createTable(tableName, partitionKey, sortKey, false);
+    }
+
+    public void createTable(
+            String tableName, String partitionKey, String sortKey, boolean streamEnabled)
             throws ExecutionException, InterruptedException {
         client.createTable(
                 CreateTableRequest.builder()
@@ -69,10 +82,33 @@ public class DynamoDBHelpers {
                                         .readCapacityUnits(1000L)
                                         .writeCapacityUnits(1000L)
                                         .build())
+                        .streamSpecification(
+                                StreamSpecification.builder()
+                                        .streamEnabled(streamEnabled)
+                                        .streamViewType(StreamViewType.NEW_AND_OLD_IMAGES)
+                                        .build())
                         .build());
 
         DynamoDbAsyncWaiter waiter = client.waiter();
         waiter.waitUntilTableExists(r -> r.tableName(tableName)).get();
+    }
+
+    public String getTableStreamArn(String tableName)
+            throws ExecutionException, InterruptedException {
+        DescribeTableResponse describeTableResponse =
+                client.describeTable(DescribeTableRequest.builder().tableName(tableName).build())
+                        .get();
+        return describeTableResponse.table().latestStreamArn();
+    }
+
+    public void putItem(String tableName, Map<String, AttributeValue> item)
+            throws ExecutionException, InterruptedException {
+        client.putItem(PutItemRequest.builder().tableName(tableName).item(item).build()).get();
+    }
+
+    public void deleteItem(String tableName, Map<String, AttributeValue> key)
+            throws ExecutionException, InterruptedException {
+        client.deleteItem(DeleteItemRequest.builder().tableName(tableName).key(key).build()).get();
     }
 
     public int getItemsCount(String tableName) throws ExecutionException, InterruptedException {
