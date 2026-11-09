@@ -128,6 +128,51 @@ public class DynamoDbSerializationUtilTest {
     }
 
     @Test
+    public void testUpdateWithAllFieldsSerializeDeserialize() throws IOException {
+        final Map<String, AttributeValue> key = new HashMap<>();
+        key.put("pk", AttributeValue.builder().s("key1").build());
+        key.put("sk", AttributeValue.builder().s("sort1").build());
+
+        DynamoDbWriteRequest dynamoDbWriteRequest =
+                DynamoDbWriteRequest.builder()
+                        .setItem(key)
+                        .setType(DynamoDbWriteRequestType.UPDATE)
+                        .setUpdateExpression("SET #c = #c + :inc, #u = :ts")
+                        .setConditionExpression("attribute_exists(pk)")
+                        .setExpressionAttributeNames(
+                                new HashMap<String, String>() {
+                                    {
+                                        put("#c", "counter");
+                                        put("#u", "updatedAt");
+                                    }
+                                })
+                        .setExpressionAttributeValues(
+                                new HashMap<String, AttributeValue>() {
+                                    {
+                                        put(":inc", AttributeValue.builder().n("1").build());
+                                        put(":ts", AttributeValue.builder().s("2026-03-28").build());
+                                    }
+                                })
+                        .build();
+
+        byte[] serialized;
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+                DataOutputStream out = new DataOutputStream(outputStream)) {
+            DynamoDbSerializationUtil.serializeWriteRequest(dynamoDbWriteRequest, out);
+            serialized = outputStream.toByteArray();
+        }
+
+        try (InputStream inputStream = new ByteArrayInputStream(serialized);
+                DataInputStream dataInputStream = new DataInputStream(inputStream)) {
+            DynamoDbWriteRequest deserializedWriteRequest =
+                    DynamoDbSerializationUtil.deserializeWriteRequest(dataInputStream);
+            assertThat(deserializedWriteRequest)
+                    .usingRecursiveComparison()
+                    .isEqualTo(dynamoDbWriteRequest);
+        }
+    }
+
+    @Test
     public void testSerializeEmptyAttributeValueThrowsException() {
         final Map<String, AttributeValue> item = new HashMap<>();
         item.put("empty", AttributeValue.builder().build());

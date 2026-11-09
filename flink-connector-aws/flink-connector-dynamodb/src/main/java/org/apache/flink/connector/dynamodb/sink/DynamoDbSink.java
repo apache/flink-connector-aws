@@ -75,6 +75,22 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  *       single batch takes precedence.
  * </ul>
  *
+ * <p>The sink supports three write request types via {@link DynamoDbWriteRequestType}:
+ *
+ * <ul>
+ *   <li>{@code PUT} - writes a full item using {@code BatchWriteItem} or {@code PutItem} (when a
+ *       condition expression is set)
+ *   <li>{@code DELETE} - deletes an item by key using {@code BatchWriteItem} or {@code DeleteItem}
+ *       (when a condition expression is set)
+ *   <li>{@code UPDATE} - updates specific attributes of an item using {@code UpdateItem}, always
+ *       processed as individual requests since {@code BatchWriteItem} does not support updates
+ * </ul>
+ *
+ * <p>Requests without condition expressions (PUT/DELETE) are sent via {@code BatchWriteItem} for
+ * efficiency. Requests with condition expressions and all UPDATE requests are sent as individual
+ * {@code PutItem}, {@code DeleteItem}, or {@code UpdateItem} calls. Both paths execute
+ * concurrently.
+ *
  * <p>Please see the writer implementation in {@link DynamoDbSinkWriter}
  *
  * @param <InputT> Type of the elements handled by this sink
