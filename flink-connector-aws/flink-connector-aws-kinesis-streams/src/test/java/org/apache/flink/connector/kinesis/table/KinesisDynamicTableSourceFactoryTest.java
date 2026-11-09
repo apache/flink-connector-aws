@@ -18,23 +18,17 @@
 
 package org.apache.flink.connector.kinesis.table;
 
-import org.apache.flink.api.dag.Transformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ConfigurationUtils;
 import org.apache.flink.connector.aws.config.AWSConfigOptions;
 import org.apache.flink.connector.kinesis.source.KinesisStreamsSource;
 import org.apache.flink.connector.kinesis.source.config.KinesisSourceConfigOptions;
-import org.apache.flink.connector.kinesis.source.enumerator.KinesisStreamsSourceEnumeratorState;
-import org.apache.flink.connector.kinesis.source.split.KinesisShardSplit;
-import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.transformations.SourceTransformation;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.catalog.Column;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.catalog.WatermarkSpec;
-import org.apache.flink.table.connector.source.DataStreamScanProvider;
 import org.apache.flink.table.connector.source.ScanTableSource;
-import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.connector.source.SourceProvider;
 import org.apache.flink.table.expressions.utils.ResolvedExpressionMock;
 import org.apache.flink.table.factories.TableOptionsBuilder;
 import org.apache.flink.table.factories.TestFormatFactory;
@@ -49,7 +43,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -193,24 +186,10 @@ public class KinesisDynamicTableSourceFactoryTest {
 
     private KinesisStreamsSource<?> assertKinesisStreamsSource(
             ScanTableSource.ScanRuntimeProvider provider) {
-        assertThat(provider).isInstanceOf(DataStreamScanProvider.class);
-        final DataStreamScanProvider dataStreamScanProvider = (DataStreamScanProvider) provider;
-        final Transformation<RowData> transformation =
-                dataStreamScanProvider
-                        .produceDataStream(
-                                n -> Optional.empty(),
-                                StreamExecutionEnvironment.createLocalEnvironment())
-                        .getTransformation();
-        assertThat(transformation).isInstanceOf(SourceTransformation.class);
-        SourceTransformation<RowData, KinesisShardSplit, KinesisStreamsSourceEnumeratorState>
-                sourceTransformation =
-                        (SourceTransformation<
-                                        RowData,
-                                        KinesisShardSplit,
-                                        KinesisStreamsSourceEnumeratorState>)
-                                transformation;
-        assertThat(sourceTransformation.getSource()).isInstanceOf(KinesisStreamsSource.class);
-        return (KinesisStreamsSource<?>) sourceTransformation.getSource();
+        assertThat(provider).isInstanceOf(SourceProvider.class);
+        final SourceProvider sourceProvider = (SourceProvider) provider;
+        assertThat(sourceProvider.createSource()).isInstanceOf(KinesisStreamsSource.class);
+        return (KinesisStreamsSource<?>) sourceProvider.createSource();
     }
 
     private DataType getProducedType(ResolvedSchema schema, RowMetadata... requestedMetadata) {
