@@ -168,4 +168,18 @@ producerConfig.put(AWSConfigConstants.AWS_ENDPOINT, "http://localhost:4566")
 {{< /tab >}}
 {{< /tabs >}}
 
+### Account-based endpoints
+
+When the AWS SDK knows the AWS account ID of a request, it sends the request to an account-based endpoint instead of
+the regional endpoint:
+
+- The DynamoDB Streams source calls `<account-id>.streams-ddb.<region>.amazonaws.com`. The SDK takes the account ID
+  from the stream ARN or the shard iterator.
+- The DynamoDB sink calls `<account-id>.ddb.<region>.amazonaws.com` when the credentials include the account ID, and
+  the regional endpoint otherwise.
+
+If your network allows outbound traffic by hostname, allow these endpoints as well. To use the regional endpoints,
+set `AWS_ACCOUNT_ID_ENDPOINT_MODE=disabled`, or `account_id_endpoint_mode = disabled` in the AWS profile. When
+`AWSConfigConstants.AWS_ENDPOINT` is set, the SDK uses that endpoint and does not use account-based endpoints.
+
 {{< top >}}

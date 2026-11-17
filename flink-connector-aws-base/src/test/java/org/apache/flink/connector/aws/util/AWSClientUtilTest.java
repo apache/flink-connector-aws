@@ -40,7 +40,7 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.retries.api.BackoffStrategy;
 import software.amazon.awssdk.retries.api.RetryStrategy;
 import software.amazon.awssdk.retries.internal.DefaultAdaptiveRetryStrategy;
-import software.amazon.awssdk.retries.internal.DefaultLegacyRetryStrategy;
+import software.amazon.awssdk.retries.internal.DefaultStandardRetryStrategy;
 import software.amazon.awssdk.retries.internal.circuitbreaker.TokenBucketStore;
 import software.amazon.awssdk.retries.internal.ratelimiter.RateLimiterTokenBucketStore;
 import software.amazon.awssdk.services.s3.S3AsyncClient;
@@ -111,7 +111,7 @@ class AWSClientUtilTest {
         ClientOverrideConfiguration resultOverrideConfiguration =
                 s3Client.serviceClientConfiguration().overrideConfiguration();
         assertThat(resultOverrideConfiguration.retryStrategy().get())
-                .isInstanceOf(DefaultLegacyRetryStrategy.class);
+                .isInstanceOf(DefaultStandardRetryStrategy.class);
         assertThat(resultOverrideConfiguration.retryPolicy()).isEqualTo(Optional.empty());
         assertThat(resultOverrideConfiguration.retryMode()).isEqualTo(Optional.empty());
         assertThat(resultOverrideConfiguration.retryStrategyConfigurator())
@@ -148,7 +148,7 @@ class AWSClientUtilTest {
         ClientOverrideConfiguration resultOverrideConfiguration =
                 s3Client.serviceClientConfiguration().overrideConfiguration();
         assertThat(resultOverrideConfiguration.retryStrategy().get())
-                .isInstanceOf(DefaultLegacyRetryStrategy.class);
+                .isInstanceOf(DefaultStandardRetryStrategy.class);
         assertThat(resultOverrideConfiguration.retryPolicy()).isEqualTo(Optional.empty());
         assertThat(resultOverrideConfiguration.retryMode()).isEqualTo(Optional.empty());
         assertThat(resultOverrideConfiguration.retryStrategyConfigurator())

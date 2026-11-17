@@ -187,7 +187,7 @@ The maximum number of retries can be configured using `DESCRIBE_STREAM_INCONSIST
 
 By default, each source reader calls `GetRecords` on all of its shards that are ready, without waiting for the responses, so a slow or throttled call on one shard does not delay the other shards.
 Each shard has at most one call in progress. The calls use HTTP/1.1, so each call in progress uses its own connection.
-The calls use the retry mode of the AWS SDK (`AWS_RETRY_MODE` or the `retry_mode` of the AWS profile, legacy by default), but without its retry quota (circuit breaker), because all calls of a source reader share one quota and a burst of errors on many calls in progress would use it up. The adaptive modes use the standard mode instead, because they cannot turn off the quota.
+The calls use the retry mode of the AWS SDK (`AWS_RETRY_MODE` or the `retry_mode` of the AWS profile, standard by default), but without its retry quota (circuit breaker), because all calls of a source reader share one quota and a burst of errors on many calls in progress would use it up. The adaptive modes use the standard mode instead, because they cannot turn off the quota.
 - `DYNAMODB_STREAMS_GET_RECORDS_MAX_IN_FLIGHT` (`flink.dynamodbstreams.getrecords.max-in-flight`): The maximum number of calls in progress per source reader, counting calls whose responses the reader has not processed yet. Default: 100.
   Each `GetRecords` response holds up to 1 MB, so this limits the memory that a source reader uses for responses. A paused split, for example with watermark alignment, can hold one more response until it resumes.
   If a source reader has more shards than this, its shards share the calls in turn.
@@ -336,5 +336,19 @@ producerConfig.put(AWSConfigConstants.AWS_ENDPOINT, "http://localhost:4566")
 ```
 {{< /tab >}}
 {{< /tabs >}}
+
+#### Account-based endpoints
+
+When the AWS SDK knows the AWS account ID of a request, it sends the request to an account-based endpoint instead of
+the regional endpoint:
+
+- The DynamoDB Streams source calls `<account-id>.streams-ddb.<region>.amazonaws.com`. The SDK takes the account ID
+  from the stream ARN or the shard iterator.
+- The DynamoDB sink calls `<account-id>.ddb.<region>.amazonaws.com` when the credentials include the account ID, and
+  the regional endpoint otherwise.
+
+If your network allows outbound traffic by hostname, allow these endpoints as well. To use the regional endpoints,
+set `AWS_ACCOUNT_ID_ENDPOINT_MODE=disabled`, or `account_id_endpoint_mode = disabled` in the AWS profile. When
+`AWSConfigConstants.AWS_ENDPOINT` is set, the SDK uses that endpoint and does not use account-based endpoints.
 
 {{< top >}}
