@@ -26,6 +26,7 @@ import org.apache.flink.annotation.PublicEvolving;
  * <ul>
  *   <li>PUT - Put Request
  *   <li>DELETE - Delete Request
+ *   <li>UPDATE - Update Request
  * </ul>
  */
 @PublicEvolving
@@ -34,7 +35,8 @@ public enum DynamoDbWriteRequestType {
     // Note: Enums have no stable hash code across different JVMs, use toByteValue() for
     // this purpose.
     PUT((byte) 0),
-    DELETE((byte) 1);
+    DELETE((byte) 1),
+    UPDATE((byte) 2);
     private final byte value;
 
     DynamoDbWriteRequestType(byte value) {
@@ -48,6 +50,7 @@ public enum DynamoDbWriteRequestType {
      * <ul>
      *   <li>"0" represents {@link #PUT}.
      *   <li>"1" represents {@link #DELETE}.
+     *   <li>"2" represents {@link #UPDATE}.
      * </ul>
      */
     public byte toByteValue() {
@@ -66,6 +69,8 @@ public enum DynamoDbWriteRequestType {
                 return PUT;
             case 1:
                 return DELETE;
+            case 2:
+                return UPDATE;
             default:
                 throw new UnsupportedOperationException(
                         "Unsupported byte value '" + value + "' for DynamoDb request type.");

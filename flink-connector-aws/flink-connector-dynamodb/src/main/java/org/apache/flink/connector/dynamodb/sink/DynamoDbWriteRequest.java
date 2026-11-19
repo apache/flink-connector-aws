@@ -28,7 +28,11 @@ import java.util.Map;
 
 /**
  * Represents a single Write Request to DynamoDb. Contains the item to be written as well as the
- * type of the Write Request (PUT/DELETE)
+ * type of the Write Request (PUT/DELETE/UPDATE).
+ *
+ * <p>For PUT requests, {@code item} contains the full item attributes. For DELETE requests, {@code
+ * item} contains the primary key attributes. For UPDATE requests, {@code item} contains the primary
+ * key attributes and the update expression fields must be set.
  */
 @PublicEvolving
 public class DynamoDbWriteRequest implements Serializable {
@@ -37,10 +41,24 @@ public class DynamoDbWriteRequest implements Serializable {
 
     private final Map<String, AttributeValue> item;
     private final DynamoDbWriteRequestType type;
+    private final String updateExpression;
+    private final Map<String, String> expressionAttributeNames;
+    private final Map<String, AttributeValue> expressionAttributeValues;
+    private final String conditionExpression;
 
-    private DynamoDbWriteRequest(Map<String, AttributeValue> item, DynamoDbWriteRequestType type) {
+    private DynamoDbWriteRequest(
+            Map<String, AttributeValue> item,
+            DynamoDbWriteRequestType type,
+            String updateExpression,
+            Map<String, String> expressionAttributeNames,
+            Map<String, AttributeValue> expressionAttributeValues,
+            String conditionExpression) {
         this.item = item;
         this.type = type;
+        this.updateExpression = updateExpression;
+        this.expressionAttributeNames = expressionAttributeNames;
+        this.expressionAttributeValues = expressionAttributeValues;
+        this.conditionExpression = conditionExpression;
     }
 
     public Map<String, AttributeValue> getItem() {
@@ -51,19 +69,54 @@ public class DynamoDbWriteRequest implements Serializable {
         return type;
     }
 
+    public String getUpdateExpression() {
+        return updateExpression;
+    }
+
+    public Map<String, String> getExpressionAttributeNames() {
+        return expressionAttributeNames;
+    }
+
+    public Map<String, AttributeValue> getExpressionAttributeValues() {
+        return expressionAttributeValues;
+    }
+
+    public String getConditionExpression() {
+        return conditionExpression;
+    }
+
     public static Builder builder() {
         return new Builder();
     }
 
     @Override
     public String toString() {
-        return "DynamoDbWriteRequest{" + "item=" + item + ", type=" + type + '}';
+        return "DynamoDbWriteRequest{"
+                + "item="
+                + item
+                + ", type="
+                + type
+                + ", updateExpression='"
+                + updateExpression
+                + '\''
+                + ", expressionAttributeNames="
+                + expressionAttributeNames
+                + ", expressionAttributeValues="
+                + expressionAttributeValues
+                + ", conditionExpression='"
+                + conditionExpression
+                + '\''
+                + '}';
     }
 
     /** Builder for DynamoDbWriteRequest. */
     public static class Builder {
         private Map<String, AttributeValue> item;
         private DynamoDbWriteRequestType type;
+        private String updateExpression;
+        private Map<String, String> expressionAttributeNames;
+        private Map<String, AttributeValue> expressionAttributeValues;
+        private String conditionExpression;
 
         public Builder setItem(Map<String, AttributeValue> item) {
             this.item = item;
@@ -75,12 +128,45 @@ public class DynamoDbWriteRequest implements Serializable {
             return this;
         }
 
+        public Builder setUpdateExpression(String updateExpression) {
+            this.updateExpression = updateExpression;
+            return this;
+        }
+
+        public Builder setExpressionAttributeNames(
+                Map<String, String> expressionAttributeNames) {
+            this.expressionAttributeNames = expressionAttributeNames;
+            return this;
+        }
+
+        public Builder setExpressionAttributeValues(
+                Map<String, AttributeValue> expressionAttributeValues) {
+            this.expressionAttributeValues = expressionAttributeValues;
+            return this;
+        }
+
+        public Builder setConditionExpression(String conditionExpression) {
+            this.conditionExpression = conditionExpression;
+            return this;
+        }
+
         public DynamoDbWriteRequest build() {
             Preconditions.checkNotNull(
-                    item, "No Item was supplied to the " + "DynamoDbWriteRequest builder.");
+                    item, "No Item was supplied to the DynamoDbWriteRequest builder.");
             Preconditions.checkNotNull(
-                    type, "No type was supplied to the " + "DynamoDbWriteRequest builder.");
-            return new DynamoDbWriteRequest(item, type);
+                    type, "No type was supplied to the DynamoDbWriteRequest builder.");
+            if (type == DynamoDbWriteRequestType.UPDATE) {
+                Preconditions.checkNotNull(
+                        updateExpression,
+                        "No updateExpression was supplied for UPDATE DynamoDbWriteRequest.");
+            }
+            return new DynamoDbWriteRequest(
+                    item,
+                    type,
+                    updateExpression,
+                    expressionAttributeNames,
+                    expressionAttributeValues,
+                    conditionExpression);
         }
     }
 }
